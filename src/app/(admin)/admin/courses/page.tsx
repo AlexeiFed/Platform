@@ -5,10 +5,18 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { tokens } from "@/lib/design-tokens";
 import { Plus, Pencil } from "lucide-react";
+import { lessonsLabel } from "@/lib/utils";
 
-export default async function AdminCoursesPage() {
+export default async function AdminCoursesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ type?: "COURSE" | "MARATHON" | "ALL" }>;
+}) {
+  const { type } = await searchParams;
+  const selectedType = type ?? "ALL";
+
   const products = await prisma.product.findMany({
-    where: { deletedAt: null },
+    where: { deletedAt: null, ...(selectedType === "ALL" ? {} : { type: selectedType }) },
     include: {
       _count: { select: { lessons: true, enrollments: true } },
     },
@@ -24,6 +32,18 @@ export default async function AdminCoursesPage() {
             <Plus className="h-4 w-4 mr-2" />
             Создать
           </Link>
+        </Button>
+      </div>
+
+      <div className="flex gap-2 flex-wrap">
+        <Button asChild size="sm" variant={selectedType === "ALL" ? "default" : "outline"}>
+          <Link href="/admin/courses?type=ALL">Все</Link>
+        </Button>
+        <Button asChild size="sm" variant={selectedType === "COURSE" ? "default" : "outline"}>
+          <Link href="/admin/courses?type=COURSE">Курсы</Link>
+        </Button>
+        <Button asChild size="sm" variant={selectedType === "MARATHON" ? "default" : "outline"}>
+          <Link href="/admin/courses?type=MARATHON">Марафоны</Link>
         </Button>
       </div>
 
@@ -49,7 +69,7 @@ export default async function AdminCoursesPage() {
                       {product.published ? "Опубликован" : "Черновик"}
                     </Badge>
                     <span className="text-xs text-muted-foreground">
-                      {product._count.lessons} уроков · {product._count.enrollments} студентов
+                      {lessonsLabel(product._count.lessons)} · {product._count.enrollments} студентов
                     </span>
                   </div>
                 </div>

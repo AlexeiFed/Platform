@@ -3,6 +3,7 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { emitHomeworkEvent } from "@/lib/realtime";
 
 export async function reviewHomework(
   submissionId: string,
@@ -49,6 +50,7 @@ export async function reviewHomework(
     }
 
     revalidatePath("/admin/homework");
+    emitHomeworkEvent({ submissionId, lessonId: submission.lessonId, userId: submission.userId });
     return { success: true };
   } catch {
     return { error: "Произошла ошибка" };
@@ -57,7 +59,9 @@ export async function reviewHomework(
 
 export async function sendChatMessage(submissionId: string, content: string) {
   const session = await auth();
-  if (!session) return { error: "Не авторизован" };
+  if (!session || (session.user.role !== "ADMIN" && session.user.role !== "CURATOR")) {
+    return { error: "Нет доступа" };
+  }
 
   try {
     await prisma.chatMessage.create({
@@ -69,6 +73,8 @@ export async function sendChatMessage(submissionId: string, content: string) {
     });
 
     revalidatePath("/admin/homework");
+    const sub = await prisma.homeworkSubmission.findUnique({ where: { id: submissionId }, select: { lessonId: true, userId: true } });
+    if (sub) emitHomeworkEvent({ submissionId, lessonId: sub.lessonId, userId: sub.userId });
     return { success: true };
   } catch {
     return { error: "Произошла ошибка" };

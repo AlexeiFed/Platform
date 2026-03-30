@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { ChevronLeft, ChevronRight, FileText, Paperclip, ClipboardList } from "lucide-react";
 import { HomeworkForm } from "./homework-form";
+import { HomeworkThread } from "./homework-thread";
 
 type ContentBlock = {
   id: string;
@@ -59,6 +60,12 @@ export default async function LessonPage({ params }: Props) {
     ? await prisma.homeworkSubmission.findFirst({
         where: { lessonId: lesson.id, userId: session.user.id },
         orderBy: { createdAt: "desc" },
+        include: {
+          messages: {
+            orderBy: { createdAt: "asc" },
+            include: { user: { select: { name: true, email: true, role: true } } },
+          },
+        },
       })
     : null;
 
@@ -172,22 +179,22 @@ export default async function LessonPage({ params }: Props) {
           </CardHeader>
           <CardContent>
             {existingSubmission ? (
-              <div className="space-y-3">
-                <Badge
-                  variant={
-                    existingSubmission.status === "APPROVED"
-                      ? "success"
-                      : existingSubmission.status === "REJECTED"
-                        ? "destructive"
-                        : "secondary"
-                  }
-                >
-                  {existingSubmission.status === "PENDING" && "На проверке"}
-                  {existingSubmission.status === "IN_REVIEW" && "Проверяется"}
-                  {existingSubmission.status === "APPROVED" && "Принято"}
-                  {existingSubmission.status === "REJECTED" && "Доработать"}
-                </Badge>
-              </div>
+              <HomeworkThread
+                lessonId={lesson.id}
+                questions={hwQuestions.length > 0 ? hwQuestions : undefined}
+                submission={{
+                  id: existingSubmission.id,
+                  status: existingSubmission.status,
+                  fileUrl: existingSubmission.fileUrl,
+                  content: existingSubmission.content ?? null,
+                }}
+                messages={existingSubmission.messages.map((m) => ({
+                  id: m.id,
+                  content: m.content,
+                  createdAt: m.createdAt.toISOString(),
+                  user: { name: m.user.name, email: m.user.email, role: m.user.role },
+                }))}
+              />
             ) : (
               <HomeworkForm
                 lessonId={lesson.id}

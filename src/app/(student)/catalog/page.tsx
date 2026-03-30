@@ -3,7 +3,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { tokens } from "@/lib/design-tokens";
-import { formatPrice } from "@/lib/utils";
+import { formatPrice, lessonsLabel } from "@/lib/utils";
 import Link from "next/link";
 
 export default async function CatalogPage() {
@@ -38,7 +38,7 @@ export default async function CatalogPage() {
                   {product.type === "COURSE" ? "Курс" : "Марафон"}
                 </Badge>
                 <span className="text-xs text-muted-foreground">
-                  {product._count.lessons} уроков
+                  {lessonsLabel(product._count.lessons)}
                 </span>
               </div>
               <CardTitle className="text-lg">{product.title}</CardTitle>

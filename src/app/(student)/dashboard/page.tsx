@@ -7,6 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { tokens } from "@/lib/design-tokens";
 import { BookOpen, Clock } from "lucide-react";
+import { lessonsLabel } from "@/lib/utils";
 
 export default async function DashboardPage() {
   const session = await auth();
@@ -84,7 +85,7 @@ export default async function DashboardPage() {
                     </div>
                     <Progress value={enrollment.progress * 100} />
                     <p className="text-xs text-muted-foreground">
-                      {enrollment.product._count.lessons} уроков
+                      {lessonsLabel(enrollment.product._count.lessons)}
                     </p>
                   </div>
                 </CardContent>
