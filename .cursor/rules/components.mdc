@@ -1,0 +1,35 @@
+---
+description: Rules for React components
+globs: "src/components/**/*.tsx,src/app/**/*.tsx"
+---
+
+# Component Rules
+
+## Structure
+- One component per file
+- Props type defined above the component in the same file
+- Use `cn()` from `@/lib/utils` for conditional class merging
+- Apply design tokens from `@/lib/design-tokens.ts`
+
+## Shadcn UI
+- Always use Shadcn components from `@/components/ui/`
+- Customize via Tailwind classes, NOT by modifying Shadcn source
+- Use `Form` component with `react-hook-form` + Zod for all forms
+
+## Server vs Client
+- Pages and layouts: Server Components
+- Interactive elements (forms, dropdowns, modals): Client Components with `"use client"`
+- Data fetching: Server Components or Server Actions only
+- Never use `useEffect` for data fetching
+
+## Accessibility
+- All interactive elements must have `aria-label` or visible labels
+- Use semantic HTML (`nav`, `main`, `section`, `article`)
+- Keyboard navigation support for custom components
+- Focus management in modals and dialogs
+
+## Mobile-First
+- All components must be responsive
+- Start with mobile styles, add `md:` and `lg:` breakpoints
+- Touch targets minimum 44x44px
+- Use `Sheet` component for mobile navigation

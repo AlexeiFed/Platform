@@ -1,0 +1,74 @@
+---
+description: General project rules for LMS Platform
+globs: "**/*"
+---
+
+# LMS Platform — General Rules
+
+## Tech Stack
+- **Framework**: Next.js 15 (App Router)
+- **Language**: TypeScript (strict mode)
+- **Styling**: Tailwind CSS + Shadcn UI
+- **ORM**: Prisma
+- **Database**: PostgreSQL
+- **Auth**: NextAuth.js v5 (Auth.js)
+- **Storage**: Yandex Cloud S3 (via AWS SDK v3)
+- **PWA**: next-pwa
+
+## Architecture Principles
+- Server Components by default, Client Components only when needed (interactivity, hooks)
+- Server Actions for all mutations — NO API routes for CRUD
+- Collocate related files: page, actions, components in the same route folder
+- Use `src/` directory structure
+- Design tokens from `src/lib/design-tokens.ts` for all styling constants
+
+## Naming Conventions
+- Files: `kebab-case.ts` / `kebab-case.tsx`
+- Components: `PascalCase`
+- Functions/variables: `camelCase`
+- DB models: `PascalCase` (Prisma)
+- Server Actions: `camelCase` with verb prefix (`createCourse`, `updateLesson`)
+- Types/Interfaces: `PascalCase` with no `I` prefix
+
+## Code Style
+- No default exports except pages/layouts
+- Prefer `const` arrow functions for components
+- Use Zod for all form validation (server + client)
+- Always handle errors with try/catch in Server Actions
+- Return `{ success, data?, error? }` from Server Actions
+- Use `revalidatePath` / `revalidateTag` after mutations
+
+## Folder Structure
+```
+src/
+├── app/
+│   ├── (auth)/          # Login, Register
+│   ├── (student)/       # Student-facing pages
+│   ├── (admin)/         # Admin dashboard
+│   ├── api/             # Only for webhooks, S3 presign
+│   └── layout.tsx
+├── components/
+│   ├── ui/              # Shadcn UI components
+│   ├── shared/          # Reusable project components
+│   └── forms/           # Form components
+├── lib/
+│   ├── prisma.ts        # Prisma client singleton
+│   ├── auth.ts          # NextAuth config
+│   ├── s3.ts            # S3 client + helpers
+│   ├── design-tokens.ts # Design system tokens
+│   └── utils.ts         # Utility functions
+├── types/               # Shared TypeScript types
+└── hooks/               # Custom React hooks
+```
+
+## Performance
+- Use `loading.tsx` for Suspense boundaries
+- Use `dynamic` import for heavy client components
+- Optimize images with `next/image`
+- Use `fetchCache` and `revalidate` for caching strategies
+
+## Security
+- Validate all inputs with Zod on the server
+- Check auth + role in every Server Action and page
+- Never expose internal IDs in URLs where avoidable — use slugs
+- Sanitize Markdown/HTML content before rendering

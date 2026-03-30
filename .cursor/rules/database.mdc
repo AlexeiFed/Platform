@@ -1,0 +1,31 @@
+---
+description: Database and Prisma rules
+globs: "prisma/**/*,src/lib/prisma.ts,src/**/*actions*.ts"
+---
+
+# Database & Prisma Rules
+
+## Schema
+- Use `uuid` for primary keys
+- Always add `createdAt` and `updatedAt` timestamps
+- Use enums for fixed values (Role, ProductType, HomeworkStatus, etc.)
+- Soft-delete via `deletedAt` field where appropriate
+- Index frequently queried fields
+
+## Prisma Client
+- Single instance via `src/lib/prisma.ts` (global singleton pattern for dev)
+- Always use `select` or `include` to limit fetched data
+- Use transactions for multi-step operations
+- Handle `PrismaClientKnownRequestError` explicitly
+
+## Server Actions
+- All DB mutations via Server Actions in colocated `actions.ts` files
+- Always validate input with Zod before DB operations
+- Always check authorization (role + ownership) before mutations
+- Use `revalidatePath()` after successful mutations
+- Return typed results: `{ success: boolean; data?: T; error?: string }`
+
+## Migrations
+- Use `npx prisma migrate dev` for development
+- Descriptive migration names: `npx prisma migrate dev --name add_homework_status`
+- Never edit migration files after they've been applied

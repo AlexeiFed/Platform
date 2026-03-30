@@ -1,0 +1,34 @@
+---
+description: Authentication and authorization rules
+globs: "src/lib/auth.ts,src/app/(auth)/**/*,src/middleware.ts"
+---
+
+# Auth Rules (NextAuth.js v5)
+
+## Setup
+- Use NextAuth.js v5 (Auth.js) with Prisma adapter
+- Credentials provider (email + password) as primary
+- bcrypt for password hashing
+- JWT strategy for sessions
+
+## Roles
+- `ADMIN` — full access, manage everything
+- `CURATOR` — review homework, manage assigned courses
+- `USER` — student, access enrolled courses only
+
+## Authorization Pattern
+```typescript
+// In Server Actions / Server Components
+const session = await auth();
+if (!session) redirect("/login");
+if (session.user.role !== "ADMIN") throw new Error("Forbidden");
+```
+
+## Middleware
+- Protect `/admin/*` routes — ADMIN + CURATOR only
+- Protect `/learn/*` routes — authenticated users only
+- Public routes: `/`, `/login`, `/register`, `/catalog`
+
+## Session Extension
+- Extend session with `role` and `id` fields
+- Type-safe session via module augmentation in `types/next-auth.d.ts`
