@@ -28,6 +28,7 @@ export default function NewCoursePage() {
       currency: "RUB",
       published: false,
       startDate: (fd.get("startDate") as string) || undefined,
+      durationDays: productType === "MARATHON" ? Number(fd.get("durationDays")) || undefined : undefined,
     });
 
     if (result.error) {
@@ -81,6 +82,12 @@ export default function NewCoursePage() {
                 <Input name="startDate" type="date" required={productType === "MARATHON"} />
               </div>
             </div>
+            {productType === "MARATHON" && (
+              <div className="space-y-2">
+                <label className={tokens.typography.label}>Длительность марафона (дней)</label>
+                <Input name="durationDays" type="number" min="1" defaultValue="22" required />
+              </div>
+            )}
             <div className="flex gap-3 pt-2">
               <Button type="submit" disabled={loading}>
                 {loading ? "Создаём..." : "Создать"}

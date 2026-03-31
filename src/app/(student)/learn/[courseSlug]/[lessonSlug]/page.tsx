@@ -47,10 +47,35 @@ export default async function LessonPage({ params }: Props) {
 
   const lesson = await prisma.lesson.findUnique({
     where: { productId_slug: { productId: product.id, slug: lessonSlug } },
-    include: { attachments: true },
+    include: {
+      attachments: true,
+      marathonEvents: {
+        where: { published: true },
+        select: {
+          id: true,
+          dayOffset: true,
+          title: true,
+        },
+        orderBy: [{ dayOffset: "asc" }, { position: "asc" }],
+      },
+    },
   });
 
   if (!lesson || !lesson.published) notFound();
+
+  if (product.type === "MARATHON" && product.startDate && lesson.marathonEvents.length > 0) {
+    const startDate = new Date(product.startDate);
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const firstEventDate = new Date(startDate);
+    firstEventDate.setHours(0, 0, 0, 0);
+    firstEventDate.setDate(firstEventDate.getDate() + lesson.marathonEvents[0].dayOffset);
+
+    if (startOfToday < firstEventDate) {
+      redirect(`/learn/${courseSlug}`);
+    }
+  }
 
   const currentIndex = product.lessons.findIndex((l) => l.slug === lessonSlug);
   const prevLesson = currentIndex > 0 ? product.lessons[currentIndex - 1] : null;

@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { syncMarathonEnrollmentProgress } from "@/lib/marathon-progress-server";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { emitHomeworkEvent } from "@/lib/realtime";
@@ -28,8 +29,28 @@ export async function reviewHomework(
       },
     });
 
-    if (status === "APPROVED") {
-      const totalLessons = submission.lesson.product._count.lessons;
+    const enrollment = await prisma.enrollment.findUnique({
+      where: {
+        userId_productId: {
+          userId: submission.userId,
+          productId: submission.lesson.productId,
+        },
+      },
+      select: {
+        id: true,
+        product: {
+          select: {
+            type: true,
+            _count: { select: { lessons: true } },
+          },
+        },
+      },
+    });
+
+    if (enrollment?.product.type === "MARATHON") {
+      await syncMarathonEnrollmentProgress(enrollment.id);
+    } else if (enrollment) {
+      const totalLessons = enrollment.product._count.lessons;
       const approvedCount = await prisma.homeworkSubmission.count({
         where: {
           userId: submission.userId,
@@ -38,11 +59,8 @@ export async function reviewHomework(
         },
       });
 
-      await prisma.enrollment.updateMany({
-        where: {
-          userId: submission.userId,
-          productId: submission.lesson.productId,
-        },
+      await prisma.enrollment.update({
+        where: { id: enrollment.id },
         data: {
           progress: totalLessons > 0 ? approvedCount / totalLessons : 0,
         },

@@ -4,6 +4,7 @@ type ProductVisibilityInput = {
   type: ProductType;
   published: boolean;
   startDate: Date | string | null;
+  durationDays?: number | null;
   deletedAt?: Date | string | null;
 };
 
@@ -12,13 +13,21 @@ const getStartOfDay = (value: Date | string) => {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 };
 
-export function getMarathonHideAt(startDate: Date | string | null) {
+export function getMarathonHideAt(
+  startDate: Date | string | null,
+  durationDays?: number | null
+) {
   if (!startDate) {
     return null;
   }
 
   const hideAt = getStartOfDay(startDate);
-  hideAt.setDate(hideAt.getDate() + 1);
+
+  if (!durationDays || durationDays < 1) {
+    return null;
+  }
+
+  hideAt.setDate(hideAt.getDate() + durationDays);
   return hideAt;
 }
 
@@ -31,9 +40,13 @@ export function isProductPubliclyVisible(product: ProductVisibilityInput) {
     return true;
   }
 
-  const hideAt = getMarathonHideAt(product.startDate);
-  if (!hideAt) {
+  if (!product.startDate) {
     return false;
+  }
+
+  const hideAt = getMarathonHideAt(product.startDate, product.durationDays);
+  if (!hideAt) {
+    return true;
   }
 
   return new Date() < hideAt;

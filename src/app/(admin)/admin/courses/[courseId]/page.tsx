@@ -15,6 +15,9 @@ export default async function CourseEditorPage({ params }: Props) {
   const product = await prisma.product.findUnique({
     where: { id: courseId },
     include: {
+      marathonEvents: {
+        orderBy: [{ dayOffset: "asc" }, { position: "asc" }, { createdAt: "asc" }],
+      },
       lessons: {
         orderBy: { order: "asc" },
         include: {
@@ -39,10 +42,18 @@ export default async function CourseEditorPage({ params }: Props) {
     currency: productData.currency,
     published: productData.published,
     startDate: productData.startDate?.toISOString() ?? null,
+    durationDays: productData.durationDays ?? null,
     createdAt: productData.createdAt.toISOString(),
     updatedAt: productData.updatedAt.toISOString(),
     deletedAt: productData.deletedAt?.toISOString() ?? null,
   };
+
+  const serializedMarathonEvents = product.marathonEvents.map((event) => ({
+    ...event,
+    blocks: event.blocks,
+    createdAt: event.createdAt.toISOString(),
+    updatedAt: event.updatedAt.toISOString(),
+  }));
 
   const serializedLessons = product.lessons.map((l) => ({
     ...l,
@@ -74,7 +85,11 @@ export default async function CourseEditorPage({ params }: Props) {
         </div>
       </div>
 
-      <CourseEditor product={serializedProduct} lessons={serializedLessons} />
+      <CourseEditor
+        product={serializedProduct}
+        lessons={serializedLessons}
+        marathonEvents={serializedMarathonEvents}
+      />
     </div>
   );
 }

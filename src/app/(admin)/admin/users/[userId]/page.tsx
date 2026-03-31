@@ -5,8 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { tokens } from "@/lib/design-tokens";
+import { calculateMarathonProgress } from "@/lib/marathon-progress";
 import { formatDate, getInitials, lessonsLabel } from "@/lib/utils";
 import { formatHomeworkDateTime } from "@/lib/homework";
+import { MarathonProceduresManager } from "./marathon-procedures-manager";
 
 type Props = {
   params: Promise<{ userId: string }>;
@@ -27,7 +29,41 @@ export default async function AdminUserDetailsPage({ params }: Props) {
               slug: true,
               type: true,
               published: true,
+              startDate: true,
+              durationDays: true,
+              marathonEvents: {
+                where: { published: true },
+                select: {
+                  id: true,
+                  lesson: {
+                    select: {
+                      submissions: {
+                        where: { userId },
+                        select: { status: true },
+                        take: 1,
+                      },
+                    },
+                  },
+                },
+              },
               _count: { select: { lessons: true } },
+            },
+          },
+          procedures: {
+            include: {
+              procedureType: {
+                select: {
+                  id: true,
+                  title: true,
+                },
+              },
+            },
+            orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+          },
+          eventCompletions: {
+            select: {
+              id: true,
+              eventId: true,
             },
           },
         },
@@ -72,6 +108,34 @@ export default async function AdminUserDetailsPage({ params }: Props) {
 
   const roleLabel =
     user.role === "ADMIN" ? "Админ" : user.role === "CURATOR" ? "Куратор" : "Студент";
+  const procedureTypes = await prisma.procedureType.findMany({
+    orderBy: { title: "asc" },
+  });
+  const marathonEnrollments = user.enrollments
+    .filter((enrollment) => enrollment.product.type === "MARATHON")
+    .map((enrollment) => ({
+      id: enrollment.id,
+      createdAt: enrollment.createdAt.toISOString(),
+      product: {
+        id: enrollment.product.id,
+        title: enrollment.product.title,
+        slug: enrollment.product.slug,
+        published: enrollment.product.published,
+        startDate: enrollment.product.startDate?.toISOString() ?? null,
+        durationDays: enrollment.product.durationDays ?? null,
+      },
+      procedures: enrollment.procedures.map((procedure) => ({
+        id: procedure.id,
+        scheduledAt: procedure.scheduledAt?.toISOString() ?? null,
+        completedAt: procedure.completedAt?.toISOString() ?? null,
+        notes: procedure.notes ?? null,
+        position: procedure.position,
+        procedureType: {
+          id: procedure.procedureType.id,
+          title: procedure.procedureType.title,
+        },
+      })),
+    }));
 
   return (
     <div className="space-y-6">
@@ -114,7 +178,18 @@ export default async function AdminUserDetailsPage({ params }: Props) {
           </Card>
         ) : (
           <div className="grid gap-3">
-            {user.enrollments.map((enrollment) => (
+            {user.enrollments.map((enrollment) => {
+              const progressValue = enrollment.product.type === "MARATHON"
+                ? calculateMarathonProgress({
+                    events: enrollment.product.marathonEvents.map((event) => ({
+                      ...event,
+                      completions: enrollment.eventCompletions.filter((completion) => completion.eventId === event.id),
+                    })),
+                    procedures: enrollment.procedures,
+                  }).value
+                : enrollment.progress;
+
+              return (
               <Card key={enrollment.id}>
                 <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
@@ -128,7 +203,7 @@ export default async function AdminUserDetailsPage({ params }: Props) {
                       </Badge>
                     </div>
                     <div className="mt-1 text-sm text-muted-foreground">
-                      {lessonsLabel(enrollment.product._count.lessons)} · прогресс {Math.round(enrollment.progress * 100)}%
+                      {lessonsLabel(enrollment.product._count.lessons)} · прогресс {Math.round(progressValue * 100)}%
                     </div>
                   </div>
                   <div className="text-sm text-muted-foreground">
@@ -136,7 +211,7 @@ export default async function AdminUserDetailsPage({ params }: Props) {
                   </div>
                 </CardContent>
               </Card>
-            ))}
+            )})}
           </div>
         )}
       </section>
@@ -193,6 +268,20 @@ export default async function AdminUserDetailsPage({ params }: Props) {
           </div>
         )}
       </section>
+
+      {marathonEnrollments.length > 0 && (
+        <section className="space-y-3">
+          <h2 className={tokens.typography.h4}>Процедуры марафонов</h2>
+          <MarathonProceduresManager
+            userId={user.id}
+            enrollments={marathonEnrollments}
+            procedureTypes={procedureTypes.map((procedureType) => ({
+              id: procedureType.id,
+              title: procedureType.title,
+            }))}
+          />
+        </section>
+      )}
 
       {user.role === "CURATOR" && (
         <section className="space-y-3">

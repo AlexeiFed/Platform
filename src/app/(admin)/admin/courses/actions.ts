@@ -14,6 +14,7 @@ const productSchema = z.object({
   currency: z.string().optional().default("RUB"),
   published: z.boolean().default(false),
   startDate: z.string().optional(),
+  durationDays: z.coerce.number().int().min(1, "Длительность должна быть не меньше 1 дня").optional(),
   coverUrl: z.string().optional(),
 }).superRefine((data, ctx) => {
   if (data.type === "MARATHON" && !data.startDate?.trim()) {
@@ -21,6 +22,14 @@ const productSchema = z.object({
       code: z.ZodIssueCode.custom,
       path: ["startDate"],
       message: "Для марафона укажите дату старта",
+    });
+  }
+
+  if (data.type === "MARATHON" && !data.durationDays) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["durationDays"],
+      message: "Для марафона укажите длительность в днях",
     });
   }
 });
@@ -42,6 +51,7 @@ export async function createProduct(input: z.infer<typeof productSchema>) {
         ...data,
         slug: finalSlug,
         startDate: data.type === "MARATHON" && data.startDate ? new Date(data.startDate) : null,
+        durationDays: data.type === "MARATHON" ? data.durationDays ?? null : null,
         price: data.price ?? null,
       },
       select: { id: true },
@@ -68,6 +78,7 @@ export async function updateProduct(id: string, input: z.infer<typeof productSch
       data: {
         ...data,
         startDate: data.type === "MARATHON" && data.startDate ? new Date(data.startDate) : null,
+        durationDays: data.type === "MARATHON" ? data.durationDays ?? null : null,
         price: data.price ?? null,
       },
     });

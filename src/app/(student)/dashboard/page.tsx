@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { calculateMarathonProgress } from "@/lib/marathon-progress";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,7 +24,32 @@ export default async function DashboardPage() {
           slug: true,
           type: true,
           coverUrl: true,
+          marathonEvents: {
+            where: { published: true },
+            select: {
+              id: true,
+              lesson: {
+                select: {
+                  submissions: {
+                    where: { userId: session.user.id },
+                    select: { status: true },
+                    take: 1,
+                  },
+                },
+              },
+              completions: {
+                where: { enrollment: { userId: session.user.id } },
+                select: { id: true },
+                take: 1,
+              },
+            },
+          },
           _count: { select: { lessons: true } },
+        },
+      },
+      procedures: {
+        select: {
+          completedAt: true,
         },
       },
     },
@@ -51,7 +77,15 @@ export default async function DashboardPage() {
         </Card>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {enrollments.map((enrollment) => (
+          {enrollments.map((enrollment) => {
+            const progressValue = enrollment.product.type === "MARATHON"
+              ? calculateMarathonProgress({
+                  events: enrollment.product.marathonEvents,
+                  procedures: enrollment.procedures,
+                }).value
+              : enrollment.progress;
+
+            return (
             <Link key={enrollment.id} href={`/learn/${enrollment.product.slug}`}>
               <Card className={`${tokens.shadow.card} h-full`}>
                 {enrollment.product.coverUrl && (
@@ -81,9 +115,9 @@ export default async function DashboardPage() {
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Прогресс</span>
-                      <span className="font-medium">{Math.round(enrollment.progress * 100)}%</span>
+                      <span className="font-medium">{Math.round(progressValue * 100)}%</span>
                     </div>
-                    <Progress value={enrollment.progress * 100} />
+                    <Progress value={progressValue * 100} />
                     <p className="text-xs text-muted-foreground">
                       {lessonsLabel(enrollment.product._count.lessons)}
                     </p>
@@ -91,7 +125,7 @@ export default async function DashboardPage() {
                 </CardContent>
               </Card>
             </Link>
-          ))}
+          )})}
         </div>
       )}
     </div>

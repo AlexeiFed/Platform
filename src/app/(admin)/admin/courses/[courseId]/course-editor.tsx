@@ -26,14 +26,28 @@ import { tokens } from "@/lib/design-tokens";
 import {
   Plus, GripVertical, FileText, Film, X, Pencil, Trash2,
   Eye, EyeOff, Image as ImageIcon, Upload, Loader2,
-  ClipboardList,
+  ClipboardList, CalendarDays, ArrowUp, ArrowDown,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useRouter } from "next/navigation";
 import {
   createLesson, updateLesson, deleteLesson, reorderLessons, updateProduct,
 } from "../actions";
+import {
+  createMarathonEvent,
+  deleteMarathonEvent,
+  reorderMarathonEvents,
+  updateMarathonEvent,
+} from "./marathon-actions";
 import { AssetManager } from "../../assets/asset-manager";
-import type { ProductType, UnlockRule } from "@prisma/client";
+import type { MarathonEventType, MarathonTrack, ProductType, UnlockRule } from "@prisma/client";
 
 // === Types ===
 
@@ -54,6 +68,7 @@ type SerializedProduct = {
   currency: string;
   published: boolean;
   startDate: string | null;
+  durationDays: number | null;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
@@ -79,13 +94,182 @@ type SerializedLesson = {
   _count: { submissions: number };
 };
 
+type SerializedMarathonEvent = {
+  id: string;
+  productId: string;
+  title: string;
+  description: string | null;
+  type: MarathonEventType;
+  track: MarathonTrack;
+  dayOffset: number;
+  weekNumber: number | null;
+  position: number;
+  lessonId: string | null;
+  blocks: unknown;
+  published: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
 type ProductForm = {
   title: string;
   description: string;
   coverUrl: string;
   price: string;
   startDate: string;
+  durationDays: string;
 };
+
+type MarathonEventForm = {
+  title: string;
+  description: string;
+  type: MarathonEventType;
+  track: MarathonTrack;
+  dayOffset: string;
+  weekNumber: string;
+  lessonId: string;
+  published: boolean;
+};
+
+const marathonEventTypeOptions: { value: MarathonEventType; label: string }[] = [
+  { value: "INFO", label: "Инфо" },
+  { value: "TRAINING", label: "Тренировка" },
+  { value: "NUTRITION", label: "Питание" },
+  { value: "PROCEDURE", label: "Процедуры" },
+  { value: "BONUS", label: "Бонус" },
+  { value: "LIVE", label: "Эфир" },
+  { value: "RESULT", label: "Результат" },
+];
+
+const marathonTrackOptions: { value: MarathonTrack; label: string }[] = [
+  { value: "ALL", label: "Все" },
+  { value: "HOME", label: "Дом" },
+  { value: "GYM", label: "Зал" },
+];
+
+function getEmptyMarathonEventForm(): MarathonEventForm {
+  return {
+    title: "",
+    description: "",
+    type: "INFO",
+    track: "ALL",
+    dayOffset: "0",
+    weekNumber: "",
+    lessonId: "",
+    published: false,
+  };
+}
+
+function MarathonEventFields({
+  form,
+  onPatch,
+  lessons,
+}: {
+  form: MarathonEventForm;
+  onPatch: (patch: Partial<MarathonEventForm>) => void;
+  lessons: SerializedLesson[];
+}) {
+  return (
+    <>
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2">
+          <label className={tokens.typography.label}>Название события</label>
+          <Input
+            value={form.title}
+            onChange={(e) => onPatch({ title: e.target.value })}
+            placeholder="Например, Питание: энергетический баланс"
+            required
+          />
+        </div>
+        <div className="space-y-2">
+          <label className={tokens.typography.label}>Тип события</label>
+          <select
+            value={form.type}
+            onChange={(e) => onPatch({ type: e.target.value as MarathonEventType })}
+            className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+          >
+            {marathonEventTypeOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <label className={tokens.typography.label}>Описание</label>
+        <textarea
+          value={form.description}
+          onChange={(e) => onPatch({ description: e.target.value })}
+          placeholder="Короткое описание события, что нужно сделать или посмотреть"
+          className="flex min-h-[100px] w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-4">
+        <div className="space-y-2">
+          <label className={tokens.typography.label}>День марафона</label>
+          <Input
+            type="number"
+            min="0"
+            value={form.dayOffset}
+            onChange={(e) => onPatch({ dayOffset: e.target.value })}
+            required
+          />
+        </div>
+        <div className="space-y-2">
+          <label className={tokens.typography.label}>Неделя</label>
+          <Input
+            type="number"
+            min="0"
+            value={form.weekNumber}
+            onChange={(e) => onPatch({ weekNumber: e.target.value })}
+            placeholder="0 — подготовка, 1+ — недели"
+          />
+        </div>
+        <div className="space-y-2">
+          <label className={tokens.typography.label}>Трек</label>
+          <select
+            value={form.track}
+            onChange={(e) => onPatch({ track: e.target.value as MarathonTrack })}
+            className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+          >
+            {marathonTrackOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-2">
+          <label className={tokens.typography.label}>Урок</label>
+          <select
+            value={form.lessonId}
+            onChange={(e) => onPatch({ lessonId: e.target.value })}
+            className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+          >
+            <option value="">Без урока</option>
+            {lessons.map((lesson) => (
+              <option key={lesson.id} value={lesson.id}>
+                {lesson.order}. {lesson.title}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={form.published}
+          onChange={(e) => onPatch({ published: e.target.checked })}
+        />
+        Сразу опубликовать событие
+      </label>
+    </>
+  );
+}
 
 function uid() {
   return crypto.randomUUID();
@@ -338,17 +522,24 @@ function SortableBlock({
 export function CourseEditor({
   product,
   lessons: initialLessons,
+  marathonEvents: initialMarathonEvents,
 }: {
   product: SerializedProduct;
   lessons: SerializedLesson[];
+  marathonEvents: SerializedMarathonEvent[];
 }) {
   const router = useRouter();
   const [lessons, setLessons] = useState(initialLessons);
+  const [marathonEvents, setMarathonEvents] = useState(initialMarathonEvents);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setLessons(initialLessons);
   }, [initialLessons]);
+
+  useEffect(() => {
+    setMarathonEvents(initialMarathonEvents);
+  }, [initialMarathonEvents]);
 
   const [showNewLesson, setShowNewLesson] = useState(false);
   const [editingLesson, setEditingLesson] = useState<SerializedLesson | null>(null);
@@ -365,7 +556,13 @@ export function CourseEditor({
     coverUrl: product.coverUrl ?? "",
     price: product.price ? String(product.price) : "",
     startDate: toDateInputValue(product.startDate),
+    durationDays: product.durationDays ? String(product.durationDays) : "",
   });
+  const [marathonEventForm, setMarathonEventForm] = useState<MarathonEventForm>(getEmptyMarathonEventForm);
+  const [marathonEditOpen, setMarathonEditOpen] = useState(false);
+  const [marathonEditEventId, setMarathonEditEventId] = useState<string | null>(null);
+  const [marathonEditForm, setMarathonEditForm] = useState<MarathonEventForm>(getEmptyMarathonEventForm);
+  const [marathonSaving, setMarathonSaving] = useState(false);
   const [showCoverPicker, setShowCoverPicker] = useState(false);
   const [coverUploading, setCoverUploading] = useState(false);
   const coverFileRef = useRef<HTMLInputElement>(null);
@@ -381,8 +578,9 @@ export function CourseEditor({
       coverUrl: product.coverUrl ?? "",
       price: product.price ? String(product.price) : "",
       startDate: toDateInputValue(product.startDate),
+      durationDays: product.durationDays ? String(product.durationDays) : "",
     });
-  }, [product.id, product.title, product.description, product.coverUrl, product.price, product.startDate]);
+  }, [product.id, product.title, product.description, product.coverUrl, product.price, product.startDate, product.durationDays]);
 
   const lessonSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -417,6 +615,7 @@ export function CourseEditor({
         currency: product.currency,
         published: !product.published,
         startDate: product.type === "MARATHON" ? productForm.startDate || undefined : undefined,
+        durationDays: product.type === "MARATHON" ? Number(productForm.durationDays) || undefined : undefined,
       });
       if (result.error) setError(result.error);
       else router.refresh();
@@ -442,6 +641,7 @@ export function CourseEditor({
       const coverUrl = productForm.coverUrl.trim();
       const priceNum = productForm.price.trim() ? Number(productForm.price.trim()) : undefined;
       const startDate = productForm.startDate.trim();
+      const durationDays = productForm.durationDays.trim() ? Number(productForm.durationDays.trim()) : undefined;
 
       const result = await updateProduct(product.id, {
         title,
@@ -452,9 +652,10 @@ export function CourseEditor({
         currency: product.currency,
         published: product.published,
         startDate: product.type === "MARATHON" ? startDate || undefined : undefined,
+        durationDays: product.type === "MARATHON" && Number.isFinite(durationDays as number) ? (durationDays as number) : undefined,
       });
 
-      if (result.error) {
+      if ("error" in result && result.error) {
         setError(result.error);
         return;
       }
@@ -467,6 +668,174 @@ export function CourseEditor({
       setError("Ошибка при обновлении курса");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleCreateMarathonEvent(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (marathonSaving) return;
+
+    try {
+      setMarathonSaving(true);
+      setError("");
+      setSuccessMsg("");
+
+      const payload = {
+        title: marathonEventForm.title,
+        description: marathonEventForm.description || undefined,
+        type: marathonEventForm.type,
+        track: marathonEventForm.track,
+        dayOffset: Number(marathonEventForm.dayOffset),
+        weekNumber:
+          marathonEventForm.weekNumber.trim() === "" ? undefined : Number(marathonEventForm.weekNumber),
+        lessonId: marathonEventForm.lessonId || undefined,
+        published: marathonEventForm.published,
+      };
+      const result = await createMarathonEvent(product.id, payload);
+
+      if ("error" in result && result.error) {
+        setError(result.error);
+        return;
+      }
+
+      setMarathonEventForm(getEmptyMarathonEventForm());
+      setSuccessMsg("Событие марафона добавлено");
+      setTimeout(() => setSuccessMsg(""), 3000);
+      router.refresh();
+    } catch (err) {
+      console.error("[handleCreateMarathonEvent]", err);
+      setError("Ошибка при создании события марафона");
+    } finally {
+      setMarathonSaving(false);
+    }
+  }
+
+  function openMarathonEditModal(event: SerializedMarathonEvent) {
+    setMarathonEditEventId(event.id);
+    setMarathonEditForm({
+      title: event.title,
+      description: event.description ?? "",
+      type: event.type,
+      track: event.track,
+      dayOffset: String(event.dayOffset),
+      weekNumber: event.weekNumber != null ? String(event.weekNumber) : "",
+      lessonId: event.lessonId ?? "",
+      published: event.published,
+    });
+    setMarathonEditOpen(true);
+  }
+
+  function closeMarathonEditModal() {
+    setMarathonEditOpen(false);
+    setMarathonEditEventId(null);
+    setMarathonEditForm(getEmptyMarathonEventForm());
+  }
+
+  async function handleSaveMarathonEdit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (marathonSaving || !marathonEditEventId) return;
+
+    try {
+      setMarathonSaving(true);
+      setError("");
+      setSuccessMsg("");
+
+      const payload = {
+        title: marathonEditForm.title,
+        description: marathonEditForm.description || undefined,
+        type: marathonEditForm.type,
+        track: marathonEditForm.track,
+        dayOffset: Number(marathonEditForm.dayOffset),
+        weekNumber:
+          marathonEditForm.weekNumber.trim() === "" ? undefined : Number(marathonEditForm.weekNumber),
+        lessonId: marathonEditForm.lessonId || undefined,
+        published: marathonEditForm.published,
+      };
+      const result = await updateMarathonEvent(marathonEditEventId, payload);
+
+      if ("error" in result && result.error) {
+        setError(result.error);
+        return;
+      }
+
+      closeMarathonEditModal();
+      setSuccessMsg("Событие марафона обновлено");
+      setTimeout(() => setSuccessMsg(""), 3000);
+      router.refresh();
+    } catch (err) {
+      console.error("[handleSaveMarathonEdit]", err);
+      setError("Ошибка при обновлении события марафона");
+    } finally {
+      setMarathonSaving(false);
+    }
+  }
+
+  async function handleDeleteMarathonEvent(eventId: string) {
+    if (marathonSaving) return;
+
+    try {
+      setMarathonSaving(true);
+      setError("");
+      setSuccessMsg("");
+
+      const result = await deleteMarathonEvent(eventId);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+
+      if (marathonEditEventId === eventId) {
+        closeMarathonEditModal();
+      }
+      setSuccessMsg("Событие марафона удалено");
+      setTimeout(() => setSuccessMsg(""), 3000);
+      router.refresh();
+    } catch (err) {
+      console.error("[handleDeleteMarathonEvent]", err);
+      setError("Ошибка при удалении события марафона");
+    } finally {
+      setMarathonSaving(false);
+    }
+  }
+
+  async function handleMoveMarathonEvent(
+    currentDayEvents: SerializedMarathonEvent[],
+    eventId: string,
+    direction: "up" | "down"
+  ) {
+    if (marathonSaving) return;
+
+    const currentIndex = currentDayEvents.findIndex((event) => event.id === eventId);
+    if (currentIndex < 0) return;
+
+    const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= currentDayEvents.length) return;
+
+    const reordered = arrayMove(currentDayEvents, currentIndex, targetIndex).map((event, index) => ({
+      id: event.id,
+      dayOffset: event.dayOffset,
+      position: index,
+    }));
+
+    try {
+      setMarathonSaving(true);
+      setError("");
+      setSuccessMsg("");
+
+      const result = await reorderMarathonEvents(product.id, reordered);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+
+      setSuccessMsg("Порядок событий обновлён");
+      setTimeout(() => setSuccessMsg(""), 3000);
+      router.refresh();
+    } catch (err) {
+      console.error("[handleMoveMarathonEvent]", err);
+      setError("Ошибка при изменении порядка событий");
+    } finally {
+      setMarathonSaving(false);
     }
   }
 
@@ -645,6 +1014,19 @@ export function CourseEditor({
     setShowNewLesson(true);
   }
 
+  const marathonEventsByDay = marathonEvents.reduce<Record<number, SerializedMarathonEvent[]>>((acc, event) => {
+    if (!acc[event.dayOffset]) {
+      acc[event.dayOffset] = [];
+    }
+
+    acc[event.dayOffset].push(event);
+    return acc;
+  }, {});
+
+  const sortedMarathonDays = Object.keys(marathonEventsByDay)
+    .map((key) => Number(key))
+    .sort((a, b) => a - b);
+
   return (
     <div className="space-y-6">
       {error && <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-lg">{error}</div>}
@@ -809,14 +1191,27 @@ export function CourseEditor({
             </div>
 
             {product.type === "MARATHON" && (
-              <div className="space-y-2">
-                <label className={tokens.typography.label}>Дата старта марафона</label>
-                <Input
-                  type="date"
-                  value={productForm.startDate}
-                  onChange={(e) => setProductForm((p) => ({ ...p, startDate: e.target.value }))}
-                  required
-                />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <label className={tokens.typography.label}>Дата старта марафона</label>
+                  <Input
+                    type="date"
+                    value={productForm.startDate}
+                    onChange={(e) => setProductForm((p) => ({ ...p, startDate: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className={tokens.typography.label}>Длительность марафона (дней)</label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={productForm.durationDays}
+                    onChange={(e) => setProductForm((p) => ({ ...p, durationDays: e.target.value }))}
+                    placeholder="21"
+                    required
+                  />
+                </div>
               </div>
             )}
 
@@ -839,6 +1234,167 @@ export function CourseEditor({
           </form>
         </CardContent>
       </Card>
+
+      {product.type === "MARATHON" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <CalendarDays className="h-4 w-4 text-primary" />
+              Расписание марафона
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <form onSubmit={handleCreateMarathonEvent} className="space-y-4 rounded-lg border p-4">
+              <div>
+                <p className="font-medium text-sm">Новое событие</p>
+                <p className="text-xs text-muted-foreground">
+                  Можно привязать событие к уроку или использовать его как календарный элемент. Редактирование — кнопка
+                  «Изменить» у события в списке ниже (открывается в отдельном окне).
+                </p>
+              </div>
+
+              <MarathonEventFields
+                form={marathonEventForm}
+                onPatch={(patch) => setMarathonEventForm((prev) => ({ ...prev, ...patch }))}
+                lessons={lessons}
+              />
+
+              <div className="flex gap-3">
+                <Button type="submit" disabled={marathonSaving}>
+                  {marathonSaving ? "Сохраняем..." : "Добавить событие"}
+                </Button>
+              </div>
+            </form>
+
+            <Dialog open={marathonEditOpen} onOpenChange={(open) => !open && closeMarathonEditModal()}>
+              <DialogContent className="max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Редактирование события</DialogTitle>
+                  <DialogDescription>
+                    Изменения сохраняются для выбранного дня и сразу видны студентам, если событие опубликовано.
+                  </DialogDescription>
+                </DialogHeader>
+                <form id="marathon-edit-form" onSubmit={handleSaveMarathonEdit} className="space-y-4">
+                  <MarathonEventFields
+                    form={marathonEditForm}
+                    onPatch={(patch) => setMarathonEditForm((prev) => ({ ...prev, ...patch }))}
+                    lessons={lessons}
+                  />
+                </form>
+                <DialogFooter className="gap-2 sm:gap-0">
+                  <Button type="button" variant="outline" onClick={closeMarathonEditModal} disabled={marathonSaving}>
+                    Отмена
+                  </Button>
+                  <Button type="submit" form="marathon-edit-form" disabled={marathonSaving}>
+                    {marathonSaving ? "Сохраняем..." : "Сохранить"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            <div className="space-y-4">
+              {sortedMarathonDays.length === 0 ? (
+                <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
+                  Пока нет событий марафона. Добавьте первый день или подготовительный этап.
+                </div>
+              ) : (
+                sortedMarathonDays.map((day) => (
+                  <div key={day} className="space-y-3 rounded-lg border p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <p className="font-medium">День {day}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {marathonEventsByDay[day]?.length ?? 0} событий
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      {marathonEventsByDay[day]?.map((event, eventIndex) => {
+                        const lesson = lessons.find((item) => item.id === event.lessonId);
+                        const dayEvents = marathonEventsByDay[day] ?? [];
+
+                        return (
+                          <div
+                            key={event.id}
+                            className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-3 md:flex-row md:items-start md:justify-between"
+                          >
+                            <div className="space-y-2">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-medium text-sm">{event.title}</span>
+                                <Badge variant="outline" className="text-xs">{event.type}</Badge>
+                                <Badge variant="secondary" className="text-xs">{event.track}</Badge>
+                                <Badge variant={event.published ? "success" : "outline"} className="text-xs">
+                                  {event.published ? "Опубликовано" : "Черновик"}
+                                </Badge>
+                                {event.weekNumber != null && (
+                                  <Badge variant="outline" className="text-xs">
+                                    {event.weekNumber === 0 ? "Подготовка" : `Неделя ${event.weekNumber}`}
+                                  </Badge>
+                                )}
+                              </div>
+                              {event.description && (
+                                <p className="text-sm text-muted-foreground">{event.description}</p>
+                              )}
+                              {lesson && (
+                                <p className="text-xs text-muted-foreground">
+                                  Привязан урок: {lesson.order}. {lesson.title}
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="flex gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={marathonSaving || eventIndex === 0}
+                                onClick={() => handleMoveMarathonEvent(dayEvents, event.id, "up")}
+                              >
+                                <ArrowUp className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={marathonSaving || eventIndex === dayEvents.length - 1}
+                                onClick={() => handleMoveMarathonEvent(dayEvents, event.id, "down")}
+                              >
+                                <ArrowDown className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={marathonSaving}
+                                onClick={() => openMarathonEditModal(event)}
+                              >
+                                <Pencil className="h-3.5 w-3.5 mr-1" />
+                                Изменить
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="text-destructive hover:text-destructive"
+                                disabled={marathonSaving}
+                                onClick={() => handleDeleteMarathonEvent(event.id)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5 mr-1" />
+                                Удалить
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* === LESSON FORM === */}
       {(showNewLesson || editingLesson) && (
