@@ -84,10 +84,20 @@ type ProductForm = {
   description: string;
   coverUrl: string;
   price: string;
+  startDate: string;
 };
 
 function uid() {
   return crypto.randomUUID();
+}
+
+function toDateInputValue(value: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function getPublicUrl(key: string) {
@@ -354,6 +364,7 @@ export function CourseEditor({
     description: product.description ?? "",
     coverUrl: product.coverUrl ?? "",
     price: product.price ? String(product.price) : "",
+    startDate: toDateInputValue(product.startDate),
   });
   const [showCoverPicker, setShowCoverPicker] = useState(false);
   const [coverUploading, setCoverUploading] = useState(false);
@@ -369,8 +380,9 @@ export function CourseEditor({
       description: product.description ?? "",
       coverUrl: product.coverUrl ?? "",
       price: product.price ? String(product.price) : "",
+      startDate: toDateInputValue(product.startDate),
     });
-  }, [product.id, product.title, product.description, product.coverUrl, product.price]);
+  }, [product.id, product.title, product.description, product.coverUrl, product.price, product.startDate]);
 
   const lessonSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -397,13 +409,14 @@ export function CourseEditor({
     try {
       setSaving(true);
       const result = await updateProduct(product.id, {
-        title: product.title,
+        title: productForm.title.trim(),
         type: product.type as "COURSE" | "MARATHON",
-        description: product.description ?? undefined,
-        price: product.price ?? undefined,
+        description: productForm.description.trim() || undefined,
+        coverUrl: productForm.coverUrl.trim() || undefined,
+        price: productForm.price.trim() ? Number(productForm.price.trim()) : undefined,
         currency: product.currency,
         published: !product.published,
-        startDate: product.startDate ?? undefined,
+        startDate: product.type === "MARATHON" ? productForm.startDate || undefined : undefined,
       });
       if (result.error) setError(result.error);
       else router.refresh();
@@ -428,6 +441,7 @@ export function CourseEditor({
       const description = productForm.description.trim();
       const coverUrl = productForm.coverUrl.trim();
       const priceNum = productForm.price.trim() ? Number(productForm.price.trim()) : undefined;
+      const startDate = productForm.startDate.trim();
 
       const result = await updateProduct(product.id, {
         title,
@@ -437,7 +451,7 @@ export function CourseEditor({
         price: Number.isFinite(priceNum as number) ? (priceNum as number) : undefined,
         currency: product.currency,
         published: product.published,
-        startDate: product.startDate ?? undefined,
+        startDate: product.type === "MARATHON" ? startDate || undefined : undefined,
       });
 
       if (result.error) {
@@ -793,6 +807,18 @@ export function CourseEditor({
                 />
               </div>
             </div>
+
+            {product.type === "MARATHON" && (
+              <div className="space-y-2">
+                <label className={tokens.typography.label}>Дата старта марафона</label>
+                <Input
+                  type="date"
+                  value={productForm.startDate}
+                  onChange={(e) => setProductForm((p) => ({ ...p, startDate: e.target.value }))}
+                  required
+                />
+              </div>
+            )}
 
             <div className="flex gap-3 flex-wrap">
               <Button type="submit" disabled={saving}>

@@ -13,8 +13,9 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const data = registerSchema.parse(body);
+    const email = data.email.trim().toLowerCase();
 
-    const exists = await prisma.user.findUnique({ where: { email: data.email } });
+    const exists = await prisma.user.findUnique({ where: { email } });
     if (exists) {
       return NextResponse.json({ error: "Пользователь с таким email уже существует" }, { status: 409 });
     }
@@ -23,8 +24,8 @@ export async function POST(req: NextRequest) {
 
     await prisma.user.create({
       data: {
-        name: data.name,
-        email: data.email,
+        name: data.name.trim(),
+        email,
         passwordHash,
       },
     });

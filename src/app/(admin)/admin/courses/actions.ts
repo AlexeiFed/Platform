@@ -15,6 +15,14 @@ const productSchema = z.object({
   published: z.boolean().default(false),
   startDate: z.string().optional(),
   coverUrl: z.string().optional(),
+}).superRefine((data, ctx) => {
+  if (data.type === "MARATHON" && !data.startDate?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["startDate"],
+      message: "Для марафона укажите дату старта",
+    });
+  }
 });
 
 export async function createProduct(input: z.infer<typeof productSchema>) {
@@ -33,16 +41,17 @@ export async function createProduct(input: z.infer<typeof productSchema>) {
       data: {
         ...data,
         slug: finalSlug,
-        startDate: data.startDate ? new Date(data.startDate) : null,
+        startDate: data.type === "MARATHON" && data.startDate ? new Date(data.startDate) : null,
         price: data.price ?? null,
       },
       select: { id: true },
     });
 
     revalidatePath("/admin/courses");
+    revalidatePath("/catalog");
     return { success: true, data: { id: product.id } };
   } catch (error) {
-    if (error instanceof z.ZodError) return { error: "Некорректные данные" };
+    if (error instanceof z.ZodError) return { error: error.issues[0]?.message ?? "Некорректные данные" };
     return { error: "Произошла ошибка" };
   }
 }
@@ -58,17 +67,18 @@ export async function updateProduct(id: string, input: z.infer<typeof productSch
       where: { id },
       data: {
         ...data,
-        startDate: data.startDate ? new Date(data.startDate) : null,
+        startDate: data.type === "MARATHON" && data.startDate ? new Date(data.startDate) : null,
         price: data.price ?? null,
       },
     });
 
     revalidatePath("/admin/courses");
     revalidatePath(`/admin/courses/${id}`);
+    revalidatePath("/catalog");
     return { success: true };
   } catch (error) {
     console.error("[updateProduct]", error);
-    if (error instanceof z.ZodError) return { error: "Некорректные данные" };
+    if (error instanceof z.ZodError) return { error: error.issues[0]?.message ?? "Некорректные данные" };
     return { error: "Произошла ошибка" };
   }
 }

@@ -20,7 +20,7 @@ export function HomeworkForm({
   const [answers, setAnswers] = useState<string[]>(hasQuestions ? questions.map(() => "") : [""]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoUrls, setPhotoUrls] = useState<string[]>([]);
   const [result, setResult] = useState<{ success?: boolean; error?: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -29,28 +29,35 @@ export function HomeworkForm({
   }
 
   async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file || !file.type.startsWith("image/")) return;
+    const files = Array.from(e.target.files ?? []).filter((file) => file.type.startsWith("image/"));
+    if (files.length === 0) return;
 
     setUploading(true);
     try {
-      const presignRes = await fetch("/api/s3/presign", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fileName: file.name,
-          contentType: file.type,
-          size: file.size,
-          path: "homework",
-        }),
-      });
-      if (!presignRes.ok) {
-        setUploading(false);
-        return;
+      const uploadedUrls: string[] = [];
+
+      for (const file of files) {
+        const presignRes = await fetch("/api/s3/presign", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fileName: file.name,
+            contentType: file.type,
+            size: file.size,
+            path: "homework",
+          }),
+        });
+        if (!presignRes.ok) {
+          continue;
+        }
+        const { url, key } = await presignRes.json();
+        await fetch(url, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
+        uploadedUrls.push(clientPublicUrl(key));
       }
-      const { url, key } = await presignRes.json();
-      await fetch(url, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
-      setPhotoUrl(clientPublicUrl(key));
+
+      if (uploadedUrls.length > 0) {
+        setPhotoUrls((prev) => [...prev, ...uploadedUrls]);
+      }
     } catch {
       /* silent */
     }
@@ -69,7 +76,8 @@ export function HomeworkForm({
     const res = await submitHomework({
       lessonId,
       content,
-      fileUrl: photoUrl ?? undefined,
+      fileUrl: photoUrls[0] ?? undefined,
+      fileUrls: photoUrls,
     });
     setResult(res);
     setLoading(false);
@@ -114,40 +122,45 @@ export function HomeworkForm({
           ref={fileRef}
           type="file"
           accept="image/*"
+          multiple
           className="hidden"
           onChange={handlePhotoUpload}
         />
 
-        {photoUrl ? (
-          <div className="relative inline-block">
-            <img
-              src={photoUrl}
-              alt="Прикреплённое фото"
-              className="max-h-40 rounded-lg border object-cover"
-            />
-            <button
-              type="button"
-              onClick={() => setPhotoUrl(null)}
-              className="absolute -top-2 -right-2 h-6 w-6 flex items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-sm"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
+        {photoUrls.length > 0 && (
+          <div className={`grid gap-2 ${photoUrls.length === 1 ? "grid-cols-1 max-w-xs" : photoUrls.length === 2 ? "grid-cols-2" : "grid-cols-2 md:grid-cols-3"}`}>
+            {photoUrls.map((photoUrl, index) => (
+              <div key={`${photoUrl}-${index}`} className="relative">
+                <img
+                  src={photoUrl}
+                  alt={`Прикреплённое фото ${index + 1}`}
+                  className="h-32 w-full rounded-lg border object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={() => setPhotoUrls((prev) => prev.filter((_, currentIndex) => currentIndex !== index))}
+                  className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-sm"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))}
           </div>
-        ) : (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={uploading}
-            onClick={() => fileRef.current?.click()}
-          >
-            {uploading ? (
-              <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Загрузка...</>
-            ) : (
-              <><ImagePlus className="h-4 w-4 mr-1.5" /> Прикрепить фото</>
-            )}
-          </Button>
         )}
+
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={uploading}
+          onClick={() => fileRef.current?.click()}
+        >
+          {uploading ? (
+            <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Загрузка...</>
+          ) : (
+            <><ImagePlus className="mr-1.5 h-4 w-4" /> {photoUrls.length > 0 ? "Добавить ещё фото" : "Прикрепить фото"}</>
+          )}
+        </Button>
       </div>
 
       {result?.error && (

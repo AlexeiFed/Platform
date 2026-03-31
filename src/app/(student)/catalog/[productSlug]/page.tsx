@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { tokens } from "@/lib/design-tokens";
 import { formatPrice } from "@/lib/utils";
+import { isProductPubliclyVisible } from "@/lib/product-visibility";
 import { EnrollButton } from "./enroll-button";
 
 type Props = {
@@ -23,7 +24,7 @@ export default async function ProductDetailsPage({ params }: Props) {
     include: { _count: { select: { lessons: true } } },
   });
 
-  if (!product || !product.published) notFound();
+  if (!product || !isProductPubliclyVisible(product)) notFound();
 
   const enrollment = await prisma.enrollment.findUnique({
     where: { userId_productId: { userId: session.user.id, productId: product.id } },
@@ -54,6 +55,14 @@ export default async function ProductDetailsPage({ params }: Props) {
               {product.price ? formatPrice(Number(product.price), product.currency) : "Бесплатно"}
             </span>
           </div>
+          {product.type === "MARATHON" && product.startDate && (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Старт</span>
+              <span className="font-medium">
+                {new Intl.DateTimeFormat("ru-RU").format(product.startDate)}
+              </span>
+            </div>
+          )}
         </CardContent>
         <CardFooter className="flex gap-2">
           <Button asChild variant="outline">

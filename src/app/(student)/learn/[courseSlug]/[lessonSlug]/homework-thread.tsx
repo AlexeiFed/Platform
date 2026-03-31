@@ -2,31 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
+import { HomeworkMessages } from "@/components/shared/homework-messages";
+import { formatHomeworkDateTime, type HomeworkThreadMessage, type HomeworkThreadSubmission } from "@/lib/homework";
 import { HomeworkForm } from "./homework-form";
 import { getHomeworkThread } from "./actions";
-
-type Msg = {
-  id: string;
-  content: string;
-  createdAt: string;
-  user: { name: string | null; email: string; role?: string };
-};
-
-type QA = { question: string; answer: string };
-
-function parseHomeworkContent(content: string | null): { type: "qa"; data: QA[] } | { type: "text"; data: string } {
-  if (!content) return { type: "text", data: "" };
-  try {
-    const parsed = JSON.parse(content);
-    if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === "object" && parsed[0] && "question" in parsed[0]) {
-      return { type: "qa", data: parsed as QA[] };
-    }
-  } catch {
-    /* not JSON */
-  }
-  return { type: "text", data: content };
-}
 
 export function HomeworkThread({
   lessonId,
@@ -36,12 +15,12 @@ export function HomeworkThread({
 }: {
   lessonId: string;
   questions?: string[];
-  submission: { id: string; status: string; fileUrl: string | null; content: string | null };
-  messages: Msg[];
+  submission: HomeworkThreadSubmission & { status: string };
+  messages: HomeworkThreadMessage[];
 }) {
-  const [live, setLive] = useState<{ submission: typeof submission; messages: Msg[] } | null>(null);
+  const [live, setLive] = useState<{ submission: typeof submission; messages: HomeworkThreadMessage[] } | null>(null);
   const sub = live?.submission ?? submission;
-  const msgs = live?.messages ?? messages;
+  const msgs = useMemo(() => live?.messages ?? messages, [live?.messages, messages]);
 
   useEffect(() => {
     let alive = true;
@@ -52,7 +31,16 @@ export function HomeworkThread({
       if (res && "success" in res && res.success) {
         if (!res.data) return;
         setLive({
-          submission: { id: res.data.id, status: res.data.status, fileUrl: res.data.fileUrl, content: res.data.content },
+          submission: {
+            id: res.data.id,
+            status: res.data.status,
+            fileUrl: res.data.fileUrl,
+            fileUrls: res.data.fileUrls,
+            content: res.data.content,
+            createdAt: res.data.createdAt,
+            updatedAt: res.data.updatedAt,
+            user: submission.user,
+          },
           messages: res.data.messages,
         });
       }
@@ -60,18 +48,16 @@ export function HomeworkThread({
 
     apply();
 
-    // Realtime via SSE; fallback to slow polling if SSE is blocked.
+    // Realtime via SSE only; avoid extra polling and full-page refreshes.
     const es = new EventSource(`/api/realtime/homework?lessonId=${encodeURIComponent(lessonId)}`);
     es.onmessage = () => apply();
     es.onerror = () => {
       // keep quiet; browser retries
     };
 
-    const t = setInterval(apply, 15000);
     return () => {
       alive = false;
       es.close();
-      clearInterval(t);
     };
   }, [lessonId]);
 
@@ -92,61 +78,15 @@ export function HomeworkThread({
 
   return (
     <div className="space-y-4">
-      <Badge variant={statusVariant}>{statusLabel}</Badge>
-
-      {(msgs.length > 0 || sub.fileUrl || sub.content) && (
-        <div className="space-y-2">
-          {sub.fileUrl && (
-            <a href={sub.fileUrl} target="_blank" rel="noopener noreferrer" className="block">
-              <img src={sub.fileUrl} alt="Фото" className="max-h-48 rounded-lg border object-cover" />
-            </a>
-          )}
-          {/* latest answer preview (optional) */}
-          {sub.content && (
-            <Card className="p-3 bg-muted/30">
-              <div className="text-xs text-muted-foreground mb-1">Последний ответ</div>
-              {(() => {
-                const parsed = parseHomeworkContent(sub.content);
-                if (parsed.type === "qa") {
-                  return (
-                    <div className="space-y-2">
-                      {parsed.data.map((qa, i) => (
-                        <div key={i} className="space-y-0.5">
-                          <div className="text-xs font-medium text-muted-foreground">{qa.question}</div>
-                          <div className="text-sm whitespace-pre-wrap">{qa.answer || "—"}</div>
-                        </div>
-                      ))}
-                    </div>
-                  );
-                }
-                return <div className="text-sm whitespace-pre-wrap">{parsed.data}</div>;
-              })()}
-            </Card>
-          )}
-          {msgs.map((m) => (
-            <Card key={m.id} className="p-3">
-              <div className="text-xs text-muted-foreground mb-1">
-                {m.user.name ?? m.user.email}
-              </div>
-              {(() => {
-                const parsed = parseHomeworkContent(m.content);
-                if (parsed.type === "qa") {
-                  return (
-                    <div className="space-y-2">
-                      {parsed.data.map((qa, i) => (
-                        <div key={i} className="space-y-0.5">
-                          <div className="text-xs font-medium text-muted-foreground">{qa.question}</div>
-                          <div className="text-sm whitespace-pre-wrap">{qa.answer || "—"}</div>
-                        </div>
-                      ))}
-                    </div>
-                  );
-                }
-                return <div className="text-sm whitespace-pre-wrap">{parsed.data}</div>;
-              })()}
-            </Card>
-          ))}
+      <div className="flex flex-wrap items-center gap-3">
+        <Badge variant={statusVariant}>{statusLabel}</Badge>
+        <div className="text-sm text-muted-foreground">
+          Последняя сдача: {formatHomeworkDateTime(sub.updatedAt)}
         </div>
+      </div>
+
+      {(msgs.length > 0 || sub.fileUrls.length > 0 || sub.fileUrl || sub.content) && (
+        <HomeworkMessages submission={sub} messages={msgs} />
       )}
 
       {sub.status === "REJECTED" && (

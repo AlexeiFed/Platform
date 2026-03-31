@@ -10,12 +10,14 @@ const homeworkSchema = z.object({
   lessonId: z.string().uuid(),
   content: z.string().min(1),
   fileUrl: z.string().url().optional(),
+  fileUrls: z.array(z.string().url()).optional(),
 });
 
 export async function submitHomework(input: {
   lessonId: string;
   content: string;
   fileUrl?: string;
+  fileUrls?: string[];
 }) {
   try {
     const session = await auth();
@@ -44,13 +46,15 @@ export async function submitHomework(input: {
       select: { id: true, status: true },
     });
 
-    // One thread per lesson: if not approved yet — update same submission (keeps chat history)
+    // One thread per lesson: student answer lives in submission itself,
+    // chat is reserved for curator/admin comments to avoid duplicate messages.
     if (latest && latest.status !== "APPROVED") {
       await prisma.homeworkSubmission.update({
         where: { id: latest.id },
         data: {
           content: data.content,
-          fileUrl: data.fileUrl ?? null,
+          fileUrl: data.fileUrls?.[0] ?? data.fileUrl ?? null,
+          fileUrls: data.fileUrls ?? [],
           status: "PENDING",
         },
       });
@@ -60,6 +64,8 @@ export async function submitHomework(input: {
           submissionId: latest.id,
           userId: session.user.id,
           content: data.content,
+          fileUrl: data.fileUrls?.[0] ?? data.fileUrl ?? null,
+          fileUrls: data.fileUrls ?? [],
         },
       });
 
@@ -70,7 +76,8 @@ export async function submitHomework(input: {
           lessonId: data.lessonId,
           userId: session.user.id,
           content: data.content,
-          fileUrl: data.fileUrl ?? null,
+          fileUrl: data.fileUrls?.[0] ?? data.fileUrl ?? null,
+          fileUrls: data.fileUrls ?? [],
           status: "PENDING",
         },
         select: { id: true },
@@ -81,6 +88,8 @@ export async function submitHomework(input: {
           submissionId: created.id,
           userId: session.user.id,
           content: data.content,
+          fileUrl: data.fileUrls?.[0] ?? data.fileUrl ?? null,
+          fileUrls: data.fileUrls ?? [],
         },
       });
 
@@ -120,11 +129,17 @@ export async function getHomeworkThread(lessonId: string) {
         id: submission.id,
         status: submission.status,
         fileUrl: submission.fileUrl,
+        fileUrls: submission.fileUrls,
         content: submission.content,
+        createdAt: submission.createdAt.toISOString(),
+        updatedAt: submission.updatedAt.toISOString(),
         messages: submission.messages.map((m) => ({
           id: m.id,
           content: m.content,
           createdAt: m.createdAt.toISOString(),
+          fileUrl: m.fileUrl,
+          fileUrls: m.fileUrls,
+          replyToId: m.replyToId,
           user: { name: m.user.name, email: m.user.email, role: m.user.role },
         })),
       },

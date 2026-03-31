@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { grantAccess } from "./actions";
@@ -11,6 +12,7 @@ type Props = {
 };
 
 export function GrantAccessForm({ userId, products }: Props) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -19,6 +21,7 @@ export function GrantAccessForm({ userId, products }: Props) {
     await grantAccess(userId, productId);
     setLoading(false);
     setOpen(false);
+    router.refresh();
   }
 
   return (

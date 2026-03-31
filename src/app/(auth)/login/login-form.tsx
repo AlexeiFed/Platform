@@ -1,16 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { tokens } from "@/lib/design-tokens";
 
-export default function RegisterPage() {
+export function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const explicitCallback = searchParams.get("callbackUrl");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -20,45 +22,39 @@ export default function RegisterPage() {
     setError("");
 
     const formData = new FormData(e.currentTarget);
-    const email = String(formData.get("email") ?? "");
-    const password = String(formData.get("password") ?? "");
-    const res = await fetch("/api/auth/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: formData.get("name"),
-        email,
-        password,
-      }),
+    const result = await signIn("credentials", {
+      email: formData.get("email") as string,
+      password: formData.get("password") as string,
+      redirect: false,
     });
 
-    if (!res.ok) {
-      const data = await res.json();
-      setError(data.error ?? "Ошибка регистрации");
+    if (result?.error) {
+      setError("Неверный email или пароль");
       setLoading(false);
+      return;
+    }
+
+    if (explicitCallback) {
+      router.push(explicitCallback);
+      return;
+    }
+
+    const sessionRes = await fetch("/api/auth/session");
+    const session = await sessionRes.json();
+    const role = session?.user?.role;
+
+    if (role === "ADMIN" || role === "CURATOR") {
+      router.push("/admin");
     } else {
-      const loginResult = await signIn("credentials", {
-        email,
-        password,
-        redirect: false,
-      });
-
-      if (loginResult?.error) {
-        setError("Аккаунт создан, но автоматический вход не сработал");
-        setLoading(false);
-        return;
-      }
-
       router.push("/dashboard");
-      router.refresh();
     }
   }
 
   return (
     <Card>
       <CardHeader className="text-center">
-        <CardTitle className={tokens.typography.h3}>Регистрация</CardTitle>
-        <CardDescription>Создайте аккаунт для начала обучения</CardDescription>
+        <CardTitle className={tokens.typography.h3}>Вход в аккаунт</CardTitle>
+        <CardDescription>Введите email и пароль для входа</CardDescription>
       </CardHeader>
       <form onSubmit={handleSubmit}>
         <CardContent className="space-y-4">
@@ -66,25 +62,21 @@ export default function RegisterPage() {
             <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-lg">{error}</div>
           )}
           <div className="space-y-2">
-            <label htmlFor="name" className={tokens.typography.label}>Имя</label>
-            <Input id="name" name="name" placeholder="Ваше имя" required />
-          </div>
-          <div className="space-y-2">
             <label htmlFor="email" className={tokens.typography.label}>Email</label>
             <Input id="email" name="email" type="email" placeholder="you@example.com" required />
           </div>
           <div className="space-y-2">
             <label htmlFor="password" className={tokens.typography.label}>Пароль</label>
-            <Input id="password" name="password" type="password" placeholder="Минимум 8 символов" minLength={8} required />
+            <Input id="password" name="password" type="password" placeholder="••••••••" required />
           </div>
         </CardContent>
         <CardFooter className="flex flex-col gap-3">
           <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? "Создаём..." : "Создать аккаунт"}
+            {loading ? "Входим..." : "Войти"}
           </Button>
           <p className="text-sm text-muted-foreground">
-            Уже есть аккаунт?{" "}
-            <Link href="/login" className="text-primary hover:underline">Войти</Link>
+            Нет аккаунта?{" "}
+            <Link href="/register" className="text-primary hover:underline">Зарегистрироваться</Link>
           </p>
         </CardFooter>
       </form>

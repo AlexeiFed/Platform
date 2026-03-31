@@ -186,12 +186,23 @@ export default async function LessonPage({ params }: Props) {
                   id: existingSubmission.id,
                   status: existingSubmission.status,
                   fileUrl: existingSubmission.fileUrl,
+                  fileUrls: existingSubmission.fileUrls,
                   content: existingSubmission.content ?? null,
+                  createdAt: existingSubmission.createdAt.toISOString(),
+                  updatedAt: existingSubmission.updatedAt.toISOString(),
+                  user: {
+                    name: session.user.name ?? null,
+                    email: session.user.email ?? "",
+                    role: session.user.role,
+                  },
                 }}
                 messages={existingSubmission.messages.map((m) => ({
                   id: m.id,
                   content: m.content,
                   createdAt: m.createdAt.toISOString(),
+                  fileUrl: m.fileUrl,
+                  fileUrls: m.fileUrls,
+                  replyToId: m.replyToId,
                   user: { name: m.user.name, email: m.user.email, role: m.user.role },
                 }))}
               />

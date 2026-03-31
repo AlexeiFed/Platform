@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { tokens } from "@/lib/design-tokens";
 import { formatPrice, lessonsLabel } from "@/lib/utils";
+import { isProductPubliclyVisible } from "@/lib/product-visibility";
 import Link from "next/link";
 
 export default async function CatalogPage() {
@@ -13,58 +14,81 @@ export default async function CatalogPage() {
     orderBy: { createdAt: "desc" },
   });
 
+  const visibleProducts = products.filter(isProductPubliclyVisible);
+  const courses = visibleProducts.filter((product) => product.type === "COURSE");
+  const marathons = visibleProducts.filter((product) => product.type === "MARATHON");
+
+  const renderProducts = (items: typeof visibleProducts) => (
+    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      {items.map((product) => (
+        <Card key={product.id} className={tokens.shadow.card}>
+          {product.coverUrl && (
+            <div className="aspect-video w-full overflow-hidden rounded-t-xl bg-muted">
+              <img
+                src={product.coverUrl}
+                alt={product.title}
+                className="h-full w-full object-cover"
+              />
+            </div>
+          )}
+          <CardHeader>
+            <div className="mb-1 flex items-center gap-2">
+              <Badge variant={product.type === "COURSE" ? "default" : "secondary"}>
+                {product.type === "COURSE" ? "Курс" : "Марафон"}
+              </Badge>
+              <span className="text-xs text-muted-foreground">
+                {lessonsLabel(product._count.lessons)}
+              </span>
+            </div>
+            <CardTitle className="text-lg">{product.title}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {product.description && (
+              <p className="text-sm text-muted-foreground line-clamp-3">{product.description}</p>
+            )}
+            {product.type === "MARATHON" && product.startDate && (
+              <p className="text-sm font-medium">Старт: {new Intl.DateTimeFormat("ru-RU").format(product.startDate)}</p>
+            )}
+          </CardContent>
+          <CardFooter className="flex items-center justify-between">
+            <span className="text-lg font-bold">
+              {product.price ? formatPrice(Number(product.price), product.currency) : "Бесплатно"}
+            </span>
+            <Button asChild size="sm">
+              <Link href={`/catalog/${product.slug}`}>Подробнее</Link>
+            </Button>
+          </CardFooter>
+        </Card>
+      ))}
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className={tokens.typography.h2}>Каталог</h1>
-        <p className={tokens.typography.body}>Выберите курс или марафон для обучения</p>
+        <p className={tokens.typography.body}>Выберите программу для обучения</p>
       </div>
 
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {products.map((product) => (
-          <Card key={product.id} className={tokens.shadow.card}>
-            {product.coverUrl && (
-              <div className="aspect-video w-full overflow-hidden rounded-t-xl bg-muted">
-                <img
-                  src={product.coverUrl}
-                  alt={product.title}
-                  className="h-full w-full object-cover"
-                />
-              </div>
-            )}
-            <CardHeader>
-              <div className="flex items-center gap-2 mb-1">
-                <Badge variant={product.type === "COURSE" ? "default" : "secondary"}>
-                  {product.type === "COURSE" ? "Курс" : "Марафон"}
-                </Badge>
-                <span className="text-xs text-muted-foreground">
-                  {lessonsLabel(product._count.lessons)}
-                </span>
-              </div>
-              <CardTitle className="text-lg">{product.title}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {product.description && (
-                <p className="text-sm text-muted-foreground line-clamp-3">{product.description}</p>
-              )}
-            </CardContent>
-            <CardFooter className="flex items-center justify-between">
-              <span className="text-lg font-bold">
-                {product.price ? formatPrice(Number(product.price), product.currency) : "Бесплатно"}
-              </span>
-              <Button asChild size="sm">
-                <Link href={`/catalog/${product.slug}`}>Подробнее</Link>
-              </Button>
-            </CardFooter>
-          </Card>
-        ))}
+      {courses.length > 0 && (
+        <section className="space-y-4">
+          <h2 className={tokens.typography.h3}>Курсы</h2>
+          {renderProducts(courses)}
+        </section>
+      )}
 
-        {products.length === 0 && (
-          <div className="col-span-full text-center py-12">
-            <p className={tokens.typography.body}>Пока нет доступных курсов</p>
-          </div>
-        )}
-      </div>
+      {marathons.length > 0 && (
+        <section className="space-y-4">
+          <h2 className={tokens.typography.h3}>Марафоны</h2>
+          {renderProducts(marathons)}
+        </section>
+      )}
+
+      {visibleProducts.length === 0 && (
+        <div className="py-12 text-center">
+          <p className={tokens.typography.body}>Пока нет доступных программ</p>
+        </div>
+      )}
     </div>
   );
 }

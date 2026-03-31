@@ -44,6 +44,7 @@ model User {
   enrollments    Enrollment[]
   submissions    HomeworkSubmission[]
   chatMessages   ChatMessage[]
+  curatedProducts ProductCurator[]
   accounts       Account[]
   sessions       Session[]
 
@@ -107,6 +108,7 @@ model Product {
 
   lessons     Lesson[]
   enrollments Enrollment[]
+  curatorAssignments ProductCurator[]
 
   @@index([slug])
   @@index([type])
@@ -181,6 +183,7 @@ model HomeworkSubmission {
   userId    String
   content   String?        @db.Text
   fileUrl   String?
+  fileUrls  String[]       @default([])
   status    HomeworkStatus @default(PENDING)
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
@@ -200,11 +203,32 @@ model ChatMessage {
   submissionId String
   userId       String
   content      String   @db.Text
+  fileUrl      String?
+  fileUrls     String[]  @default([])
+  replyToId    String?
   createdAt    DateTime @default(now())
 
   submission HomeworkSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
   user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  replyTo    ChatMessage?       @relation("ChatReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies    ChatMessage[]      @relation("ChatReplies")
 
   @@index([submissionId])
+  @@index([replyToId])
   @@map("chat_messages")
+}
+
+model ProductCurator {
+  id        String   @id @default(uuid())
+  productId String
+  curatorId String
+  createdAt DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  curator User    @relation(fields: [curatorId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, curatorId])
+  @@index([curatorId])
+  @@index([productId])
+  @@map("product_curators")
 }

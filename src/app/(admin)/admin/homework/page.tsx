@@ -1,37 +1,33 @@
+import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { tokens } from "@/lib/design-tokens";
 import { formatDate } from "@/lib/utils";
-import { HomeworkActions } from "./homework-actions";
 import { BookOpen, GraduationCap } from "lucide-react";
-import { RealtimeRefresh } from "./realtime-refresh";
-
-type QA = { question: string; answer: string };
-
-function parseHomeworkContent(content: string | null): { type: "qa"; data: QA[] } | { type: "text"; data: string } {
-  if (!content) return { type: "text", data: "" };
-  try {
-    const parsed = JSON.parse(content);
-    if (Array.isArray(parsed) && parsed.length > 0 && "question" in parsed[0]) {
-      return { type: "qa", data: parsed as QA[] };
-    }
-  } catch {
-    /* not JSON */
-  }
-  return { type: "text", data: content };
-}
+import { LiveReviewThread } from "./live-review-thread";
 
 export default async function AdminHomeworkPage({
   searchParams,
 }: {
   searchParams: Promise<{ productId?: string; userId?: string; lessonId?: string }>;
 }) {
+  const session = await auth();
   const { productId, userId, lessonId } = await searchParams;
 
+  const allowedProductIds = session?.user.role === "CURATOR"
+    ? (await prisma.productCurator.findMany({
+        where: { curatorId: session.user.id },
+        select: { productId: true },
+      })).map((item) => item.productId)
+    : null;
+
   const products = await prisma.product.findMany({
-    where: { deletedAt: null },
+    where: {
+      deletedAt: null,
+      ...(allowedProductIds ? { id: { in: allowedProductIds } } : {}),
+    },
     select: { id: true, title: true, type: true },
     orderBy: { title: "asc" },
   });
@@ -131,10 +127,8 @@ export default async function AdminHomeworkPage({
   };
 
   const selectedProduct = products.find((p) => p.id === selectedProductId) ?? null;
-
   return (
     <div className="space-y-6">
-      <RealtimeRefresh />
       <h1 className={tokens.typography.h2}>Домашние задания</h1>
 
       <div className="grid gap-4 lg:grid-cols-[340px_280px_1fr]">
@@ -153,7 +147,7 @@ export default async function AdminHomeworkPage({
                     <Link
                       key={p.id}
                       href={`/admin/homework?productId=${p.id}`}
-                      className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm hover:bg-accent transition-colors ${active ? "bg-primary/10 border-primary/60 outline outline-2 outline-primary/50 outline-offset-2 shadow-[0_0_0_1px_rgba(108,60,245,0.35)]" : ""}`}
+                      className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm hover:bg-accent transition-colors ${active ? "bg-primary/10 border-primary/60 ring-2 ring-primary/40" : ""}`}
                     >
                       <span className="truncate">
                         {p.title}
@@ -184,7 +178,7 @@ export default async function AdminHomeworkPage({
                       <Link
                         key={s.userId}
                         href={`/admin/homework?productId=${selectedProductId}&userId=${s.userId}`}
-                        className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm hover:bg-accent transition-colors ${active ? "bg-primary/10 border-primary/60 outline outline-2 outline-primary/50 outline-offset-2 shadow-[0_0_0_1px_rgba(108,60,245,0.35)]" : ""}`}
+                        className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm hover:bg-accent transition-colors ${active ? "bg-primary/10 border-primary/60 ring-2 ring-primary/40" : ""}`}
                       >
                         <span className="truncate">{label}</span>
                         {pending > 0 && <Badge variant="destructive" className="text-xs">{pending}</Badge>}
@@ -212,7 +206,7 @@ export default async function AdminHomeworkPage({
                 <Link
                   key={t.lesson.id}
                   href={`/admin/homework?productId=${selectedProductId}&userId=${selectedUserId}&lessonId=${t.lesson.id}`}
-                  className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm hover:bg-accent transition-colors ${active ? "bg-primary/10 border-primary/60 outline outline-2 outline-primary/50 outline-offset-2 shadow-[0_0_0_1px_rgba(108,60,245,0.35)]" : ""}`}
+                  className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm hover:bg-accent transition-colors ${active ? "bg-primary/10 border-primary/60 ring-2 ring-primary/40" : ""}`}
                 >
                   <span className="truncate">{t.lesson.order ? `${t.lesson.order}. ` : ""}{t.lesson.title}</span>
                   <span className="flex items-center gap-2">
@@ -263,47 +257,38 @@ export default async function AdminHomeworkPage({
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
-                {/* Answer preview */}
-                {(() => {
-                  const parsed = parseHomeworkContent(selectedSubmission.content);
-                  if (!parsed.data) return null;
-                  return parsed.type === "qa" ? (
-                    <div className="space-y-2 bg-muted/50 rounded-lg p-3">
-                      {parsed.data.map((qa, i) => (
-                        <div key={i} className="space-y-0.5">
-                          <div className="text-xs font-medium text-muted-foreground">{qa.question}</div>
-                          <div className="text-sm whitespace-pre-wrap">{qa.answer || "—"}</div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-sm whitespace-pre-wrap bg-muted/50 rounded-lg p-3">{parsed.data}</div>
-                  );
-                })()}
-
-                {selectedSubmission.fileUrl && (
-                  <a href={selectedSubmission.fileUrl} target="_blank" rel="noopener noreferrer" className="block">
-                    <img src={selectedSubmission.fileUrl} alt="Фото" className="max-h-64 rounded-lg border object-cover" />
-                  </a>
-                )}
-
-                {/* Messages */}
-                {selectedSubmission.messages.length > 0 ? (
-                  <div className="space-y-2">
-                    {selectedSubmission.messages.map((m) => (
-                      <Card key={m.id} className="p-3">
-                        <div className="text-xs text-muted-foreground mb-1">
-                          {m.user.name ?? m.user.email} {m.user.role ? `(${m.user.role})` : ""}
-                        </div>
-                        <div className="text-sm whitespace-pre-wrap">{m.content}</div>
-                      </Card>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-sm text-muted-foreground">Сообщений пока нет</div>
-                )}
-
-                <HomeworkActions submissionId={selectedSubmission.id} currentStatus={selectedSubmission.status} />
+                <LiveReviewThread
+                  productId={selectedProductId!}
+                  userId={selectedUserId!}
+                  lessonId={selectedLessonId!}
+                  initialSubmission={{
+                    id: selectedSubmission.id,
+                    status: selectedSubmission.status,
+                    content: selectedSubmission.content,
+                    fileUrl: selectedSubmission.fileUrl,
+                    fileUrls: selectedSubmission.fileUrls,
+                    createdAt: selectedSubmission.createdAt.toISOString(),
+                    updatedAt: selectedSubmission.updatedAt.toISOString(),
+                    user: {
+                      name: selectedSubmission.user.name,
+                      email: selectedSubmission.user.email,
+                      role: "USER",
+                    },
+                  }}
+                  initialMessages={selectedSubmission.messages.map((m) => ({
+                    id: m.id,
+                    content: m.content,
+                    createdAt: m.createdAt.toISOString(),
+                    fileUrl: m.fileUrl,
+                    fileUrls: m.fileUrls,
+                    replyToId: m.replyToId,
+                    user: {
+                      name: m.user.name,
+                      email: m.user.email,
+                      role: m.user.role,
+                    },
+                  }))}
+                />
               </CardContent>
             </Card>
           )}

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { tokens } from "@/lib/design-tokens";
@@ -12,6 +12,7 @@ export default function NewCoursePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [productType, setProductType] = useState<"COURSE" | "MARATHON">("COURSE");
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -54,6 +55,8 @@ export default function NewCoursePage() {
               <label className={tokens.typography.label}>Тип</label>
               <select
                 name="type"
+                value={productType}
+                onChange={(e) => setProductType(e.target.value as "COURSE" | "MARATHON")}
                 className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
               >
                 <option value="COURSE">Курс</option>
@@ -75,7 +78,7 @@ export default function NewCoursePage() {
               </div>
               <div className="space-y-2">
                 <label className={tokens.typography.label}>Дата старта (для марафона)</label>
-                <Input name="startDate" type="date" />
+                <Input name="startDate" type="date" required={productType === "MARATHON"} />
               </div>
             </div>
             <div className="flex gap-3 pt-2">

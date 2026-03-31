@@ -1,15 +1,20 @@
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import Link from "next/link";
 import { tokens } from "@/lib/design-tokens";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getInitials, formatDate } from "@/lib/utils";
+import { CreateCuratorForm } from "./create-curator-form";
+import { CuratorProductsForm } from "./curator-products-form";
 import { GrantAccessForm } from "./grant-access-form";
+import { UserRoleForm } from "./user-role-form";
 
 export default async function AdminUsersPage() {
   const users = await prisma.user.findMany({
     include: {
       _count: { select: { enrollments: true, submissions: true } },
+      curatedProducts: { select: { productId: true } },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -36,27 +41,43 @@ export default async function AdminUsersPage() {
     <div className="space-y-6">
       <h1 className={tokens.typography.h2}>Пользователи</h1>
 
+      <CreateCuratorForm />
+
       <div className="space-y-3">
         {users.map((user) => (
           <Card key={user.id}>
-            <CardContent className="flex items-center gap-4 p-4">
-              <Avatar>
-                <AvatarImage src={user.avatarUrl ?? undefined} />
-                <AvatarFallback>{getInitials(user.name ?? user.email)}</AvatarFallback>
-              </Avatar>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="font-medium text-sm truncate">{user.name ?? "Без имени"}</p>
-                  <Badge variant={roleVariants[user.role]} className="text-xs">
-                    {roleLabels[user.role]}
-                  </Badge>
+            <CardContent className="flex flex-col gap-4 p-4 lg:flex-row lg:items-center">
+              <Link href={`/admin/users/${user.id}`} className="flex min-w-0 flex-1 items-center gap-4 rounded-lg transition-colors hover:bg-accent/40">
+                <Avatar>
+                  <AvatarImage src={user.avatarUrl ?? undefined} />
+                  <AvatarFallback>{getInitials(user.name ?? user.email)}</AvatarFallback>
+                </Avatar>
+                <div className="min-w-0 flex-1 px-1">
+                  <div className="flex items-center gap-2">
+                    <p className="truncate text-sm font-medium">{user.name ?? "Без имени"}</p>
+                    <Badge variant={roleVariants[user.role]} className="text-xs">
+                      {roleLabels[user.role]}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{user.email}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {user.role === "CURATOR"
+                      ? `Назначено продуктов: ${user.curatedProducts.length} · ДЗ: ${user._count.submissions} · Регистрация: ${formatDate(user.createdAt)}`
+                      : `Зачислений: ${user._count.enrollments} · ДЗ: ${user._count.submissions} · Регистрация: ${formatDate(user.createdAt)}`}
+                  </p>
                 </div>
-                <p className="text-xs text-muted-foreground">{user.email}</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Зачислений: {user._count.enrollments} · ДЗ: {user._count.submissions} · Регистрация: {formatDate(user.createdAt)}
-                </p>
+              </Link>
+              <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                <UserRoleForm userId={user.id} currentRole={user.role} />
+                {user.role === "CURATOR" && (
+                  <CuratorProductsForm
+                    userId={user.id}
+                    assignedProductIds={user.curatedProducts.map((item) => item.productId)}
+                    products={products}
+                  />
+                )}
+                {user.role === "USER" && <GrantAccessForm userId={user.id} products={products} />}
               </div>
-              <GrantAccessForm userId={user.id} products={products} />
             </CardContent>
           </Card>
         ))}

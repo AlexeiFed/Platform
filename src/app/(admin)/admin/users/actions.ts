@@ -1,8 +1,16 @@
 "use server";
 
+import bcrypt from "bcryptjs";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
+
+const createCuratorSchema = z.object({
+  name: z.string().min(2, "Укажите имя"),
+  email: z.string().email("Некорректный email"),
+  password: z.string().min(8, "Пароль должен быть не короче 8 символов"),
+});
 
 export async function grantAccess(userId: string, productId: string) {
   const session = await auth();
@@ -31,6 +39,88 @@ export async function updateUserRole(userId: string, role: "ADMIN" | "CURATOR" |
     revalidatePath("/admin/users");
     return { success: true };
   } catch {
+    return { error: "Произошла ошибка" };
+  }
+}
+
+export async function toggleCuratorProduct(userId: string, productId: string) {
+  const session = await auth();
+  if (!session || session.user.role !== "ADMIN") return { error: "Нет доступа" };
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+
+    if (!user || user.role !== "CURATOR") {
+      return { error: "Назначение доступно только для кураторов" };
+    }
+
+    const existing = await prisma.productCurator.findUnique({
+      where: {
+        productId_curatorId: {
+          productId,
+          curatorId: userId,
+        },
+      },
+      select: { id: true },
+    });
+
+    if (existing) {
+      await prisma.productCurator.delete({ where: { id: existing.id } });
+    } else {
+      await prisma.productCurator.create({
+        data: {
+          productId,
+          curatorId: userId,
+        },
+      });
+    }
+
+    revalidatePath("/admin/users");
+    revalidatePath("/admin/homework");
+    return { success: true };
+  } catch {
+    return { error: "Произошла ошибка" };
+  }
+}
+
+export async function createCurator(input: z.infer<typeof createCuratorSchema>) {
+  const session = await auth();
+  if (!session || session.user.role !== "ADMIN") return { error: "Нет доступа" };
+
+  try {
+    const data = createCuratorSchema.parse(input);
+    const email = data.email.trim().toLowerCase();
+
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    });
+
+    if (existingUser) {
+      return { error: "Пользователь с таким email уже существует" };
+    }
+
+    const passwordHash = await bcrypt.hash(data.password, 12);
+
+    await prisma.user.create({
+      data: {
+        name: data.name.trim(),
+        email,
+        passwordHash,
+        role: "CURATOR",
+      },
+    });
+
+    revalidatePath("/admin/users");
+    return { success: true };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return { error: error.issues[0]?.message ?? "Некорректные данные" };
+    }
+
     return { error: "Произошла ошибка" };
   }
 }
