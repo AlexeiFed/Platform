@@ -47,6 +47,13 @@ enum MarathonTrack {
   GYM
 }
 
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
 model User {
   id           String   @id @default(uuid())
   email        String   @unique
@@ -63,6 +70,7 @@ model User {
   curatedProducts ProductCurator[]
   accounts        Account[]
   sessions        Session[]
+  payments        Payment[]
 
   @@map("users")
 }
@@ -114,6 +122,8 @@ model Product {
   slug         String      @unique
   description  String?     @db.Text
   coverUrl     String?
+  /// Ссылка на Яндекс.Форму (или другую форму оплаты); в URL добавляется ?paymentRef=…
+  paymentFormUrl String?   @db.Text
   price        Decimal?    @db.Decimal(10, 2)
   currency     String      @default("RUB")
   published    Boolean     @default(false)
@@ -127,10 +137,33 @@ model Product {
   enrollments        Enrollment[]
   marathonEvents     MarathonEvent[]
   curatorAssignments ProductCurator[]
+  payments           Payment[]
 
   @@index([slug])
   @@index([type])
   @@map("products")
+}
+
+model Payment {
+  id                  String        @id @default(uuid())
+  reference           String        @unique
+  /// Идентификатор операции из HTTP-уведомления ЮMoney (идемпотентность повторных доставок).
+  yoomoneyOperationId String?       @unique
+  userId              String
+  productId           String
+  amount              Decimal       @db.Decimal(10, 2)
+  currency            String        @default("RUB")
+  status              PaymentStatus @default(PENDING)
+  rawPayload          Json?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([userId, productId])
+  @@index([productId, status])
+  @@map("payments")
 }
 
 model Lesson {

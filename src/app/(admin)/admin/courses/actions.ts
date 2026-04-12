@@ -16,6 +16,7 @@ const productSchema = z.object({
   startDate: z.string().optional(),
   durationDays: z.coerce.number().int().min(1, "Длительность должна быть не меньше 1 дня").optional(),
   coverUrl: z.string().optional(),
+  paymentFormUrl: z.string().optional(),
 }).superRefine((data, ctx) => {
   if (data.type === "MARATHON" && !data.startDate?.trim()) {
     ctx.addIssue({
@@ -31,6 +32,26 @@ const productSchema = z.object({
       path: ["durationDays"],
       message: "Для марафона укажите длительность в днях",
     });
+  }
+
+  const price = data.price ?? 0;
+  const yoomoneyReceiver = process.env.YOOMONEY_WALLET_RECEIVER?.trim();
+  if (data.published && price > 0) {
+    const form = data.paymentFormUrl?.trim();
+    if (!form && !yoomoneyReceiver) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["paymentFormUrl"],
+        message:
+          "Для платного продукта укажите ссылку на форму оплаты или настройте на сервере переменную YOOMONEY_WALLET_RECEIVER",
+      });
+    } else if (form && !URL.canParse(form)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["paymentFormUrl"],
+        message: "Некорректный URL формы оплаты",
+      });
+    }
   }
 });
 
@@ -53,6 +74,7 @@ export async function createProduct(input: z.infer<typeof productSchema>) {
         startDate: data.type === "MARATHON" && data.startDate ? new Date(data.startDate) : null,
         durationDays: data.type === "MARATHON" ? data.durationDays ?? null : null,
         price: data.price ?? null,
+        paymentFormUrl: data.paymentFormUrl?.trim() || null,
       },
       select: { id: true },
     });
@@ -80,6 +102,7 @@ export async function updateProduct(id: string, input: z.infer<typeof productSch
         startDate: data.type === "MARATHON" && data.startDate ? new Date(data.startDate) : null,
         durationDays: data.type === "MARATHON" ? data.durationDays ?? null : null,
         price: data.price ?? null,
+        paymentFormUrl: data.paymentFormUrl?.trim() || null,
       },
     });
 

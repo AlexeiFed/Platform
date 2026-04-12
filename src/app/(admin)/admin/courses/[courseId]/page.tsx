@@ -40,6 +40,7 @@ export default async function CourseEditorPage({ params }: Props) {
     coverUrl: productData.coverUrl,
     price: productData.price ? Number(productData.price) : null,
     currency: productData.currency,
+    paymentFormUrl: productData.paymentFormUrl,
     published: productData.published,
     startDate: productData.startDate?.toISOString() ?? null,
     durationDays: productData.durationDays ?? null,

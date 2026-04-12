@@ -66,6 +66,7 @@ type SerializedProduct = {
   coverUrl: string | null;
   price: number | null;
   currency: string;
+  paymentFormUrl: string | null;
   published: boolean;
   startDate: string | null;
   durationDays: number | null;
@@ -116,6 +117,7 @@ type ProductForm = {
   description: string;
   coverUrl: string;
   price: string;
+  paymentFormUrl: string;
   startDate: string;
   durationDays: string;
 };
@@ -555,6 +557,7 @@ export function CourseEditor({
     description: product.description ?? "",
     coverUrl: product.coverUrl ?? "",
     price: product.price ? String(product.price) : "",
+    paymentFormUrl: product.paymentFormUrl ?? "",
     startDate: toDateInputValue(product.startDate),
     durationDays: product.durationDays ? String(product.durationDays) : "",
   });
@@ -577,10 +580,11 @@ export function CourseEditor({
       description: product.description ?? "",
       coverUrl: product.coverUrl ?? "",
       price: product.price ? String(product.price) : "",
+      paymentFormUrl: product.paymentFormUrl ?? "",
       startDate: toDateInputValue(product.startDate),
       durationDays: product.durationDays ? String(product.durationDays) : "",
     });
-  }, [product.id, product.title, product.description, product.coverUrl, product.price, product.startDate, product.durationDays]);
+  }, [product.id, product.title, product.description, product.coverUrl, product.price, product.paymentFormUrl, product.startDate, product.durationDays]);
 
   const lessonSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -613,6 +617,7 @@ export function CourseEditor({
         coverUrl: productForm.coverUrl.trim() || undefined,
         price: productForm.price.trim() ? Number(productForm.price.trim()) : undefined,
         currency: product.currency,
+        paymentFormUrl: productForm.paymentFormUrl.trim() || undefined,
         published: !product.published,
         startDate: product.type === "MARATHON" ? productForm.startDate || undefined : undefined,
         durationDays: product.type === "MARATHON" ? Number(productForm.durationDays) || undefined : undefined,
@@ -650,6 +655,7 @@ export function CourseEditor({
         coverUrl: coverUrl || undefined,
         price: Number.isFinite(priceNum as number) ? (priceNum as number) : undefined,
         currency: product.currency,
+        paymentFormUrl: productForm.paymentFormUrl.trim() || undefined,
         published: product.published,
         startDate: product.type === "MARATHON" ? startDate || undefined : undefined,
         durationDays: product.type === "MARATHON" && Number.isFinite(durationDays as number) ? (durationDays as number) : undefined,
@@ -1188,6 +1194,22 @@ export function CourseEditor({
                   placeholder="0"
                 />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className={tokens.typography.label}>Ссылка на форму оплаты</label>
+              <Input
+                value={productForm.paymentFormUrl}
+                onChange={(e) => setProductForm((p) => ({ ...p, paymentFormUrl: e.target.value }))}
+                placeholder="https://forms.yandex.ru/…"
+                className="font-mono text-sm"
+              />
+              <p className={tokens.typography.small}>
+                Нужна при публикации платного курса, если на сервере не задан <code className="rounded bg-muted px-1">YOOMONEY_WALLET_RECEIVER</code>{" "}
+                (прямая оплата через ЮMoney). Для сценария только с формой: в URL добавится{" "}
+                <code className="rounded bg-muted px-1">paymentRef</code> — в JSON-вебхук формы передайте как{" "}
+                <code className="rounded bg-muted px-1">reference</code>.
+              </p>
             </div>
 
             {product.type === "MARATHON" && (

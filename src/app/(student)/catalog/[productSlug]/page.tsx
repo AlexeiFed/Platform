@@ -8,19 +8,36 @@ import { Button } from "@/components/ui/button";
 import { tokens } from "@/lib/design-tokens";
 import { formatPrice } from "@/lib/utils";
 import { isProductPubliclyVisible } from "@/lib/product-visibility";
+import { isPaidProduct } from "@/lib/product-payment";
 import { EnrollButton } from "./enroll-button";
 
 type Props = {
   params: Promise<{ productSlug: string }>;
+  searchParams: Promise<{ payment?: string }>;
 };
 
-export default async function ProductDetailsPage({ params }: Props) {
+export default async function ProductDetailsPage({ params, searchParams }: Props) {
   const { productSlug } = await params;
+  const { payment: paymentQuery } = await searchParams;
   const session = await auth();
 
   const product = await prisma.product.findUnique({
     where: { slug: productSlug, deletedAt: null },
-    include: { _count: { select: { lessons: true } } },
+    select: {
+      id: true,
+      type: true,
+      title: true,
+      slug: true,
+      description: true,
+      price: true,
+      currency: true,
+      published: true,
+      startDate: true,
+      durationDays: true,
+      paymentFormUrl: true,
+      deletedAt: true,
+      _count: { select: { lessons: true } },
+    },
   });
 
   if (!product || !isProductPubliclyVisible(product)) notFound();
@@ -33,9 +50,16 @@ export default async function ProductDetailsPage({ params }: Props) {
       : null;
 
   const loginWithReturn = `/login?callbackUrl=${encodeURIComponent(`/catalog/${product.slug}`)}`;
+  const yoomoneyCheckoutEnabled = Boolean(process.env.YOOMONEY_WALLET_RECEIVER?.trim());
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
+      {paymentQuery === "yoomoney_ok" ? (
+        <p className={`${tokens.typography.small} rounded-lg border border-primary/30 bg-primary/5 px-3 py-2`}>
+          Если оплату в ЮMoney вы завершили, подождите несколько секунд и нажмите «Проверить доступ». Если закрыли
+          оплату без перевода — вернитесь на страницу оплаты и нажмите «Оплату не завершил».
+        </p>
+      ) : null}
       <div>
         <Badge variant={product.type === "COURSE" ? "default" : "secondary"}>
           {product.type === "COURSE" ? "Курс" : "Марафон"}
@@ -81,7 +105,13 @@ export default async function ProductDetailsPage({ params }: Props) {
               <Link href={`/learn/${product.slug}`}>Открыть</Link>
             </Button>
           ) : (
-            <EnrollButton productId={product.id} productSlug={product.slug} />
+            <EnrollButton
+              productId={product.id}
+              productSlug={product.slug}
+              requiresPayment={isPaidProduct(product.price)}
+              paymentFormUrl={product.paymentFormUrl}
+              yoomoneyCheckoutEnabled={yoomoneyCheckoutEnabled}
+            />
           )}
         </CardFooter>
       </Card>
