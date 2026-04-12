@@ -13,6 +13,17 @@ export function formatDate(date: Date | string) {
   }).format(new Date(date));
 }
 
+export function formatDateTime(date: Date | string) {
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(new Date(date));
+}
+
 export function formatPrice(price: number, currency = "RUB") {
   return new Intl.NumberFormat("ru-RU", {
     style: "currency",

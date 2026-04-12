@@ -11,6 +11,7 @@ import {
   Settings,
   GraduationCap,
   ShoppingBag,
+  Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { tokens, layout } from "@/lib/design-tokens";
@@ -27,6 +28,7 @@ const adminNav: NavItem[] = [
   { label: "Курсы", href: "/admin/courses", icon: BookOpen },
   { label: "Пользователи", href: "/admin/users", icon: Users },
   { label: "Домашние задания", href: "/admin/homework", icon: ClipboardCheck },
+  { label: "Оплата", href: "/admin/payments", icon: Wallet },
   { label: "Файлы", href: "/admin/assets", icon: FolderOpen },
   { label: "Настройки", href: "/admin/settings", icon: Settings },
 ];
