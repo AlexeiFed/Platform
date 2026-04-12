@@ -9,6 +9,7 @@ import { tokens } from "@/lib/design-tokens";
 import { formatPrice } from "@/lib/utils";
 import { isProductPubliclyVisible } from "@/lib/product-visibility";
 import { isProductPaidForCatalog, getProductMinPrice } from "@/lib/product-tariff-pricing";
+import { PRODUCT_CRITERION_LABELS } from "@/lib/product-criteria";
 import { EnrollButton } from "./enroll-button";
 
 type Props = {
@@ -82,6 +83,32 @@ export default async function ProductDetailsPage({ params, searchParams }: Props
         <h1 className={`${tokens.typography.h2} mt-2`}>{product.title}</h1>
         {product.description && <p className={`${tokens.typography.body} mt-2`}>{product.description}</p>}
       </div>
+
+      {tariffOptions.length > 0 ? (
+        <section className="space-y-3" aria-labelledby="catalog-tariffs-heading">
+          <h2 id="catalog-tariffs-heading" className={tokens.typography.h3}>
+            Тарифы
+          </h2>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {tariffOptions.map((t) => (
+              <Card key={t.id} className={tokens.shadow.card}>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg">{t.name}</CardTitle>
+                  <p className="text-base font-semibold text-primary">{formatPrice(t.price, t.currency)}</p>
+                </CardHeader>
+                <CardContent>
+                  <p className={`${tokens.typography.small} font-medium text-foreground mb-2`}>Входит в тариф</p>
+                  <ul className="space-y-1 text-sm text-muted-foreground">
+                    {t.criteria.map((c) => (
+                      <li key={c}>· {PRODUCT_CRITERION_LABELS[c]}</li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <Card className={tokens.shadow.card}>
         <CardHeader>

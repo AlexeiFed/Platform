@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -43,6 +43,16 @@ export const TariffsAndCriteriaEditor = ({ productId, initialEnabled, tariffs: i
   const [tariffs, setTariffs] = useState(initialTariffs);
   const [msg, setMsg] = useState("");
 
+  const initialTariffsKey = useMemo(() => JSON.stringify(initialTariffs), [initialTariffs]);
+  useEffect(() => {
+    setTariffs(JSON.parse(initialTariffsKey) as SerializedTariff[]);
+  }, [initialTariffsKey]);
+
+  const initialEnabledKey = useMemo(() => norm(initialEnabled), [initialEnabled]);
+  useEffect(() => {
+    setEnabled(initialEnabled.length > 0 ? [...initialEnabled] : [...ALL_PRODUCT_CRITERIA]);
+  }, [initialEnabledKey]);
+
   const baselineEnabled = initialEnabled.length > 0 ? initialEnabled : ALL_PRODUCT_CRITERIA;
   const enabledUnchanged = useMemo(() => norm(enabled) === norm(baselineEnabled), [enabled, baselineEnabled]);
 
@@ -82,6 +92,21 @@ export const TariffsAndCriteriaEditor = ({ productId, initialEnabled, tariffs: i
       setMsg(res.error);
       return;
     }
+    setTariffs((prev) =>
+      prev.map((x) =>
+        x.id === t.id
+          ? {
+              ...x,
+              name: draft.name ?? x.name,
+              price: draft.price ?? x.price,
+              currency: draft.currency ?? x.currency,
+              sortOrder: draft.sortOrder ?? x.sortOrder,
+              published: draft.published ?? x.published,
+              criteria: draft.criteria ?? x.criteria,
+            }
+          : x
+      )
+    );
     router.refresh();
   };
 
