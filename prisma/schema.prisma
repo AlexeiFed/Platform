@@ -54,6 +54,31 @@ enum PaymentStatus {
   CANCELLED
 }
 
+/// Возможности продукта/тарифа — каждый ключ должен иметь явные гейты в коде.
+enum ProductCriterion {
+  NUTRITION_CONTENT
+  ONLINE_TRAINING
+  TASKS
+  COMMUNITY_CHAT
+  HOMEWORK_REVIEW
+  CURATOR_FEEDBACK
+  MARATHON_LIVE
+}
+
+enum PaymentKind {
+  INITIAL
+  UPGRADE
+}
+
+enum TariffUpgradeStatus {
+  DRAFT
+  PENDING_PAYMENT
+  PAID
+  APPLIED
+  CANCELLED
+  FAILED
+}
+
 model User {
   id           String   @id @default(uuid())
   email        String   @unique
@@ -71,6 +96,8 @@ model User {
   accounts        Account[]
   sessions        Session[]
   payments        Payment[]
+  feedbackMessages CuratorFeedbackMessage[]
+  enrollmentTariffAuthorship EnrollmentTariffHistory[] @relation("EnrollmentTariffHistoryAuthor")
 
   @@map("users")
 }
@@ -126,6 +153,8 @@ model Product {
   paymentFormUrl String?   @db.Text
   price        Decimal?    @db.Decimal(10, 2)
   currency     String      @default("RUB")
+  /// Какие критерии вообще доступны для этого продукта (тариф может включить только подмножество).
+  enabledCriteria ProductCriterion[] @default([])
   published    Boolean     @default(false)
   startDate    DateTime? // for MARATHON type
   durationDays Int? // for MARATHON type, used for event scheduling
@@ -138,10 +167,38 @@ model Product {
   marathonEvents     MarathonEvent[]
   curatorAssignments ProductCurator[]
   payments           Payment[]
+  tariffs            ProductTariff[]
 
   @@index([slug])
   @@index([type])
   @@map("products")
+}
+
+model ProductTariff {
+  id          String             @id @default(uuid())
+  productId   String
+  name        String
+  price       Decimal            @db.Decimal(10, 2)
+  currency    String             @default("RUB")
+  sortOrder   Int                @default(0)
+  published   Boolean            @default(true)
+  criteria    ProductCriterion[]
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  deletedAt   DateTime?
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  enrollments          Enrollment[]
+  payments             Payment[]            @relation("PaymentTariff")
+  upgradesFrom         TariffUpgrade[]      @relation("TariffUpgradeFrom")
+  upgradesTo           TariffUpgrade[]      @relation("TariffUpgradeTo")
+  enrollmentHistoryFrom EnrollmentTariffHistory[] @relation("EnrollmentHistoryFrom")
+  enrollmentHistoryTo   EnrollmentTariffHistory[] @relation("EnrollmentHistoryTo")
+
+  @@index([productId, sortOrder])
+  @@index([productId, published])
+  @@map("product_tariffs")
 }
 
 model Payment {
@@ -151,6 +208,9 @@ model Payment {
   yoomoneyOperationId String?       @unique
   userId              String
   productId           String
+  kind                PaymentKind   @default(INITIAL)
+  /// Тариф первичной оплаты (для kind = INITIAL).
+  tariffId            String?
   amount              Decimal       @db.Decimal(10, 2)
   currency            String        @default("RUB")
   status              PaymentStatus @default(PENDING)
@@ -160,10 +220,72 @@ model Payment {
 
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  tariff  ProductTariff? @relation("PaymentTariff", fields: [tariffId], references: [id], onDelete: SetNull)
+
+  tariffUpgrade TariffUpgrade?
 
   @@index([userId, productId])
   @@index([productId, status])
+  @@index([tariffId])
   @@map("payments")
+}
+
+model TariffUpgrade {
+  id                      String              @id @default(uuid())
+  enrollmentId            String
+  fromTariffId            String
+  toTariffId              String
+  status                  TariffUpgradeStatus @default(DRAFT)
+  quotedFromPrice         Decimal             @db.Decimal(10, 2)
+  quotedToPrice           Decimal             @db.Decimal(10, 2)
+  quotedDelta             Decimal             @db.Decimal(10, 2)
+  currency                String              @default("RUB")
+  paymentId               String?             @unique
+  appliedCriteriaSnapshot Json?
+  expiresAt               DateTime?
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
+
+  enrollment Enrollment    @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  fromTariff ProductTariff @relation("TariffUpgradeFrom", fields: [fromTariffId], references: [id], onDelete: Restrict)
+  toTariff   ProductTariff @relation("TariffUpgradeTo", fields: [toTariffId], references: [id], onDelete: Restrict)
+  payment    Payment?      @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  @@index([enrollmentId, status])
+  @@index([toTariffId])
+  @@map("tariff_upgrades")
+}
+
+model EnrollmentTariffHistory {
+  id              String   @id @default(uuid())
+  enrollmentId    String
+  fromTariffId    String?
+  toTariffId      String
+  reason          String   @default("payment")
+  changedByUserId String?
+  createdAt       DateTime @default(now())
+
+  enrollment Enrollment     @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  fromTariff ProductTariff? @relation("EnrollmentHistoryFrom", fields: [fromTariffId], references: [id], onDelete: SetNull)
+  toTariff   ProductTariff  @relation("EnrollmentHistoryTo", fields: [toTariffId], references: [id], onDelete: Restrict)
+  changedBy  User?          @relation("EnrollmentTariffHistoryAuthor", fields: [changedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([enrollmentId, createdAt])
+  @@map("enrollment_tariff_history")
+}
+
+model CuratorFeedbackMessage {
+  id           String   @id @default(uuid())
+  enrollmentId String
+  userId       String
+  content      String   @db.Text
+  createdAt    DateTime @default(now())
+
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([enrollmentId, createdAt])
+  @@map("curator_feedback_messages")
 }
 
 model Lesson {
@@ -215,6 +337,7 @@ model Enrollment {
   id        String    @id @default(uuid())
   userId    String
   productId String
+  tariffId  String
   expiresAt DateTime?
   progress  Float     @default(0) // 0.0 - 1.0
   createdAt DateTime  @default(now())
@@ -222,12 +345,17 @@ model Enrollment {
 
   user       User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
   product    Product                 @relation(fields: [productId], references: [id], onDelete: Cascade)
+  tariff     ProductTariff           @relation(fields: [tariffId], references: [id], onDelete: Restrict)
   procedures UserMarathonProcedure[]
   eventCompletions MarathonEventCompletion[]
+  tariffUpgrades TariffUpgrade[]
+  tariffHistory  EnrollmentTariffHistory[]
+  feedbackMessages CuratorFeedbackMessage[]
 
   @@unique([userId, productId])
   @@index([userId])
   @@index([productId])
+  @@index([tariffId])
   @@map("enrollments")
 }
 

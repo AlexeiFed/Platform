@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { calculateMarathonProgress } from "../src/lib/marathon-progress";
+import { ALL_PRODUCT_CRITERIA } from "../src/lib/product-criteria";
 
 const prisma = new PrismaClient();
 
@@ -473,6 +474,29 @@ async function main() {
     },
   });
 
+  await prisma.product.update({
+    where: { id: product.id },
+    data: { enabledCriteria: ALL_PRODUCT_CRITERIA },
+  });
+
+  let tariff = await prisma.productTariff.findFirst({
+    where: { productId: product.id, deletedAt: null },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+  });
+  if (!tariff) {
+    tariff = await prisma.productTariff.create({
+      data: {
+        productId: product.id,
+        name: "Базовый",
+        price: product.price ?? 0,
+        currency: product.currency,
+        sortOrder: 0,
+        published: true,
+        criteria: ALL_PRODUCT_CRITERIA,
+      },
+    });
+  }
+
   await prisma.marathonEventCompletion.deleteMany({
     where: {
       enrollment: {
@@ -501,10 +525,11 @@ async function main() {
         productId: product.id,
       },
     },
-    update: {},
+    update: { tariffId: tariff.id },
     create: {
       userId: student.id,
       productId: product.id,
+      tariffId: tariff.id,
     },
   });
 

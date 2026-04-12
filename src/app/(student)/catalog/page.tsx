@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { tokens } from "@/lib/design-tokens";
 import { formatPrice, lessonsLabel } from "@/lib/utils";
 import { isProductPubliclyVisible } from "@/lib/product-visibility";
+import { getProductMinPrice } from "@/lib/product-tariff-pricing";
 import Link from "next/link";
 
 export default async function CatalogPage() {
@@ -17,6 +18,11 @@ export default async function CatalogPage() {
   const visibleProducts = products.filter(isProductPubliclyVisible);
   const courses = visibleProducts.filter((product) => product.type === "COURSE");
   const marathons = visibleProducts.filter((product) => product.type === "MARATHON");
+
+  const minPriceEntries = await Promise.all(
+    visibleProducts.map(async (p) => [p.id, await getProductMinPrice(p.id)] as const)
+  );
+  const minPriceByProductId = new Map(minPriceEntries);
 
   const renderProducts = (items: typeof visibleProducts) => (
     <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -52,7 +58,10 @@ export default async function CatalogPage() {
           </CardContent>
           <CardFooter className="flex items-center justify-between">
             <span className="text-lg font-bold">
-              {product.price ? formatPrice(Number(product.price), product.currency) : "Бесплатно"}
+              {(() => {
+                const min = minPriceByProductId.get(product.id);
+                return min ? formatPrice(min.price, min.currency) : "Бесплатно";
+              })()}
             </span>
             <Button asChild size="sm">
               <Link href={`/catalog/${product.slug}`}>Подробнее</Link>

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CheckCircle2, ChevronRight, FileText, Lock } from "lucide-react";
+import { CheckCircle2, ChevronRight, FileText, Lock, MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { tokens } from "@/lib/design-tokens";
 import { useCourseNavPayload } from "@/components/shared/course-nav-context";
@@ -134,8 +134,33 @@ export function CourseNavSidebarSection() {
         </div>
       )}
 
+      {payload.productType === "COURSE" && payload.curatorFeedback ? (
+        <div className="px-1 pb-1">
+          <Link
+            href={`${base}/feedback`}
+            className={navItemClass(pathname === `${base}/feedback`)}
+            aria-current={pathname === `${base}/feedback` ? "page" : undefined}
+          >
+            <MessageCircle className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />
+            <span className="min-w-0 flex-1 truncate text-sm">Обратная связь</span>
+          </Link>
+        </div>
+      ) : null}
+
       {payload.productType === "MARATHON" && (
         <>
+          {payload.curatorFeedback ? (
+            <div className="px-1 pb-2">
+              <Link
+                href={`${base}/feedback`}
+                className={navItemClass(pathname === `${base}/feedback`)}
+                aria-current={pathname === `${base}/feedback` ? "page" : undefined}
+              >
+                <MessageCircle className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />
+                <span className="min-w-0 flex-1 truncate text-sm">Обратная связь</span>
+              </Link>
+            </div>
+          ) : null}
           {payload.procedures && payload.procedures.length > 0 && (
             <MarathonProcedureSidebarDetails procedures={payload.procedures} />
           )}
@@ -174,6 +199,19 @@ export function CourseNavSidebarSection() {
                                     <span className="min-w-0 flex-1 truncate text-xs">{event.title}</span>
                                     <Badge variant="outline" className="shrink-0 text-[9px] px-1 py-0">
                                       {event.type}
+                                    </Badge>
+                                  </div>
+                                </li>
+                              );
+                            }
+                            if (event.lockedByTariff) {
+                              return (
+                                <li key={event.id}>
+                                  <div className={lockedRowClass} title="Недоступно в вашем тарифе">
+                                    <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                                    <span className="min-w-0 flex-1 truncate text-xs">{event.title}</span>
+                                    <Badge variant="secondary" className="shrink-0 text-[9px] px-1 py-0">
+                                      тариф
                                     </Badge>
                                   </div>
                                 </li>

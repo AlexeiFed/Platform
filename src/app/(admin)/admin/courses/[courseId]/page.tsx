@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { tokens } from "@/lib/design-tokens";
 import { Badge } from "@/components/ui/badge";
 import { CourseEditor } from "./course-editor";
+import { TariffsAndCriteriaEditor } from "./tariffs-and-criteria-editor";
 import type { ContentBlock } from "./course-editor";
 
 type Props = {
@@ -25,12 +26,16 @@ export default async function CourseEditorPage({ params }: Props) {
           attachments: { orderBy: { createdAt: "asc" } },
         },
       },
+      tariffs: {
+        where: { deletedAt: null },
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      },
     },
   });
 
   if (!product) notFound();
 
-  const { lessons: _, ...productData } = product;
+  const { lessons: _, tariffs: productTariffs, ...productData } = product;
   const serializedProduct = {
     id: productData.id,
     type: productData.type,
@@ -47,7 +52,18 @@ export default async function CourseEditorPage({ params }: Props) {
     createdAt: productData.createdAt.toISOString(),
     updatedAt: productData.updatedAt.toISOString(),
     deletedAt: productData.deletedAt?.toISOString() ?? null,
+    enabledCriteria: productData.enabledCriteria,
   };
+
+  const serializedTariffs = productTariffs.map((t) => ({
+    id: t.id,
+    name: t.name,
+    price: Number(t.price),
+    currency: t.currency,
+    sortOrder: t.sortOrder,
+    published: t.published,
+    criteria: t.criteria,
+  }));
 
   const serializedMarathonEvents = product.marathonEvents.map((event) => ({
     ...event,
@@ -85,6 +101,12 @@ export default async function CourseEditorPage({ params }: Props) {
           </div>
         </div>
       </div>
+
+      <TariffsAndCriteriaEditor
+        productId={product.id}
+        initialEnabled={productData.enabledCriteria}
+        tariffs={serializedTariffs}
+      />
 
       <CourseEditor
         product={serializedProduct}

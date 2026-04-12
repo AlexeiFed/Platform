@@ -3,6 +3,7 @@
 import bcrypt from "bcryptjs";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getDefaultTariffForProduct } from "@/lib/product-tariff-pricing";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -17,10 +18,21 @@ export async function grantAccess(userId: string, productId: string) {
   if (!session || session.user.role !== "ADMIN") return { error: "Нет доступа" };
 
   try {
+    const tariff =
+      (await getDefaultTariffForProduct(productId)) ??
+      (await prisma.productTariff.findFirst({
+        where: { productId, deletedAt: null },
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+        select: { id: true },
+      }));
+    if (!tariff) {
+      return { error: "У продукта нет тарифа — создайте тариф в админке курса" };
+    }
+
     await prisma.enrollment.upsert({
       where: { userId_productId: { userId, productId } },
-      create: { userId, productId },
-      update: {},
+      create: { userId, productId, tariffId: tariff.id },
+      update: { tariffId: tariff.id },
     });
 
     revalidatePath("/admin/users");

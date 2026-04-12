@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { emitHomeworkEvent } from "@/lib/realtime";
+import { enrollmentHasCriterion, loadEnrollmentForCriteriaByUserProduct } from "@/lib/enrollment-criteria";
 
 const homeworkSchema = z.object({
   lessonId: z.string().uuid(),
@@ -40,6 +41,14 @@ export async function submitHomework(input: {
 
     if (!enrollment) return { error: "Нет доступа к курсу" };
 
+    const enrollmentCrit = await loadEnrollmentForCriteriaByUserProduct(
+      session.user.id,
+      lesson.productId
+    );
+    if (!enrollmentCrit || !enrollmentHasCriterion(enrollmentCrit, "TASKS")) {
+      return { error: "В вашем тарифе нет доступа к заданиям" };
+    }
+
     const latest = await prisma.homeworkSubmission.findFirst({
       where: { lessonId: data.lessonId, userId: session.user.id },
       orderBy: { createdAt: "desc" },
@@ -48,6 +57,10 @@ export async function submitHomework(input: {
 
     // One thread per lesson: student answer lives in submission itself,
     // chat is reserved for curator/admin comments to avoid duplicate messages.
+    const allowChat = enrollmentHasCriterion(enrollmentCrit, "COMMUNITY_CHAT");
+    const hasReview = enrollmentHasCriterion(enrollmentCrit, "HOMEWORK_REVIEW");
+    const nextStatus = hasReview ? "PENDING" : "APPROVED";
+
     if (latest && latest.status !== "APPROVED") {
       await prisma.homeworkSubmission.update({
         where: { id: latest.id },
@@ -55,19 +68,21 @@ export async function submitHomework(input: {
           content: data.content,
           fileUrl: data.fileUrls?.[0] ?? data.fileUrl ?? null,
           fileUrls: data.fileUrls ?? [],
-          status: "PENDING",
+          status: nextStatus,
         },
       });
 
-      await prisma.chatMessage.create({
-        data: {
-          submissionId: latest.id,
-          userId: session.user.id,
-          content: data.content,
-          fileUrl: data.fileUrls?.[0] ?? data.fileUrl ?? null,
-          fileUrls: data.fileUrls ?? [],
-        },
-      });
+      if (allowChat) {
+        await prisma.chatMessage.create({
+          data: {
+            submissionId: latest.id,
+            userId: session.user.id,
+            content: data.content,
+            fileUrl: data.fileUrls?.[0] ?? data.fileUrl ?? null,
+            fileUrls: data.fileUrls ?? [],
+          },
+        });
+      }
 
       emitHomeworkEvent({ submissionId: latest.id, lessonId: data.lessonId, userId: session.user.id });
     } else {
@@ -78,20 +93,22 @@ export async function submitHomework(input: {
           content: data.content,
           fileUrl: data.fileUrls?.[0] ?? data.fileUrl ?? null,
           fileUrls: data.fileUrls ?? [],
-          status: "PENDING",
+          status: nextStatus,
         },
         select: { id: true },
       });
 
-      await prisma.chatMessage.create({
-        data: {
-          submissionId: created.id,
-          userId: session.user.id,
-          content: data.content,
-          fileUrl: data.fileUrls?.[0] ?? data.fileUrl ?? null,
-          fileUrls: data.fileUrls ?? [],
-        },
-      });
+      if (allowChat) {
+        await prisma.chatMessage.create({
+          data: {
+            submissionId: created.id,
+            userId: session.user.id,
+            content: data.content,
+            fileUrl: data.fileUrls?.[0] ?? data.fileUrl ?? null,
+            fileUrls: data.fileUrls ?? [],
+          },
+        });
+      }
 
       emitHomeworkEvent({ submissionId: created.id, lessonId: data.lessonId, userId: session.user.id });
     }

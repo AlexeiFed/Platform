@@ -47,7 +47,7 @@ import {
   updateMarathonEvent,
 } from "./marathon-actions";
 import { AssetManager } from "../../assets/asset-manager";
-import type { MarathonEventType, MarathonTrack, ProductType, UnlockRule } from "@prisma/client";
+import type { MarathonEventType, MarathonTrack, ProductCriterion, ProductType, UnlockRule } from "@prisma/client";
 
 // === Types ===
 
@@ -73,6 +73,7 @@ type SerializedProduct = {
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
+  enabledCriteria?: ProductCriterion[];
 };
 
 type SerializedLesson = {

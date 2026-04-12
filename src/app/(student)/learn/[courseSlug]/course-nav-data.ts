@@ -1,5 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { getMarathonEventDate } from "@/lib/marathon-progress";
+import type { ProductCriterion } from "@prisma/client";
+import { criterionForMarathonEventType } from "@/lib/product-criteria";
+import { effectiveCriteriaSet, enrollmentHasCriterion } from "@/lib/enrollment-criteria";
 import type {
   CourseNavLesson,
   CourseNavMarathonDay,
@@ -51,7 +54,8 @@ type MarathonEventLoaded = MarathonEvent & {
 
 function buildMarathonWeeks(
   product: Pick<Product, "startDate">,
-  events: MarathonEventLoaded[]
+  events: MarathonEventLoaded[],
+  criteria: Set<ProductCriterion>
 ): CourseNavMarathonWeek[] {
   const weekMap = new Map<number, MarathonEventLoaded[]>();
 
@@ -88,10 +92,13 @@ function buildMarathonWeeks(
           const lessonCompleted =
             event.lesson?.submissions.some((s) => s.status === "APPROVED") ?? false;
           const manuallyCompleted = event.completions.length > 0;
+          const required = criterionForMarathonEventType(event.type);
+          const lockedByTariff = required != null && !criteria.has(required);
           return {
             id: event.id,
             title: event.title,
             accessible,
+            lockedByTariff,
             completed: manuallyCompleted || lessonCompleted,
             type: event.type,
           };
@@ -164,15 +171,20 @@ export async function getCourseNavPayload(
         },
         orderBy: [{ position: "asc" }, { createdAt: "asc" }],
       },
+      tariff: { select: { criteria: true } },
+      product: { select: { enabledCriteria: true } },
     },
   });
 
   if (!enrollment) return null;
 
+  const criteriaSet = effectiveCriteriaSet(enrollment);
+
   const base: CourseNavPayload = {
     courseSlug: product.slug,
     title: product.title,
     productType: product.type,
+    curatorFeedback: enrollmentHasCriterion(enrollment, "CURATOR_FEEDBACK"),
   };
 
   if (product.type === "COURSE") {
@@ -194,7 +206,7 @@ export async function getCourseNavPayload(
     notes: p.notes,
   }));
 
-  const marathonWeeks = buildMarathonWeeks(product, product.marathonEvents);
+  const marathonWeeks = buildMarathonWeeks(product, product.marathonEvents, criteriaSet);
 
   return { ...base, procedures, marathonWeeks };
 }

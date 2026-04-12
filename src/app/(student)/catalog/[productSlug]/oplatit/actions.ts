@@ -24,10 +24,16 @@ export async function cancelPendingPaymentByReference(paymentRef: string, produc
     return { error: "Активная заявка на оплату не найдена" };
   }
 
-  await prisma.payment.update({
-    where: { id: payment.id },
-    data: { status: "CANCELLED" },
-  });
+  await prisma.$transaction([
+    prisma.payment.update({
+      where: { id: payment.id },
+      data: { status: "CANCELLED" },
+    }),
+    prisma.tariffUpgrade.updateMany({
+      where: { paymentId: payment.id, status: "PENDING_PAYMENT" },
+      data: { status: "CANCELLED" },
+    }),
+  ]);
 
   revalidatePath("/catalog");
   revalidatePath(`/catalog/${productSlug}`);

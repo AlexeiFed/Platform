@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { tokens } from "@/lib/design-tokens";
 import { formatPrice } from "@/lib/utils";
 import { isProductPubliclyVisible } from "@/lib/product-visibility";
-import { isPaidProduct } from "@/lib/product-payment";
+import { isProductPaidForCatalog, getProductMinPrice } from "@/lib/product-tariff-pricing";
 import { EnrollButton } from "./enroll-button";
 
 type Props = {
@@ -37,6 +37,11 @@ export default async function ProductDetailsPage({ params, searchParams }: Props
       paymentFormUrl: true,
       deletedAt: true,
       _count: { select: { lessons: true } },
+      tariffs: {
+        where: { published: true, deletedAt: null },
+        orderBy: [{ sortOrder: "asc" }, { price: "asc" }],
+        select: { id: true, name: true, price: true, currency: true, criteria: true },
+      },
     },
   });
 
@@ -51,6 +56,16 @@ export default async function ProductDetailsPage({ params, searchParams }: Props
 
   const loginWithReturn = `/login?callbackUrl=${encodeURIComponent(`/catalog/${product.slug}`)}`;
   const yoomoneyCheckoutEnabled = Boolean(process.env.YOOMONEY_WALLET_RECEIVER?.trim());
+
+  const paid = await isProductPaidForCatalog(product.id);
+  const minPrice = await getProductMinPrice(product.id);
+  const tariffOptions = product.tariffs.map((t) => ({
+    id: t.id,
+    name: t.name,
+    price: Number(t.price),
+    currency: t.currency,
+    criteria: t.criteria,
+  }));
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -80,7 +95,7 @@ export default async function ProductDetailsPage({ params, searchParams }: Props
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Цена</span>
             <span className="font-semibold">
-              {product.price ? formatPrice(Number(product.price), product.currency) : "Бесплатно"}
+              {minPrice ? formatPrice(minPrice.price, minPrice.currency) : "Бесплатно"}
             </span>
           </div>
           {product.type === "MARATHON" && product.startDate && (
@@ -108,9 +123,10 @@ export default async function ProductDetailsPage({ params, searchParams }: Props
             <EnrollButton
               productId={product.id}
               productSlug={product.slug}
-              requiresPayment={isPaidProduct(product.price)}
+              requiresPayment={paid}
               paymentFormUrl={product.paymentFormUrl}
               yoomoneyCheckoutEnabled={yoomoneyCheckoutEnabled}
+              tariffs={tariffOptions}
             />
           )}
         </CardFooter>

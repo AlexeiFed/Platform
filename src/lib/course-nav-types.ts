@@ -18,6 +18,8 @@ export type CourseNavMarathonEvent = {
   id: string;
   title: string;
   accessible: boolean;
+  /** Событие по дате доступно, но тип события не входит в тариф (LIVE / тренировка / питание). */
+  lockedByTariff: boolean;
   completed: boolean;
   type: string;
 };
@@ -38,6 +40,8 @@ export type CourseNavPayload = {
   courseSlug: string;
   title: string;
   productType: "COURSE" | "MARATHON";
+  /** Отдельный канал обратной связи по тарифу. */
+  curatorFeedback: boolean;
   lessons?: CourseNavLesson[];
   procedures?: CourseNavProcedure[];
   marathonWeeks?: CourseNavMarathonWeek[];

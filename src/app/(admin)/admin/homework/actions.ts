@@ -5,6 +5,7 @@ import { syncMarathonEnrollmentProgress } from "@/lib/marathon-progress-server";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { emitHomeworkEvent } from "@/lib/realtime";
+import { enrollmentHasCriterion, loadEnrollmentForCriteriaByUserProduct } from "@/lib/enrollment-criteria";
 
 export async function reviewHomework(
   submissionId: string,
@@ -16,6 +17,36 @@ export async function reviewHomework(
   }
 
   try {
+    const before = await prisma.homeworkSubmission.findUnique({
+      where: { id: submissionId },
+      select: {
+        userId: true,
+        lesson: { select: { productId: true } },
+      },
+    });
+    if (!before) return { error: "Работа не найдена" };
+
+    const enrollment = await loadEnrollmentForCriteriaByUserProduct(
+      before.userId,
+      before.lesson.productId
+    );
+    if (!enrollment || !enrollmentHasCriterion(enrollment, "HOMEWORK_REVIEW")) {
+      return { error: "У студента нет проверки ДЗ в тарифе" };
+    }
+
+    if (session.user.role === "CURATOR") {
+      const assignment = await prisma.productCurator.findUnique({
+        where: {
+          productId_curatorId: {
+            productId: before.lesson.productId,
+            curatorId: session.user.id,
+          },
+        },
+        select: { id: true },
+      });
+      if (!assignment) return { error: "Нет доступа" };
+    }
+
     const submission = await prisma.homeworkSubmission.update({
       where: { id: submissionId },
       data: { status },
@@ -102,6 +133,11 @@ export async function getHomeworkReviewThread(input: {
       }
     }
 
+    const enrollment = await loadEnrollmentForCriteriaByUserProduct(input.userId, input.productId);
+    if (!enrollment || !enrollmentHasCriterion(enrollment, "HOMEWORK_REVIEW")) {
+      return { error: "У студента нет проверки ДЗ в тарифе" } as const;
+    }
+
     const submission = await prisma.homeworkSubmission.findFirst({
       where: {
         userId: input.userId,
@@ -174,6 +210,23 @@ export async function sendChatMessage(
   }
 
   try {
+    const subMeta = await prisma.homeworkSubmission.findUnique({
+      where: { id: submissionId },
+      select: {
+        userId: true,
+        lesson: { select: { productId: true } },
+      },
+    });
+    if (!subMeta) return { error: "Работа не найдена" };
+
+    const enrollment = await loadEnrollmentForCriteriaByUserProduct(
+      subMeta.userId,
+      subMeta.lesson.productId
+    );
+    if (!enrollment || !enrollmentHasCriterion(enrollment, "HOMEWORK_REVIEW")) {
+      return { error: "У студента нет проверки ДЗ в тарифе" };
+    }
+
     if (replyToId) {
       const replyTarget = await prisma.chatMessage.findFirst({
         where: { id: replyToId, submissionId },

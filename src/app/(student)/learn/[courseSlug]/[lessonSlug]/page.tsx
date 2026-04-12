@@ -7,6 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { FileText, Paperclip, ClipboardList } from "lucide-react";
 import { HomeworkForm } from "./homework-form";
 import { HomeworkThread } from "./homework-thread";
+import { enrollmentHasCriterion, loadEnrollmentForCriteriaByUserProduct } from "@/lib/enrollment-criteria";
 
 type ContentBlock = {
   id: string;
@@ -41,6 +42,9 @@ export default async function LessonPage({ params }: Props) {
   });
 
   if (!enrollment) redirect("/catalog");
+
+  const crit = await loadEnrollmentForCriteriaByUserProduct(session.user.id, product.id);
+  const canTasks = Boolean(crit && enrollmentHasCriterion(crit, "TASKS"));
 
   const lesson = await prisma.lesson.findUnique({
     where: { productId_slug: { productId: product.id, slug: lessonSlug } },
@@ -180,8 +184,16 @@ export default async function LessonPage({ params }: Props) {
 
       <Separator />
 
+      {lesson.homeworkEnabled && !canTasks ? (
+        <Card>
+          <CardContent className={`${tokens.typography.small} p-4 text-muted-foreground`}>
+            Домашнее задание у урока есть, но в вашем тарифе нет доступа к заданиям.
+          </CardContent>
+        </Card>
+      ) : null}
+
       {/* === HOMEWORK (conditional) === */}
-      {lesson.homeworkEnabled && (
+      {lesson.homeworkEnabled && canTasks && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">

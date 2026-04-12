@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { slugify } from "@/lib/utils";
+import { ALL_PRODUCT_CRITERIA } from "@/lib/product-criteria";
 
 const productSchema = z.object({
   title: z.string().min(1),
@@ -67,16 +68,31 @@ export async function createProduct(input: z.infer<typeof productSchema>) {
     const existing = await prisma.product.findUnique({ where: { slug } });
     const finalSlug = existing ? `${slug}-${Date.now()}` : slug;
 
-    const product = await prisma.product.create({
-      data: {
-        ...data,
-        slug: finalSlug,
-        startDate: data.type === "MARATHON" && data.startDate ? new Date(data.startDate) : null,
-        durationDays: data.type === "MARATHON" ? data.durationDays ?? null : null,
-        price: data.price ?? null,
-        paymentFormUrl: data.paymentFormUrl?.trim() || null,
-      },
-      select: { id: true },
+    const product = await prisma.$transaction(async (tx) => {
+      const p = await tx.product.create({
+        data: {
+          ...data,
+          slug: finalSlug,
+          startDate: data.type === "MARATHON" && data.startDate ? new Date(data.startDate) : null,
+          durationDays: data.type === "MARATHON" ? data.durationDays ?? null : null,
+          price: data.price ?? null,
+          paymentFormUrl: data.paymentFormUrl?.trim() || null,
+          enabledCriteria: ALL_PRODUCT_CRITERIA,
+        },
+        select: { id: true },
+      });
+      await tx.productTariff.create({
+        data: {
+          productId: p.id,
+          name: "Базовый",
+          price: data.price ?? 0,
+          currency: data.currency ?? "RUB",
+          sortOrder: 0,
+          published: true,
+          criteria: ALL_PRODUCT_CRITERIA,
+        },
+      });
+      return p;
     });
 
     revalidatePath("/admin/courses");
@@ -95,15 +111,28 @@ export async function updateProduct(id: string, input: z.infer<typeof productSch
   try {
     const data = productSchema.parse(input);
 
-    await prisma.product.update({
-      where: { id },
-      data: {
-        ...data,
-        startDate: data.type === "MARATHON" && data.startDate ? new Date(data.startDate) : null,
-        durationDays: data.type === "MARATHON" ? data.durationDays ?? null : null,
-        price: data.price ?? null,
-        paymentFormUrl: data.paymentFormUrl?.trim() || null,
-      },
+    await prisma.$transaction(async (tx) => {
+      await tx.product.update({
+        where: { id },
+        data: {
+          ...data,
+          startDate: data.type === "MARATHON" && data.startDate ? new Date(data.startDate) : null,
+          durationDays: data.type === "MARATHON" ? data.durationDays ?? null : null,
+          price: data.price ?? null,
+          paymentFormUrl: data.paymentFormUrl?.trim() || null,
+        },
+      });
+      const baseTariff = await tx.productTariff.findFirst({
+        where: { productId: id, deletedAt: null },
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+        select: { id: true },
+      });
+      if (baseTariff) {
+        await tx.productTariff.update({
+          where: { id: baseTariff.id },
+          data: { price: data.price ?? 0, currency: data.currency ?? "RUB" },
+        });
+      }
     });
 
     revalidatePath("/admin/courses");

@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { amountsEqual } from "@/lib/product-payment";
 import { verifyYooMoneyNotificationSha1 } from "@/lib/yoomoney-notification-verify";
 import { Prisma } from "@prisma/client";
+import { upsertEnrollmentAfterInitialPaymentTx } from "@/lib/payment-enrollment";
+import { tryApplyTariffUpgradeFromPaymentTx } from "@/lib/tariff-upgrade-from-payment";
 
 export const runtime = "nodejs";
 
@@ -74,8 +76,10 @@ export async function POST(req: Request) {
         select: {
           id: true,
           status: true,
+          kind: true,
           userId: true,
           productId: true,
+          tariffId: true,
           amount: true,
           yoomoneyOperationId: true,
           product: { select: { slug: true } },
@@ -107,11 +111,25 @@ export async function POST(req: Request) {
         },
       });
 
-      await tx.enrollment.upsert({
-        where: { userId_productId: { userId: payment.userId, productId: payment.productId } },
-        create: { userId: payment.userId, productId: payment.productId },
-        update: {},
+      const upgradeResult = await tryApplyTariffUpgradeFromPaymentTx(tx, payment, paidBySender);
+      if (upgradeResult.outcome === "amount_mismatch") {
+        return { type: "amount_mismatch" as const };
+      }
+      if (upgradeResult.outcome === "bad_state" || upgradeResult.outcome === "conflict") {
+        return { type: "conflict" as const };
+      }
+      if (upgradeResult.outcome === "applied") {
+        return { type: "ok" as const, slug: payment.product.slug };
+      }
+
+      const enrollRes = await upsertEnrollmentAfterInitialPaymentTx(tx, {
+        userId: payment.userId,
+        productId: payment.productId,
+        tariffId: payment.tariffId,
       });
+      if (!enrollRes.ok) {
+        return { type: "bad_state" as const };
+      }
 
       return { type: "ok" as const, slug: payment.product.slug };
     });
@@ -129,6 +147,7 @@ export async function POST(req: Request) {
     revalidatePath("/catalog");
     revalidatePath(`/catalog/${result.slug}`);
     revalidatePath(`/learn/${result.slug}`);
+    revalidatePath(`/learn/${result.slug}/upgrade`);
 
     return okResponse();
   } catch (e) {

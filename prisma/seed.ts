@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { ALL_PRODUCT_CRITERIA } from "../src/lib/product-criteria";
 
 const prisma = new PrismaClient();
 
@@ -42,7 +43,7 @@ async function main() {
 
   const course = await prisma.product.upsert({
     where: { slug: "web-development-basics" },
-    update: {},
+    update: { enabledCriteria: ALL_PRODUCT_CRITERIA },
     create: {
       title: "Основы веб-разработки",
       slug: "web-development-basics",
@@ -50,12 +51,13 @@ async function main() {
       description: "Изучите HTML, CSS и JavaScript с нуля. Идеальный курс для начинающих разработчиков.",
       price: 4990,
       published: true,
+      enabledCriteria: ALL_PRODUCT_CRITERIA,
     },
   });
 
   const marathon = await prisma.product.upsert({
     where: { slug: "30-days-javascript" },
-    update: {},
+    update: { enabledCriteria: ALL_PRODUCT_CRITERIA },
     create: {
       title: "30 дней JavaScript",
       slug: "30-days-javascript",
@@ -64,8 +66,33 @@ async function main() {
       price: 2990,
       published: true,
       startDate: new Date("2026-04-01"),
+      enabledCriteria: ALL_PRODUCT_CRITERIA,
     },
   });
+
+  const ensureTariff = async (productId: string, price: number, currency: string) => {
+    const existing = await prisma.productTariff.findFirst({
+      where: { productId, deletedAt: null },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    });
+    if (existing) {
+      return existing;
+    }
+    return prisma.productTariff.create({
+      data: {
+        productId,
+        name: "Базовый",
+        price,
+        currency,
+        sortOrder: 0,
+        published: true,
+        criteria: ALL_PRODUCT_CRITERIA,
+      },
+    });
+  };
+
+  const courseTariff = await ensureTariff(course.id, 4990, course.currency);
+  await ensureTariff(marathon.id, 2990, marathon.currency);
 
   const lessons = [
     { title: "Введение в HTML", content: "<h2>Что такое HTML?</h2><p>HTML — это язык разметки для создания веб-страниц.</p>", order: 1 },
@@ -92,10 +119,11 @@ async function main() {
 
   await prisma.enrollment.upsert({
     where: { userId_productId: { userId: student.id, productId: course.id } },
-    update: {},
+    update: { tariffId: courseTariff.id },
     create: {
       userId: student.id,
       productId: course.id,
+      tariffId: courseTariff.id,
     },
   });
 

@@ -5,6 +5,8 @@ import { timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { amountsEqual } from "@/lib/product-payment";
 import { Prisma } from "@prisma/client";
+import { upsertEnrollmentAfterInitialPaymentTx } from "@/lib/payment-enrollment";
+import { tryApplyTariffUpgradeFromPaymentTx } from "@/lib/tariff-upgrade-from-payment";
 
 export const runtime = "nodejs";
 
@@ -81,8 +83,10 @@ export async function POST(req: Request) {
         select: {
           id: true,
           status: true,
+          kind: true,
           userId: true,
           productId: true,
+          tariffId: true,
           amount: true,
           currency: true,
           product: { select: { slug: true } },
@@ -118,17 +122,51 @@ export async function POST(req: Request) {
         },
       });
 
-      await tx.enrollment.upsert({
-        where: { userId_productId: { userId: payment.userId, productId: payment.productId } },
-        create: { userId: payment.userId, productId: payment.productId },
-        update: {},
+      const fullPay = await tx.payment.findUnique({
+        where: { id: payment.id },
+        select: {
+          id: true,
+          kind: true,
+          userId: true,
+          productId: true,
+          tariffId: true,
+          product: { select: { slug: true } },
+        },
       });
+      if (!fullPay) {
+        return { type: "bad_state" as const, status: "UNKNOWN" };
+      }
+
+      const up = await tryApplyTariffUpgradeFromPaymentTx(tx, fullPay, amount);
+      if (up.outcome === "amount_mismatch") {
+        return { type: "amount_mismatch" as const };
+      }
+      if (up.outcome === "bad_state" || up.outcome === "conflict") {
+        return { type: "bad_state" as const, status: "UPGRADE" };
+      }
+      if (up.outcome === "applied") {
+        return {
+          type: "ok" as const,
+          userId: fullPay.userId,
+          productId: fullPay.productId,
+          slug: fullPay.product.slug,
+        };
+      }
+
+      const enrollRes = await upsertEnrollmentAfterInitialPaymentTx(tx, {
+        userId: fullPay.userId,
+        productId: fullPay.productId,
+        tariffId: fullPay.tariffId,
+      });
+      if (!enrollRes.ok) {
+        return { type: "bad_state" as const, status: "NO_TARIFF" };
+      }
 
       return {
         type: "ok" as const,
-        userId: payment.userId,
-        productId: payment.productId,
-        slug: payment.product.slug,
+        userId: fullPay.userId,
+        productId: fullPay.productId,
+        slug: fullPay.product.slug,
       };
     });
 

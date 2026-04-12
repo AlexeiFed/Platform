@@ -60,12 +60,15 @@ if ! command -v pnpm >/dev/null 2>&1; then
 fi
 
 echo "→ pnpm install (offline cache если есть)"
+# Раньше здесь был prisma db push; теперь migrate deploy — история миграций в _prisma_migrations.
+# Если на сервере БД уже совпадает со схемой, но migrate deploy падает: один раз
+#   prisma migrate resolve --applied <имя_папки_миграции>
 sudo -u appuser bash -lc "
   set -euo pipefail
   cd '$ROOT'
   pnpm install --frozen-lockfile --prefer-offline
   pnpm exec prisma generate
-  pnpm exec prisma db push
+  pnpm exec prisma migrate deploy
   pnpm build
   test -f .next/standalone/server.js
   mkdir -p .next/standalone/.next

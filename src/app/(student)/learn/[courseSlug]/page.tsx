@@ -4,6 +4,8 @@ import { calculateMarathonProgress } from "@/lib/marathon-progress";
 import { redirect, notFound } from "next/navigation";
 import { tokens } from "@/lib/design-tokens";
 import { Card, CardContent } from "@/components/ui/card";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 
@@ -54,6 +56,7 @@ export default async function CoursePage({ params }: Props) {
   const enrollment = await prisma.enrollment.findUnique({
     where: { userId_productId: { userId: session.user.id, productId: product.id } },
     include: {
+      tariff: { select: { price: true } },
       procedures: {
         include: {
           procedureType: {
@@ -69,6 +72,15 @@ export default async function CoursePage({ params }: Props) {
   });
 
   if (!enrollment) redirect("/catalog");
+
+  const higherTariffs = await prisma.productTariff.count({
+    where: {
+      productId: product.id,
+      published: true,
+      deletedAt: null,
+      price: { gt: enrollment.tariff.price },
+    },
+  });
 
   const marathonProgress = product.type === "MARATHON"
     ? calculateMarathonProgress({
@@ -99,6 +111,19 @@ export default async function CoursePage({ params }: Props) {
         </div>
         <Progress value={progressValue * 100} />
       </div>
+
+      {higherTariffs > 0 ? (
+        <Card>
+          <CardContent className={`flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between ${tokens.spacing.card}`}>
+            <p className={`${tokens.typography.small} text-muted-foreground`}>
+              Доступен апгрейд тарифа — откройте больше возможностей.
+            </p>
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/learn/${courseSlug}/upgrade`}>Апгрейд тарифа</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {product.type === "MARATHON" ? (
         <>

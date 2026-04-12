@@ -9,6 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { tokens } from "@/lib/design-tokens";
 import { CalendarDays, CheckCircle2, Clock3, PlayCircle } from "lucide-react";
 import { MarathonEventCompletionToggle } from "./completion-toggle";
+import { criterionForMarathonEventType } from "@/lib/product-criteria";
+import { enrollmentHasCriterion, loadEnrollmentForCriteriaByUserProduct } from "@/lib/enrollment-criteria";
 
 type ContentBlock = {
   id: string;
@@ -82,6 +84,12 @@ export default async function MarathonEventPage({ params }: Props) {
 
   if (!event) notFound();
 
+  const critRow = await loadEnrollmentForCriteriaByUserProduct(session.user.id, product.id);
+  const requiredCrit = criterionForMarathonEventType(event.type);
+  const lockedByTariff = Boolean(
+    requiredCrit && critRow && !enrollmentHasCriterion(critRow, requiredCrit)
+  );
+
   const eventDate = product.startDate ? getMarathonEventDate(product.startDate, event.dayOffset) : null;
   const accessible = eventDate ? new Date() >= eventDate : true;
 
@@ -121,6 +129,20 @@ export default async function MarathonEventPage({ params }: Props) {
         </div>
       </div>
 
+      {lockedByTariff ? (
+        <Card>
+          <CardContent className={`space-y-4 ${tokens.spacing.card}`}>
+            <p className={tokens.typography.body}>
+              Этот тип события не входит в ваш тариф (например эфир или тренировка). Оформите апгрейд тарифа, чтобы
+              открыть доступ.
+            </p>
+            <Button asChild variant="default">
+              <Link href={`/learn/${courseSlug}/upgrade`}>Апгрейд тарифа</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
       <Card>
         <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
           <div className="flex items-start gap-3">
@@ -207,6 +229,8 @@ export default async function MarathonEventPage({ params }: Props) {
             )}
           </CardContent>
         </Card>
+      )}
+        </>
       )}
     </div>
   );

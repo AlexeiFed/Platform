@@ -5,6 +5,18 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { appendPaymentRefToFormUrl, isPaidProduct } from "@/lib/product-payment";
 import { revalidatePath } from "next/cache";
+import { isProductPaidForCatalog, getDefaultTariffForProduct } from "@/lib/product-tariff-pricing";
+
+const resolveTariffForSucceededPayment = async (userId: string, productId: string) => {
+  const pay = await prisma.payment.findFirst({
+    where: { userId, productId, status: "SUCCEEDED", kind: "INITIAL" },
+    orderBy: { updatedAt: "desc" },
+    select: { tariffId: true },
+  });
+  if (pay?.tariffId) return pay.tariffId;
+  const def = await getDefaultTariffForProduct(productId);
+  return def?.id ?? null;
+};
 
 export async function enrollToProduct(productId: string) {
   const session = await auth();
@@ -13,15 +25,25 @@ export async function enrollToProduct(productId: string) {
   try {
     const product = await prisma.product.findFirst({
       where: { id: productId, deletedAt: null },
-      select: { price: true, slug: true },
+      select: { slug: true },
     });
     if (!product) return { error: "Продукт не найден" };
 
-    if (!isPaidProduct(product.price)) {
+    const paid = await isProductPaidForCatalog(productId);
+
+    if (!paid) {
+      const freeTariff = await prisma.productTariff.findFirst({
+        where: { productId, published: true, deletedAt: null, price: 0 },
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+        select: { id: true },
+      });
+      if (!freeTariff) {
+        return { error: "Нет бесплатного тарифа (цена 0). Добавьте тариф в админке." };
+      }
       await prisma.enrollment.upsert({
         where: { userId_productId: { userId: session.user.id, productId } },
-        create: { userId: session.user.id, productId },
-        update: {},
+        create: { userId: session.user.id, productId, tariffId: freeTariff.id },
+        update: { tariffId: freeTariff.id },
       });
       revalidatePath("/catalog");
       revalidatePath(`/catalog/${product.slug}`);
@@ -40,10 +62,15 @@ export async function enrollToProduct(productId: string) {
       };
     }
 
+    const tariffId = await resolveTariffForSucceededPayment(session.user.id, productId);
+    if (!tariffId) {
+      return { error: "Не удалось определить тариф. Обратитесь к администратору." };
+    }
+
     await prisma.enrollment.upsert({
       where: { userId_productId: { userId: session.user.id, productId } },
-      create: { userId: session.user.id, productId },
-      update: {},
+      create: { userId: session.user.id, productId, tariffId },
+      update: { tariffId },
     });
 
     revalidatePath("/catalog");
@@ -57,7 +84,7 @@ export async function enrollToProduct(productId: string) {
 }
 
 /** Создаёт PENDING-платёж и отдаёт либо путь на нашу страницу QuickPay (ЮMoney), либо URL внешней формы. */
-export async function createExternalFormCheckout(productId: string) {
+export async function createExternalFormCheckout(productId: string, tariffId: string) {
   const session = await auth();
   if (!session) return { error: "Необходимо войти в аккаунт" };
 
@@ -65,8 +92,6 @@ export async function createExternalFormCheckout(productId: string) {
     const product = await prisma.product.findFirst({
       where: { id: productId, deletedAt: null },
       select: {
-        price: true,
-        currency: true,
         paymentFormUrl: true,
         published: true,
         slug: true,
@@ -75,7 +100,20 @@ export async function createExternalFormCheckout(productId: string) {
 
     if (!product) return { error: "Продукт не найден" };
     if (!product.published) return { error: "Продукт недоступен" };
-    if (!isPaidProduct(product.price)) return { error: "Этот продукт бесплатный — запишитесь кнопкой «Записаться»" };
+
+    const tariff = await prisma.productTariff.findFirst({
+      where: {
+        id: tariffId,
+        productId,
+        published: true,
+        deletedAt: null,
+      },
+      select: { price: true, currency: true },
+    });
+    if (!tariff) return { error: "Тариф не найден или снят с публикации" };
+    if (!isPaidProduct(tariff.price)) {
+      return { error: "Для бесплатного тарифа нажмите «Записаться»" };
+    }
 
     const yoomoneyReceiver = process.env.YOOMONEY_WALLET_RECEIVER?.trim();
     const formUrl = product.paymentFormUrl?.trim();
@@ -103,8 +141,10 @@ export async function createExternalFormCheckout(productId: string) {
         reference,
         userId: session.user.id,
         productId,
-        amount: product.price!,
-        currency: product.currency,
+        kind: "INITIAL",
+        tariffId,
+        amount: tariff.price,
+        currency: tariff.currency,
         status: "PENDING",
       },
     });

@@ -4,6 +4,8 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { syncMarathonEnrollmentProgress } from "@/lib/marathon-progress-server";
 import { revalidatePath } from "next/cache";
+import { criterionForMarathonEventType } from "@/lib/product-criteria";
+import { enrollmentHasCriterion, loadEnrollmentForCriteriaByUserProduct } from "@/lib/enrollment-criteria";
 
 export async function toggleMarathonEventCompletion(eventId: string) {
   const session = await auth();
@@ -14,6 +16,7 @@ export async function toggleMarathonEventCompletion(eventId: string) {
       where: { id: eventId },
       select: {
         id: true,
+        type: true,
         productId: true,
         product: {
           select: {
@@ -40,6 +43,12 @@ export async function toggleMarathonEventCompletion(eventId: string) {
 
     if (!enrollment) {
       return { error: "Нет доступа к марафону" };
+    }
+
+    const critRow = await loadEnrollmentForCriteriaByUserProduct(session.user.id, event.productId);
+    const required = criterionForMarathonEventType(event.type);
+    if (required && critRow && !enrollmentHasCriterion(critRow, required)) {
+      return { error: "Тип события недоступен в вашем тарифе" };
     }
 
     const existing = await prisma.marathonEventCompletion.findUnique({
