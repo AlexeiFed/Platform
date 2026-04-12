@@ -26,7 +26,7 @@ SERVER_GIT_KEY="${SERVER_GIT_KEY:-/var/www/.ssh/platform_github}"
 
 echo "→ $SERVER:$REMOTE (git, branch $BRANCH)"
 
-REMOTE_EXPORTS="$(printf 'export DOMAIN=%q REMOTE=%q BRANCH=%q GIT_REPO=%q GIT_CLONE_HTTPS=%q SERVER_GIT_KEY=%q\n' \
+REMOTE_EXPORTS="$(printf 'export DOMAIN=%q REMOTE=%q BRANCH=%q GIT_REPO=%q GIT_CLONE_HTTPS=%q SERVER_GIT_KEY=%q;' \
   "$DOMAIN" "$REMOTE" "$BRANCH" "$GIT_REPO" "$GIT_CLONE_HTTPS" "$SERVER_GIT_KEY")"
 
 ssh "$SERVER" "${REMOTE_EXPORTS} bash -s" <<'REMOTE'
