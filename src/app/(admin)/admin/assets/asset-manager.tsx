@@ -187,7 +187,7 @@ export function AssetManager({
   function getIcon(key: string) {
     const cat = getFileCategory(key);
     if (cat === "image") return <Image className="h-5 w-5 text-blue-500" />;
-    if (cat === "video") return <Film className="h-5 w-5 text-purple-500" />;
+    if (cat === "video") return <Film className="h-5 w-5 text-primary" />;
     return <FileText className="h-5 w-5 text-orange-500" />;
   }
 

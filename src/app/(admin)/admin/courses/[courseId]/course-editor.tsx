@@ -390,7 +390,7 @@ function MediaBlockEditor({
 
   const typeLabel = block.type === "video" ? "Видео" : "Изображение";
   const TypeIcon = block.type === "video" ? Film : ImageIcon;
-  const iconColor = block.type === "video" ? "text-purple-500" : "text-blue-500";
+  const iconColor = block.type === "video" ? "text-primary" : "text-blue-500";
 
   return (
     <div className="space-y-2">
@@ -412,7 +412,7 @@ function MediaBlockEditor({
           )}
           {block.type === "video" && (
             <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 border">
-              <Film className="h-4 w-4 text-purple-500 shrink-0" />
+              <Film className="h-4 w-4 text-primary shrink-0" />
               <span className="text-xs truncate flex-1">{block.content.split("/").pop()}</span>
             </div>
           )}
@@ -1468,7 +1468,7 @@ export function CourseEditor({
                     <FileText className="h-3.5 w-3.5 mr-1.5 text-emerald-500" /> + Текст
                   </Button>
                   <Button type="button" variant="outline" size="sm" onClick={() => addBlock("video")}>
-                    <Film className="h-3.5 w-3.5 mr-1.5 text-purple-500" /> + Видео
+                    <Film className="h-3.5 w-3.5 mr-1.5 text-primary" /> + Видео
                   </Button>
                   <Button type="button" variant="outline" size="sm" onClick={() => addBlock("image")}>
                     <ImageIcon className="h-3.5 w-3.5 mr-1.5 text-blue-500" /> + Изображение

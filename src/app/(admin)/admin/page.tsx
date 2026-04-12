@@ -15,7 +15,7 @@ export default async function AdminDashboardPage() {
     { label: "Пользователей", value: usersCount, icon: Users, color: "text-blue-500" },
     { label: "Курсов", value: productsCount, icon: BookOpen, color: "text-green-500" },
     { label: "На проверке", value: pendingHomework, icon: ClipboardCheck, color: "text-orange-500" },
-    { label: "Зачислений", value: enrollmentsCount, icon: TrendingUp, color: "text-purple-500" },
+    { label: "Зачислений", value: enrollmentsCount, icon: TrendingUp, color: "text-primary" },
   ];
 
   return (

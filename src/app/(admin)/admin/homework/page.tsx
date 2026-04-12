@@ -229,7 +229,7 @@ export default async function AdminHomeworkPage({
               {selectedProduct.type === "COURSE" ? (
                 <BookOpen className="h-5 w-5 text-primary" />
               ) : (
-                <GraduationCap className="h-5 w-5 text-purple-500" />
+                <GraduationCap className="h-5 w-5 text-primary" />
               )}
               <h2 className={tokens.typography.h4}>{selectedProduct.title}</h2>
             </div>
