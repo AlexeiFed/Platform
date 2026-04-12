@@ -60,15 +60,32 @@ if ! command -v pnpm >/dev/null 2>&1; then
 fi
 
 echo "→ pnpm install (offline cache если есть)"
-# Раньше здесь был prisma db push; теперь migrate deploy — история миграций в _prisma_migrations.
-# Если на сервере БД уже совпадает со схемой, но migrate deploy падает: один раз
-#   prisma migrate resolve --applied <имя_папки_миграции>
+# migrate deploy. P3005: БД уже с данными, но нет записей в _prisma_migrations (раньше был db push).
+# Тогда один раз: SQL миграции → resolve --applied → снова migrate deploy.
 sudo -u appuser bash -lc "
   set -euo pipefail
   cd '$ROOT'
   pnpm install --frozen-lockfile --prefer-offline
   pnpm exec prisma generate
-  pnpm exec prisma migrate deploy
+  set +e
+  migrate_out=\$(pnpm exec prisma migrate deploy 2>&1)
+  migrate_ec=\$?
+  set -e
+  printf '%s\n' \"\$migrate_out\"
+  if [ \"\$migrate_ec\" -eq 0 ]; then
+    :
+  elif printf '%s' \"\$migrate_out\" | grep -qF 'P3005'; then
+    echo \"→ Prisma P3005: baseline миграции тарифов…\"
+    pnpm exec prisma db execute \\
+      --file \"\$PWD/prisma/migrations/20260413140000_add_product_tariffs_criteria/migration.sql\" \\
+      --schema \"\$PWD/prisma/schema.prisma\" \\
+      || echo \"⚠ db execute завершился с ошибкой (возможно SQL уже применяли вручную)\"
+    pnpm exec prisma migrate resolve --applied 20260413140000_add_product_tariffs_criteria
+    pnpm exec prisma migrate deploy
+  else
+    exit \"\$migrate_ec\"
+  fi
+  set -euo pipefail
   pnpm build
   test -f .next/standalone/server.js
   mkdir -p .next/standalone/.next
