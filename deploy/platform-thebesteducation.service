@@ -1,0 +1,20 @@
+[Unit]
+Description=LMS Platform (Next.js standalone) — thebesteducation.ru
+After=network.target
+
+[Service]
+Type=simple
+User=appuser
+Group=appuser
+WorkingDirectory=/var/www/platform/.next/standalone
+Environment=NODE_ENV=production
+Environment=PORT=3004
+Environment=HOSTNAME=127.0.0.1
+EnvironmentFile=-/var/www/platform/.env
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=5
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
