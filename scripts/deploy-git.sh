@@ -76,6 +76,8 @@ if [[ ! -d "$REMOTE/.git" ]]; then
   if [[ -d "$REMOTE" ]]; then
     mv "$REMOTE" "${REMOTE}.rsync-backup.${ts}"
   fi
+  mkdir -p "$REMOTE"
+  chown appuser:appuser "$REMOTE"
   sudo -u appuser git clone --branch "$BRANCH" --depth 1 "$GIT_CLONE_HTTPS" "$REMOTE"
   if [[ -f "${REMOTE}.rsync-backup.${ts}/.env" ]]; then
     cp "${REMOTE}.rsync-backup.${ts}/.env" "$REMOTE/.env"
