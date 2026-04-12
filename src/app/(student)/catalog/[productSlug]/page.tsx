@@ -1,6 +1,6 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { redirect, notFound } from "next/navigation";
+import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +17,6 @@ type Props = {
 export default async function ProductDetailsPage({ params }: Props) {
   const { productSlug } = await params;
   const session = await auth();
-  if (!session) redirect("/login");
 
   const product = await prisma.product.findUnique({
     where: { slug: productSlug, deletedAt: null },
@@ -26,9 +25,14 @@ export default async function ProductDetailsPage({ params }: Props) {
 
   if (!product || !isProductPubliclyVisible(product)) notFound();
 
-  const enrollment = await prisma.enrollment.findUnique({
-    where: { userId_productId: { userId: session.user.id, productId: product.id } },
-  });
+  const enrollment =
+    session?.user?.id != null
+      ? await prisma.enrollment.findUnique({
+          where: { userId_productId: { userId: session.user.id, productId: product.id } },
+        })
+      : null;
+
+  const loginWithReturn = `/login?callbackUrl=${encodeURIComponent(`/catalog/${product.slug}`)}`;
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -68,7 +72,11 @@ export default async function ProductDetailsPage({ params }: Props) {
           <Button asChild variant="outline">
             <Link href="/catalog">Назад</Link>
           </Button>
-          {enrollment ? (
+          {!session ? (
+            <Button asChild>
+              <Link href={loginWithReturn}>Войти, чтобы записаться</Link>
+            </Button>
+          ) : enrollment ? (
             <Button asChild>
               <Link href={`/learn/${product.slug}`}>Открыть</Link>
             </Button>

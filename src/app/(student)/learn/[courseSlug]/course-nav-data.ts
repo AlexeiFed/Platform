@@ -1,0 +1,200 @@
+import { prisma } from "@/lib/prisma";
+import { getMarathonEventDate } from "@/lib/marathon-progress";
+import type {
+  CourseNavLesson,
+  CourseNavMarathonDay,
+  CourseNavMarathonWeek,
+  CourseNavPayload,
+  CourseNavProcedure,
+} from "@/lib/course-nav-types";
+import type { Lesson, MarathonEvent, Product } from "@prisma/client";
+
+type LessonWithSubs = Lesson & {
+  submissions: Array<{ status: string }>;
+};
+
+function isLessonAccessible(
+  product: Pick<Product, "type" | "startDate">,
+  lessons: LessonWithSubs[],
+  lesson: LessonWithSubs,
+  index: number
+): boolean {
+  if (lesson.unlockRule === "IMMEDIATELY") return true;
+
+  if (lesson.unlockRule === "SPECIFIC_DATE") {
+    if (product.type === "MARATHON" && product.startDate && lesson.unlockDay) {
+      const unlockDate = new Date(product.startDate);
+      unlockDate.setDate(unlockDate.getDate() + lesson.unlockDay - 1);
+      return new Date() >= unlockDate;
+    }
+    return lesson.unlockDate ? new Date() >= new Date(lesson.unlockDate) : true;
+  }
+
+  if (lesson.unlockRule === "AFTER_HOMEWORK_APPROVAL" && index > 0) {
+    const prevLesson = lessons[index - 1];
+    return prevLesson.submissions.some((s) => s.status === "APPROVED");
+  }
+
+  return true;
+}
+
+type MarathonEventLoaded = MarathonEvent & {
+  lesson: {
+    id: string;
+    slug: string;
+    title: string;
+    published: boolean;
+    submissions: Array<{ status: string }>;
+  } | null;
+  completions: Array<{ id: string }>;
+};
+
+function buildMarathonWeeks(
+  product: Pick<Product, "startDate">,
+  events: MarathonEventLoaded[]
+): CourseNavMarathonWeek[] {
+  const weekMap = new Map<number, MarathonEventLoaded[]>();
+
+  for (const event of events) {
+    const weekNumber =
+      event.dayOffset <= 0 ? 0 : (event.weekNumber ?? Math.ceil(event.dayOffset / 7));
+    const bucket = weekMap.get(weekNumber) ?? [];
+    bucket.push(event);
+    weekMap.set(weekNumber, bucket);
+  }
+
+  const sortedWeeks = [...weekMap.entries()].sort((a, b) => a[0] - b[0]);
+
+  return sortedWeeks.map(([weekNumber, weekEvents]) => {
+    const dayMap = new Map<number, MarathonEventLoaded[]>();
+    for (const event of weekEvents) {
+      const bucket = dayMap.get(event.dayOffset) ?? [];
+      bucket.push(event);
+      dayMap.set(event.dayOffset, bucket);
+    }
+    const sortedDays = [...dayMap.entries()].sort((a, b) => a[0] - b[0]);
+
+    const days: CourseNavMarathonDay[] = sortedDays.map(([dayOffset, dayEvents]) => ({
+      dayOffset,
+      dayLabel: dayOffset === 0 ? "День 0" : `День ${dayOffset}`,
+      events: dayEvents
+        .slice()
+        .sort((a, b) => a.position - b.position)
+        .map((event) => {
+          const eventDate = product.startDate
+            ? getMarathonEventDate(product.startDate, event.dayOffset)
+            : null;
+          const accessible = eventDate ? new Date() >= eventDate : true;
+          const lessonCompleted =
+            event.lesson?.submissions.some((s) => s.status === "APPROVED") ?? false;
+          const manuallyCompleted = event.completions.length > 0;
+          return {
+            id: event.id,
+            title: event.title,
+            accessible,
+            completed: manuallyCompleted || lessonCompleted,
+            type: event.type,
+          };
+        }),
+    }));
+
+    return {
+      weekNumber,
+      weekLabel: weekNumber === 0 ? "Подготовка" : `Неделя ${weekNumber}`,
+      days,
+    };
+  });
+}
+
+export async function getCourseNavPayload(
+  courseSlug: string,
+  userId: string
+): Promise<CourseNavPayload | null> {
+  const product = await prisma.product.findUnique({
+    where: { slug: courseSlug },
+    include: {
+      marathonEvents: {
+        where: { published: true },
+        orderBy: [{ dayOffset: "asc" }, { position: "asc" }],
+        include: {
+          lesson: {
+            select: {
+              id: true,
+              slug: true,
+              title: true,
+              published: true,
+              submissions: {
+                where: { userId },
+                select: { status: true },
+                take: 1,
+              },
+            },
+          },
+          completions: {
+            where: {
+              enrollment: { userId },
+            },
+            select: { id: true },
+            take: 1,
+          },
+        },
+      },
+      lessons: {
+        where: { published: true },
+        orderBy: { order: "asc" },
+        include: {
+          submissions: {
+            where: { userId },
+            select: { status: true },
+            take: 1,
+          },
+        },
+      },
+    },
+  });
+
+  if (!product) return null;
+
+  const enrollment = await prisma.enrollment.findUnique({
+    where: { userId_productId: { userId, productId: product.id } },
+    include: {
+      procedures: {
+        include: {
+          procedureType: { select: { id: true, title: true } },
+        },
+        orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+      },
+    },
+  });
+
+  if (!enrollment) return null;
+
+  const base: CourseNavPayload = {
+    courseSlug: product.slug,
+    title: product.title,
+    productType: product.type,
+  };
+
+  if (product.type === "COURSE") {
+    const lessons: CourseNavLesson[] = product.lessons.map((lesson, idx) => ({
+      slug: lesson.slug,
+      title: lesson.title,
+      index: idx,
+      accessible: isLessonAccessible(product, product.lessons, lesson, idx),
+      completed: lesson.submissions.some((s) => s.status === "APPROVED"),
+    }));
+    return { ...base, lessons };
+  }
+
+  const procedures: CourseNavProcedure[] = enrollment.procedures.map((p) => ({
+    id: p.id,
+    title: p.procedureType.title,
+    completed: Boolean(p.completedAt),
+    scheduledAt: p.scheduledAt?.toISOString() ?? null,
+    notes: p.notes,
+  }));
+
+  const marathonWeeks = buildMarathonWeeks(product, product.marathonEvents);
+
+  return { ...base, procedures, marathonWeeks };
+}

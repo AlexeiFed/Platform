@@ -13,8 +13,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {mobileMenuOpen && (
         <div className="fixed inset-0 z-50 md:hidden">
           <div className="fixed inset-0 bg-black/50" onClick={() => setMobileMenuOpen(false)} />
-          <div className="fixed left-0 top-0 h-full w-64 bg-card z-50">
-            <Sidebar variant="admin" />
+          <div className="fixed left-0 top-0 z-50 flex h-full w-64 flex-col bg-card overflow-y-auto">
+            <Sidebar variant="admin" mobileDrawer />
           </div>
         </div>
       )}

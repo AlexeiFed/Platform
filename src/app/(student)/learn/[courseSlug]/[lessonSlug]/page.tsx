@@ -2,12 +2,9 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect, notFound } from "next/navigation";
 import { tokens } from "@/lib/design-tokens";
-import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { ChevronLeft, ChevronRight, FileText, Paperclip, ClipboardList } from "lucide-react";
+import { FileText, Paperclip, ClipboardList } from "lucide-react";
 import { HomeworkForm } from "./homework-form";
 import { HomeworkThread } from "./homework-thread";
 
@@ -78,8 +75,6 @@ export default async function LessonPage({ params }: Props) {
   }
 
   const currentIndex = product.lessons.findIndex((l) => l.slug === lessonSlug);
-  const prevLesson = currentIndex > 0 ? product.lessons[currentIndex - 1] : null;
-  const nextLesson = currentIndex < product.lessons.length - 1 ? product.lessons[currentIndex + 1] : null;
 
   const existingSubmission = lesson.homeworkEnabled
     ? await prisma.homeworkSubmission.findFirst({
@@ -100,14 +95,6 @@ export default async function LessonPage({ params }: Props) {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Link href={`/learn/${courseSlug}`} className="hover:text-foreground">
-          {product.title}
-        </Link>
-        <span>/</span>
-        <span className="text-foreground">{lesson.title}</span>
-      </div>
-
       <div>
         <h1 className={tokens.typography.h2}>{lesson.title}</h1>
         <p className="text-sm text-muted-foreground">
@@ -240,25 +227,6 @@ export default async function LessonPage({ params }: Props) {
           </CardContent>
         </Card>
       )}
-
-      <div className="flex justify-between">
-        {prevLesson ? (
-          <Button variant="outline" asChild>
-            <Link href={`/learn/${courseSlug}/${prevLesson.slug}`}>
-              <ChevronLeft className="h-4 w-4 mr-1" />
-              {prevLesson.title}
-            </Link>
-          </Button>
-        ) : <div />}
-        {nextLesson && (
-          <Button asChild>
-            <Link href={`/learn/${courseSlug}/${nextLesson.slug}`}>
-              {nextLesson.title}
-              <ChevronRight className="h-4 w-4 ml-1" />
-            </Link>
-          </Button>
-        )}
-      </div>
     </div>
   );
 }

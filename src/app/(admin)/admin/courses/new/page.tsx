@@ -42,6 +42,9 @@ export default function NewCoursePage() {
   return (
     <div className="max-w-2xl mx-auto">
       <h1 className={`${tokens.typography.h2} mb-6`}>Новый продукт</h1>
+      <p className={`${tokens.typography.small} mb-4`}>
+        Продукт создаётся скрытым. Чтобы курс или марафон увидели все в каталоге, в редакторе нажмите «Опубликовать».
+      </p>
       <Card>
         <CardContent className="pt-6">
           <form onSubmit={handleSubmit} className="space-y-4">

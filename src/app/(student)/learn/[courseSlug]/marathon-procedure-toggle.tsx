@@ -9,9 +9,11 @@ import { toggleMarathonProcedureCompletion } from "./procedure-actions";
 type Props = {
   procedureId: string;
   completed: boolean;
+  /** Узкая строка в сайдбаре — без длинного текста */
+  compact?: boolean;
 };
 
-export function MarathonProcedureToggle({ procedureId, completed }: Props) {
+export function MarathonProcedureToggle({ procedureId, completed, compact }: Props) {
   const router = useRouter();
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -27,6 +29,24 @@ export function MarathonProcedureToggle({ procedureId, completed }: Props) {
       router.refresh();
     });
   };
+
+  if (compact) {
+    return (
+      <div className="flex flex-col items-stretch gap-1">
+        <Button
+          type="button"
+          variant={completed ? "outline" : "default"}
+          size="sm"
+          className="h-8 text-xs"
+          onClick={handleClick}
+          disabled={isPending}
+        >
+          {isPending ? "…" : completed ? "Снять" : "Готово"}
+        </Button>
+        {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      </div>
+    );
+  }
 
   return (
     <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
