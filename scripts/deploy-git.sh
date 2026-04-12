@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
-# Деплой без rsync: git pull на сервере → тот же пайплайн, что в deploy-remote.sh.
-# Безопаснее для секретов: .env только на сервере, с Mac не тянется исходник целиком.
-# Переменные: SERVER, REMOTE, DOMAIN, BRANCH (default main).
+# Основной деплой: git на сервере (без rsync исходников с Mac).
+# Резерв: ./scripts/deploy.sh (rsync + тот же deploy-remote.sh).
 #
-# Первый раз, если каталог без .git (например, только rsync):
-#   ssh root@SERVER "mv /var/www/platform /var/www/platform.bak && sudo -u appuser git clone 'https://github.com/ORG/platform.git' /var/www/platform && cp /var/www/platform.bak/.env /var/www/platform/.env && chown appuser:appuser /var/www/platform/.env && rm -rf /var/www/platform.bak"
-# (или deploy-key + git@github.com:ORG/platform.git)
+# Переменные (Mac → ssh на SERVER):
+#   SERVER          root@host
+#   REMOTE          каталог на сервере (default /var/www/platform)
+#   DOMAIN
+#   BRANCH          default main
+#   GIT_REPO        SSH origin (default git@github.com:AlexeiFed/Platform.git)
+#   GIT_CLONE_HTTPS первый clone без ключа (default https://github.com/AlexeiFed/Platform.git)
+#   SERVER_GIT_KEY  приватный ключ на сервере (default /var/www/.ssh/platform_github)
 
 set -euo pipefail
 
@@ -16,14 +20,81 @@ SERVER="${SERVER:-root@5.129.207.217}"
 REMOTE="${REMOTE:-/var/www/platform}"
 DOMAIN="${DOMAIN:-thebesteducation.ru}"
 BRANCH="${BRANCH:-main}"
+GIT_REPO="${GIT_REPO:-git@github.com:AlexeiFed/Platform.git}"
+GIT_CLONE_HTTPS="${GIT_CLONE_HTTPS:-https://github.com/AlexeiFed/Platform.git}"
+SERVER_GIT_KEY="${SERVER_GIT_KEY:-/var/www/.ssh/platform_github}"
 
-echo "→ $SERVER:$REMOTE (git origin/$BRANCH)"
+echo "→ $SERVER:$REMOTE (git, branch $BRANCH)"
 
-if ! ssh "$SERVER" "test -d $(printf %q "$REMOTE")/.git"; then
-  echo "Нет $(printf %q "$REMOTE")/.git — сначала один раз клонируй репо в $REMOTE (см. комментарий в scripts/deploy-git.sh), перенеси .env."
-  exit 1
+REMOTE_EXPORTS="$(printf 'export DOMAIN=%q REMOTE=%q BRANCH=%q GIT_REPO=%q GIT_CLONE_HTTPS=%q SERVER_GIT_KEY=%q\n' \
+  "$DOMAIN" "$REMOTE" "$BRANCH" "$GIT_REPO" "$GIT_CLONE_HTTPS" "$SERVER_GIT_KEY")"
+
+ssh "$SERVER" "${REMOTE_EXPORTS} bash -s" <<'REMOTE'
+set -euo pipefail
+
+key_dir="$(dirname "$SERVER_GIT_KEY")"
+mkdir -p "$key_dir"
+chown appuser:appuser "$key_dir"
+chmod 700 "$key_dir"
+
+if [[ ! -f "$SERVER_GIT_KEY" ]]; then
+  echo "→ нет $SERVER_GIT_KEY — создаю deploy key (ed25519)…"
+  sudo -u appuser ssh-keygen -t ed25519 -f "$SERVER_GIT_KEY" -N "" -C "platform-deploy-$(hostname -s)"
+  chmod 600 "$SERVER_GIT_KEY"
+  chmod 644 "${SERVER_GIT_KEY}.pub"
+  echo ""
+  echo "=== GitHub → AlexeiFed/Platform → Settings → Deploy keys → Add (read-only OK) ==="
+  cat "${SERVER_GIT_KEY}.pub"
+  echo "================================================================"
+  echo "После сохранения ключа снова: ./scripts/deploy-git.sh"
+  exit 2
 fi
 
-ssh "$SERVER" "$(printf "export DOMAIN=%q; sudo -u appuser git -C %q pull --ff-only origin %q && bash %q/scripts/deploy-remote.sh" "$DOMAIN" "$REMOTE" "$BRANCH" "$REMOTE")"
+chmod 600 "$SERVER_GIT_KEY" 2>/dev/null || true
+chown appuser:appuser "$SERVER_GIT_KEY" 2>/dev/null || true
+
+export GIT_SSH_COMMAND="ssh -i ${SERVER_GIT_KEY} -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -F /dev/null"
+
+ssh_origin_ok() {
+  sudo -u appuser env GIT_SSH_COMMAND="$GIT_SSH_COMMAND" git ls-remote "$GIT_REPO" HEAD &>/dev/null
+}
+
+try_ssh_origin() {
+  if ssh_origin_ok; then
+    sudo -u appuser git -C "$REMOTE" remote set-url origin "$GIT_REPO"
+    sudo -u appuser git -C "$REMOTE" config core.sshCommand "$GIT_SSH_COMMAND"
+    return 0
+  fi
+  sudo -u appuser git -C "$REMOTE" remote set-url origin "$GIT_CLONE_HTTPS"
+  sudo -u appuser git -C "$REMOTE" config --unset core.sshCommand 2>/dev/null || true
+  return 1
+}
+
+if [[ ! -d "$REMOTE/.git" ]]; then
+  echo "→ нет $REMOTE/.git — bootstrap (бэкап, clone по HTTPS)…"
+  ts="$(date +%s)"
+  if [[ -d "$REMOTE" ]]; then
+    mv "$REMOTE" "${REMOTE}.rsync-backup.${ts}"
+  fi
+  sudo -u appuser git clone --branch "$BRANCH" --depth 1 "$GIT_CLONE_HTTPS" "$REMOTE"
+  if [[ -f "${REMOTE}.rsync-backup.${ts}/.env" ]]; then
+    cp "${REMOTE}.rsync-backup.${ts}/.env" "$REMOTE/.env"
+    chown appuser:appuser "$REMOTE/.env"
+    chmod 600 "$REMOTE/.env"
+  fi
+  try_ssh_origin || echo "→ Deploy key ещё не на GitHub — origin остаётся HTTPS."
+fi
+
+if [[ "$(sudo -u appuser git -C "$REMOTE" remote get-url origin 2>/dev/null || true)" == "$GIT_CLONE_HTTPS" ]]; then
+  try_ssh_origin || true
+fi
+
+sudo -u appuser git -C "$REMOTE" fetch origin "$BRANCH"
+sudo -u appuser git -C "$REMOTE" checkout "$BRANCH"
+sudo -u appuser git -C "$REMOTE" pull --ff-only origin "$BRANCH"
+
+export DOMAIN
+bash "$REMOTE/scripts/deploy-remote.sh"
+REMOTE
 
 echo "Готово: https://$DOMAIN"

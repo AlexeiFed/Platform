@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Деплой на прод: rsync исходников → scripts/deploy-remote.sh на сервере.
-# Альтернатива без rsync: ./scripts/deploy-git.sh (нужен .git на сервере).
+# Резервный деплой: rsync исходников с Mac → scripts/deploy-remote.sh на сервере.
+# Основной способ: ./scripts/deploy-git.sh (git + deploy key на сервере).
 # Переменные: SERVER, REMOTE, DOMAIN.
 
 set -euo pipefail
