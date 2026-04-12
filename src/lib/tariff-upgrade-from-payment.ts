@@ -22,7 +22,7 @@ export const tryApplyTariffUpgradeFromPaymentTx = async (
   | { outcome: "bad_state" }
   | { outcome: "amount_mismatch" }
   | { outcome: "conflict" }
-  | { outcome: "applied"; slug: string }
+  | { outcome: "applied" }
 > => {
   if (payment.kind !== "UPGRADE") {
     return { outcome: "skipped" };

@@ -26,11 +26,11 @@ export async function reviewHomework(
     });
     if (!before) return { error: "Работа не найдена" };
 
-    const enrollment = await loadEnrollmentForCriteriaByUserProduct(
+    const criteriaEnrollment = await loadEnrollmentForCriteriaByUserProduct(
       before.userId,
       before.lesson.productId
     );
-    if (!enrollment || !enrollmentHasCriterion(enrollment, "HOMEWORK_REVIEW")) {
+    if (!criteriaEnrollment || !enrollmentHasCriterion(criteriaEnrollment, "HOMEWORK_REVIEW")) {
       return { error: "У студента нет проверки ДЗ в тарифе" };
     }
 
@@ -60,7 +60,7 @@ export async function reviewHomework(
       },
     });
 
-    const enrollment = await prisma.enrollment.findUnique({
+    const enrollmentProgress = await prisma.enrollment.findUnique({
       where: {
         userId_productId: {
           userId: submission.userId,
@@ -78,10 +78,10 @@ export async function reviewHomework(
       },
     });
 
-    if (enrollment?.product.type === "MARATHON") {
-      await syncMarathonEnrollmentProgress(enrollment.id);
-    } else if (enrollment) {
-      const totalLessons = enrollment.product._count.lessons;
+    if (enrollmentProgress?.product.type === "MARATHON") {
+      await syncMarathonEnrollmentProgress(enrollmentProgress.id);
+    } else if (enrollmentProgress) {
+      const totalLessons = enrollmentProgress.product._count.lessons;
       const approvedCount = await prisma.homeworkSubmission.count({
         where: {
           userId: submission.userId,
@@ -91,7 +91,7 @@ export async function reviewHomework(
       });
 
       await prisma.enrollment.update({
-        where: { id: enrollment.id },
+        where: { id: enrollmentProgress.id },
         data: {
           progress: totalLessons > 0 ? approvedCount / totalLessons : 0,
         },

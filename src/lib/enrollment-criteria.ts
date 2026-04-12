@@ -37,9 +37,3 @@ export const loadEnrollmentForCriteriaByUserProduct = async (userId: string, pro
     where: { userId_productId: { userId, productId } },
     select: tariffCriteriaSelect,
   });
-
-export const loadEnrollmentForCriteria = async (enrollmentId: string) =>
-  prisma.enrollment.findUnique({
-    where: { id: enrollmentId },
-    select: tariffCriteriaSelect,
-  });
