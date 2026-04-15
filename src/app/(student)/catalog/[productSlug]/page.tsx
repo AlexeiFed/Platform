@@ -140,6 +140,12 @@ export default async function ProductDetailsPage({ params, searchParams }: Props
             <span className="text-muted-foreground">Уроков</span>
             <span className="font-medium">{product._count.lessons}</span>
           </div>
+          {product.description ? (
+            <div className="space-y-1 pt-2">
+              <div className="text-sm text-muted-foreground">Описание</div>
+              <div className="text-sm whitespace-pre-wrap">{product.description}</div>
+            </div>
+          ) : null}
           {tariffOptions.length === 0 ? (
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Цена</span>

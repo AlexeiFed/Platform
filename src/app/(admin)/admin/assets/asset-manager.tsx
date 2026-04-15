@@ -99,6 +99,7 @@ export function AssetManager({
   const [allowDuplicates, setAllowDuplicates] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("date");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [nameQuery, setNameQuery] = useState("");
   const [filter, setFilter] = useState<FileCategory>(defaultFilter);
   const [copied, setCopied] = useState<string | null>(null);
   const [preview, setPreview] = useState<S3Object | null>(null);
@@ -221,6 +222,8 @@ export function AssetManager({
         : "attachments";
   }
 
+  const fileNameOf = useCallback((key: string) => key.split("/").pop() ?? key, []);
+
   const filteredFiles = useMemo(() => {
     if (filter === "all") return files;
     return files.filter((f) => getFileCategory(f.Key) === filter);
@@ -228,16 +231,19 @@ export function AssetManager({
 
   const sortedFiles = useMemo(() => {
     const dir = sortDir === "asc" ? 1 : -1;
-    const list = [...filteredFiles];
+    const q = nameQuery.trim().toLowerCase();
+    const list = q
+      ? filteredFiles.filter((f) => fileNameOf(f.Key).toLowerCase().includes(q))
+      : [...filteredFiles];
     list.sort((a, b) => {
       if (sortKey === "size") return (a.Size - b.Size) * dir;
-      if (sortKey === "name") return getFileName(a.Key).localeCompare(getFileName(b.Key), "ru") * dir;
+      if (sortKey === "name") return fileNameOf(a.Key).localeCompare(fileNameOf(b.Key), "ru") * dir;
       const ad = Date.parse(a.LastModified ?? "") || 0;
       const bd = Date.parse(b.LastModified ?? "") || 0;
       return (ad - bd) * dir;
     });
     return list;
-  }, [filteredFiles, sortKey, sortDir]);
+  }, [filteredFiles, sortKey, sortDir, nameQuery, fileNameOf]);
 
   const visibleUploadJobs = useMemo(() => {
     const list = hideDoneJobs ? uploadJobs.filter((j) => j.status !== "done") : uploadJobs;
@@ -469,7 +475,7 @@ export function AssetManager({
   }
 
   function getFileName(key: string) {
-    return key.split("/").pop() ?? key;
+    return fileNameOf(key);
   }
 
   // Пререндер Next.js сравнивает HTML сервера/клиента. Чтобы исключить hydration mismatch,
@@ -560,6 +566,21 @@ export function AssetManager({
           />
           Разрешать дубли (одинаковые имена)
         </label>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Input
+          value={nameQuery}
+          onChange={(e) => setNameQuery(e.target.value)}
+          placeholder="Поиск по названию…"
+          className="h-9 max-w-sm"
+          aria-label="Поиск по названию файла"
+        />
+        {nameQuery.trim() ? (
+          <Button type="button" variant="ghost" size="sm" onClick={() => setNameQuery("")}>
+            Очистить
+          </Button>
+        ) : null}
       </div>
 
       {/* Upload status */}
@@ -679,7 +700,7 @@ export function AssetManager({
 
       {/* Type filters */}
       {files.length > 0 && (
-        <div className="flex gap-2 items-center">
+        <div className="flex flex-wrap gap-2 items-center">
           <span className="text-sm text-muted-foreground">Фильтр:</span>
           {(
             [
@@ -695,7 +716,7 @@ export function AssetManager({
               variant={filter === f.key ? "secondary" : "ghost"}
               size="sm"
               onClick={() => setFilter(f.key)}
-              className="gap-1.5"
+              className="gap-1.5 shrink-0"
             >
               <f.icon className="h-3.5 w-3.5" />
               {f.label}

@@ -541,6 +541,7 @@ export function CourseEditor({
   marathonEvents: SerializedMarathonEvent[];
 }) {
   const router = useRouter();
+  const returnToScrollYRef = useRef<number | null>(null);
   const [lessons, setLessons] = useState(initialLessons);
   const [marathonEvents, setMarathonEvents] = useState(initialMarathonEvents);
   const [mounted, setMounted] = useState(false);
@@ -992,6 +993,16 @@ export function CourseEditor({
       setSuccessMsg("Урок сохранён");
       setTimeout(() => setSuccessMsg(""), 3000);
       router.refresh();
+
+      const y = returnToScrollYRef.current;
+      if (y != null) {
+        returnToScrollYRef.current = null;
+        requestAnimationFrame(() => {
+          window.scrollTo({ top: y });
+          // на случай, если refresh перерисует позже
+          setTimeout(() => window.scrollTo({ top: y }), 50);
+        });
+      }
     } catch (err) {
       console.error("[handleSave]", err);
       setError("Ошибка при сохранении");
@@ -1028,6 +1039,11 @@ export function CourseEditor({
   function openNew() {
     resetForm();
     setShowNewLesson(true);
+  }
+
+  function openNewFromMarathon() {
+    returnToScrollYRef.current = window.scrollY;
+    openNew();
   }
 
   const marathonEventsByDay = marathonEvents.reduce<Record<number, SerializedMarathonEvent[]>>((acc, event) => {
@@ -1289,7 +1305,7 @@ export function CourseEditor({
                 form={marathonEventForm}
                 onPatch={(patch) => setMarathonEventForm((prev) => ({ ...prev, ...patch }))}
                 lessons={lessons}
-                onCreateLesson={openNew}
+                onCreateLesson={openNewFromMarathon}
               />
 
               <div className="flex gap-3">
@@ -1312,7 +1328,7 @@ export function CourseEditor({
                     form={marathonEditForm}
                     onPatch={(patch) => setMarathonEditForm((prev) => ({ ...prev, ...patch }))}
                     lessons={lessons}
-                  onCreateLesson={openNew}
+                  onCreateLesson={openNewFromMarathon}
                   />
                 </form>
                 <DialogFooter className="gap-2 sm:gap-0">
