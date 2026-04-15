@@ -110,6 +110,8 @@ export function AssetManager({
   const [autoLoaded, setAutoLoaded] = useState(false);
   const uploadXhrByJobIdRef = useRef<Record<string, XMLHttpRequest | undefined>>({});
   const cancelledJobIdsRef = useRef<Set<string>>(new Set());
+  const [hasMoreFiles, setHasMoreFiles] = useState(false);
+  const [nextFilesToken, setNextFilesToken] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -125,23 +127,56 @@ export function AssetManager({
 
   function loadFilesImmediate(p: string) {
     setLoading(true);
-    fetch(`/api/s3/list?prefix=${encodeURIComponent(p)}`)
+    fetch(`/api/s3/list?prefix=${encodeURIComponent(p)}&maxKeys=50`)
       .then((r) => r.json())
-      .then((data) => setFiles(data.files ?? []))
+      .then((data) => {
+        setFiles(data.files ?? []);
+        setHasMoreFiles(Boolean(data.hasMore));
+        setNextFilesToken((data.nextToken as string | undefined) ?? null);
+      })
       .finally(() => setLoading(false));
   }
 
   const loadFiles = useCallback(async (searchPrefix?: string) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/s3/list?prefix=${encodeURIComponent(searchPrefix ?? prefix)}`);
+      const p = searchPrefix ?? prefix;
+      const res = await fetch(`/api/s3/list?prefix=${encodeURIComponent(p)}&maxKeys=50`);
       const data = await res.json();
       setFiles(data.files ?? []);
+      setHasMoreFiles(Boolean(data.hasMore));
+      setNextFilesToken((data.nextToken as string | undefined) ?? null);
     } catch {
       // silent
     }
     setLoading(false);
   }, [prefix]);
+
+  const loadMoreFiles = useCallback(async () => {
+    if (!hasMoreFiles || !nextFilesToken) return;
+    if (loading) return;
+    setLoading(true);
+    try {
+      const res = await fetch(
+        `/api/s3/list?prefix=${encodeURIComponent(prefix)}&maxKeys=50&token=${encodeURIComponent(nextFilesToken)}`
+      );
+      const data = await res.json();
+      const incoming: S3Object[] = data.files ?? [];
+      setFiles((prev) => {
+        const seen = new Set(prev.map((f) => f.Key));
+        const merged = [...prev];
+        for (const f of incoming) {
+          if (!seen.has(f.Key)) merged.push(f);
+        }
+        return merged;
+      });
+      setHasMoreFiles(Boolean(data.hasMore));
+      setNextFilesToken((data.nextToken as string | undefined) ?? null);
+    } catch {
+      // silent
+    }
+    setLoading(false);
+  }, [hasMoreFiles, nextFilesToken, loading, prefix]);
 
   function uid() {
     return crypto.randomUUID();
@@ -759,6 +794,14 @@ export function AssetManager({
             </Card>
           );
         })}
+
+        {hasMoreFiles && (
+          <div className="pt-2 flex justify-center">
+            <Button type="button" variant="outline" onClick={() => void loadMoreFiles()} disabled={loading}>
+              {loading ? "..." : "Загрузить ещё"}
+            </Button>
+          </div>
+        )}
 
         {filteredFiles.length === 0 && files.length > 0 && (
           <div className="text-center py-8">

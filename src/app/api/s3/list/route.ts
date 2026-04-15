@@ -9,7 +9,11 @@ export async function GET(req: NextRequest) {
   }
 
   const prefix = req.nextUrl.searchParams.get("prefix") ?? undefined;
-  const result = await listObjects(prefix);
+  const continuationToken = req.nextUrl.searchParams.get("token") ?? undefined;
+  const maxKeysParam = req.nextUrl.searchParams.get("maxKeys");
+  const maxKeys = maxKeysParam ? Math.max(1, Math.min(200, Number(maxKeysParam) || 50)) : 50;
+
+  const result = await listObjects(prefix, maxKeys, continuationToken);
 
   const files = (result.Contents ?? []).map((obj) => ({
     Key: obj.Key,
