@@ -6,6 +6,9 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { slugify } from "@/lib/utils";
 import { ALL_PRODUCT_CRITERIA } from "@/lib/product-criteria";
+import type { LandingBlock } from "@/types/landing";
+
+export type { LandingBlock } from "@/types/landing";
 
 const productSchema = z.object({
   title: z.string().min(1),
@@ -319,6 +322,37 @@ export async function removeLessonAttachment(attachmentId: string) {
     revalidatePath(`/admin/courses/${attachment.lesson.productId}`);
     return { success: true };
   } catch {
+    return { error: "Произошла ошибка" };
+  }
+}
+
+// === Landing Blocks ===
+
+const landingBlockSchema = z.discriminatedUnion("type", [
+  z.object({ id: z.string(), type: z.literal("hero"), title: z.string(), subtitle: z.string(), imageUrl: z.string() }),
+  z.object({ id: z.string(), type: z.literal("heading"), level: z.union([z.literal(2), z.literal(3)]), text: z.string() }),
+  z.object({ id: z.string(), type: z.literal("text"), content: z.string() }),
+  z.object({ id: z.string(), type: z.literal("features"), title: z.string(), items: z.array(z.string()) }),
+  z.object({ id: z.string(), type: z.literal("image"), url: z.string(), caption: z.string(), fullWidth: z.boolean() }),
+  z.object({ id: z.string(), type: z.literal("video"), url: z.string(), title: z.string() }),
+  z.object({ id: z.string(), type: z.literal("divider") }),
+]);
+
+export async function updateProductLanding(productId: string, blocks: LandingBlock[]) {
+  const session = await auth();
+  if (!session || session.user.role !== "ADMIN") return { error: "Нет доступа" };
+
+  try {
+    const parsed = z.array(landingBlockSchema).parse(blocks);
+    await prisma.product.update({
+      where: { id: productId },
+      data: { landingBlocks: parsed },
+    });
+    revalidatePath(`/admin/courses/${productId}`);
+    revalidatePath(`/catalog`);
+    return { success: true };
+  } catch (error) {
+    if (error instanceof z.ZodError) return { error: error.issues[0]?.message ?? "Некорректные данные" };
     return { error: "Произошла ошибка" };
   }
 }

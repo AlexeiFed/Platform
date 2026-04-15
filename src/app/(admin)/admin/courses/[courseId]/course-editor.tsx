@@ -47,6 +47,8 @@ import {
   updateMarathonEvent,
 } from "./marathon-actions";
 import { AssetManager } from "../../assets/asset-manager";
+import { LandingEditor } from "./landing-editor";
+import type { LandingBlock } from "@/types/landing";
 import type { MarathonEventType, MarathonTrack, ProductCriterion, ProductType, UnlockRule } from "@prisma/client";
 
 // === Types ===
@@ -74,6 +76,7 @@ type SerializedProduct = {
   updatedAt: string;
   deletedAt: string | null;
   enabledCriteria?: ProductCriterion[];
+  landingBlocks: LandingBlock[];
 };
 
 type SerializedLesson = {
@@ -540,6 +543,7 @@ export function CourseEditor({
   lessons: SerializedLesson[];
   marathonEvents: SerializedMarathonEvent[];
 }) {
+  // landingBlocks передаётся через product
   const router = useRouter();
   const returnToScrollYRef = useRef<number | null>(null);
   const [lessons, setLessons] = useState(initialLessons);
@@ -1567,6 +1571,9 @@ export function CourseEditor({
           </CardContent>
         </Card>
       )}
+
+      {/* === LANDING EDITOR === */}
+      <LandingEditor productId={product.id} productSlug={product.slug} initialBlocks={product.landingBlocks} />
 
       {/* === LESSONS LIST === */}
       <div className="space-y-2">

@@ -158,6 +158,8 @@ model Product {
   published    Boolean     @default(false)
   startDate    DateTime? // for MARATHON type
   durationDays Int? // for MARATHON type, used for event scheduling
+  /// Блоки лендинга продукта: [{id, type, ...fields}]
+  landingBlocks Json?
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
   deletedAt    DateTime?

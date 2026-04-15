@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { CourseEditor } from "./course-editor";
 import { TariffsAndCriteriaEditor } from "./tariffs-and-criteria-editor";
 import type { ContentBlock } from "./course-editor";
+import type { LandingBlock } from "@/types/landing";
 
 type Props = {
   params: Promise<{ courseId: string }>;
@@ -35,7 +36,8 @@ export default async function CourseEditorPage({ params }: Props) {
 
   if (!product) notFound();
 
-  const { lessons: _, tariffs: productTariffs, ...productData } = product;
+  const { lessons: _lessons, tariffs: productTariffs, ...productData } = product;
+  void _lessons;
   const serializedProduct = {
     id: productData.id,
     type: productData.type,
@@ -53,6 +55,7 @@ export default async function CourseEditorPage({ params }: Props) {
     updatedAt: productData.updatedAt.toISOString(),
     deletedAt: productData.deletedAt?.toISOString() ?? null,
     enabledCriteria: productData.enabledCriteria,
+    landingBlocks: (productData.landingBlocks as LandingBlock[] | null) ?? [],
   };
 
   const serializedTariffs = productTariffs.map((t) => ({
