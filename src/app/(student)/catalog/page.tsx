@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { tokens } from "@/lib/design-tokens";
 import { formatPrice, lessonsLabel } from "@/lib/utils";
 import { isProductPubliclyVisible } from "@/lib/product-visibility";
-import { getProductMinPrice } from "@/lib/product-tariff-pricing";
+import { getProductPricingSummary } from "@/lib/product-tariff-pricing";
 import Link from "next/link";
 
 export default async function CatalogPage() {
@@ -19,10 +19,10 @@ export default async function CatalogPage() {
   const courses = visibleProducts.filter((product) => product.type === "COURSE");
   const marathons = visibleProducts.filter((product) => product.type === "MARATHON");
 
-  const minPriceEntries = await Promise.all(
-    visibleProducts.map(async (p) => [p.id, await getProductMinPrice(p.id)] as const)
+  const pricingEntries = await Promise.all(
+    visibleProducts.map(async (p) => [p.id, await getProductPricingSummary(p.id)] as const)
   );
-  const minPriceByProductId = new Map(minPriceEntries);
+  const pricingByProductId = new Map(pricingEntries);
 
   const renderProducts = (items: typeof visibleProducts) => (
     <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -59,8 +59,10 @@ export default async function CatalogPage() {
           <CardFooter className="flex items-center justify-between">
             <span className="text-lg font-bold">
               {(() => {
-                const min = minPriceByProductId.get(product.id);
-                return min ? formatPrice(min.price, min.currency) : "Бесплатно";
+                const pricing = pricingByProductId.get(product.id);
+                if (!pricing?.minPrice) return "Бесплатно";
+                const label = formatPrice(pricing.minPrice.price, pricing.minPrice.currency);
+                return pricing.hasPublishedTariffs && pricing.publishedTariffsCount > 1 ? `от ${label}` : label;
               })()}
             </span>
             <Button asChild size="sm">

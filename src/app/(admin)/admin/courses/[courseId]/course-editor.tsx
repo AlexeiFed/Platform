@@ -167,10 +167,12 @@ function MarathonEventFields({
   form,
   onPatch,
   lessons,
+  onCreateLesson,
 }: {
   form: MarathonEventForm;
   onPatch: (patch: Partial<MarathonEventForm>) => void;
   lessons: SerializedLesson[];
+  onCreateLesson?: () => void;
 }) {
   return (
     <>
@@ -246,7 +248,14 @@ function MarathonEventFields({
           </select>
         </div>
         <div className="space-y-2">
-          <label className={tokens.typography.label}>Урок</label>
+          <div className="flex items-center justify-between gap-2">
+            <label className={tokens.typography.label}>Урок</label>
+            {onCreateLesson ? (
+              <Button type="button" variant="outline" size="sm" onClick={onCreateLesson}>
+                <Plus className="h-3.5 w-3.5 mr-1" /> Создать урок
+              </Button>
+            ) : null}
+          </div>
           <select
             value={form.lessonId}
             onChange={(e) => onPatch({ lessonId: e.target.value })}
@@ -1280,6 +1289,7 @@ export function CourseEditor({
                 form={marathonEventForm}
                 onPatch={(patch) => setMarathonEventForm((prev) => ({ ...prev, ...patch }))}
                 lessons={lessons}
+                onCreateLesson={openNew}
               />
 
               <div className="flex gap-3">
@@ -1302,6 +1312,7 @@ export function CourseEditor({
                     form={marathonEditForm}
                     onPatch={(patch) => setMarathonEditForm((prev) => ({ ...prev, ...patch }))}
                     lessons={lessons}
+                  onCreateLesson={openNew}
                   />
                 </form>
                 <DialogFooter className="gap-2 sm:gap-0">
