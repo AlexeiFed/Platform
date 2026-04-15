@@ -2,6 +2,8 @@ import {
   S3Client,
   ListObjectsV2Command,
   DeleteObjectCommand,
+  CopyObjectCommand,
+  HeadObjectCommand,
   type ListObjectsV2CommandInput,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
@@ -54,12 +56,36 @@ export async function listObjects(prefix?: string, maxKeys = 50, continuationTok
   return s3Client.send(command);
 }
 
+export async function objectExists(key: string): Promise<boolean> {
+  try {
+    await s3Client.send(new HeadObjectCommand({ Bucket: BUCKET, Key: key }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function deleteObject(key: string) {
   const command = new DeleteObjectCommand({
     Bucket: BUCKET,
     Key: key,
   });
   return s3Client.send(command);
+}
+
+export async function copyObject(fromKey: string, toKey: string) {
+  const copySource = `/${BUCKET}/${encodeURIComponent(fromKey)}`;
+  const command = new CopyObjectCommand({
+    Bucket: BUCKET,
+    Key: toKey,
+    CopySource: copySource,
+  });
+  return s3Client.send(command);
+}
+
+export async function renameObject(fromKey: string, toKey: string) {
+  await copyObject(fromKey, toKey);
+  await deleteObject(fromKey);
 }
 
 export function getPublicUrl(key: string) {

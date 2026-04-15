@@ -1,10 +1,19 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { tokens } from "@/lib/design-tokens";
 import {
   Upload,
@@ -18,6 +27,8 @@ import {
   Trash2,
   Eye,
   X,
+  Pencil,
+  Loader2,
 } from "lucide-react";
 
 type S3Object = {
@@ -27,6 +38,22 @@ type S3Object = {
 };
 
 type FileCategory = "all" | "video" | "image" | "document";
+
+type UploadJobStatus = "queued" | "presigning" | "uploading" | "done" | "error";
+
+type UploadJob = {
+  id: string;
+  fileName: string;
+  size: number;
+  status: UploadJobStatus;
+  progress: number; // 0..100
+  key?: string;
+  existingKey?: string;
+  error?: string;
+};
+
+type SortKey = "date" | "name" | "size";
+type SortDir = "desc" | "asc";
 
 const QUICK_FOLDERS = [
   { label: "Все файлы", prefix: "" },
@@ -61,20 +88,40 @@ export function AssetManager({
   onSelect?: (url: string, key: string) => void;
   defaultFilter?: FileCategory;
 }) {
+  const [mounted, setMounted] = useState(false);
   const [files, setFiles] = useState<S3Object[]>([]);
   const [prefix, setPrefix] = useState(defaultFilter === "video" ? "videos/" : defaultFilter === "image" ? "images/" : "");
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadJobs, setUploadJobs] = useState<UploadJob[]>([]);
+  const [uploadJobsLimit, setUploadJobsLimit] = useState(8);
+  const [hideDoneJobs, setHideDoneJobs] = useState(true);
+  const [allowDuplicates, setAllowDuplicates] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>("date");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [filter, setFilter] = useState<FileCategory>(defaultFilter);
   const [copied, setCopied] = useState<string | null>(null);
   const [preview, setPreview] = useState<S3Object | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [deleteKey, setDeleteKey] = useState<string | null>(null);
+  const [renamingKey, setRenamingKey] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [renaming, setRenaming] = useState(false);
   const [autoLoaded, setAutoLoaded] = useState(false);
+  const uploadXhrByJobIdRef = useRef<Record<string, XMLHttpRequest | undefined>>({});
+  const cancelledJobIdsRef = useRef<Set<string>>(new Set());
 
-  if (!autoLoaded && defaultFilter !== "all") {
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (autoLoaded) return;
+    if (defaultFilter === "all") return;
     setAutoLoaded(true);
     loadFilesImmediate(defaultFilter === "video" ? "videos/" : defaultFilter === "image" ? "images/" : "");
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoLoaded, defaultFilter]);
 
   function loadFilesImmediate(p: string) {
     setLoading(true);
@@ -96,10 +143,80 @@ export function AssetManager({
     setLoading(false);
   }, [prefix]);
 
+  function uid() {
+    return crypto.randomUUID();
+  }
+
+  function scheduleAutoHideDoneJob(jobId: string) {
+    window.setTimeout(() => {
+      setUploadJobs((prev) => prev.filter((j) => !(j.id === jobId && j.status === "done")));
+    }, 900);
+  }
+
+  function xhrPutWithProgress(url: string, file: File, onProgress: (pct: number) => void) {
+    return new Promise<{ xhr: XMLHttpRequest; done: Promise<void> }>((resolve) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("PUT", url, true);
+      xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+
+      const done = new Promise<void>((doneResolve, doneReject) => {
+        xhr.upload.onprogress = (evt) => {
+          if (!evt.lengthComputable) return;
+          const pct = Math.max(0, Math.min(100, Math.round((evt.loaded / evt.total) * 100)));
+          onProgress(pct);
+        };
+        xhr.onerror = () => doneReject(new Error("Upload failed"));
+        xhr.onabort = () => doneReject(new Error("Upload cancelled"));
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) doneResolve();
+          else doneReject(new Error(`Upload failed (${xhr.status})`));
+        };
+      });
+
+      xhr.send(file);
+      resolve({ xhr, done });
+    });
+  }
+
+  function getAutoPrefix(file: File) {
+    return file.type.startsWith("video/")
+      ? "videos"
+      : file.type.startsWith("image/")
+        ? "images"
+        : "attachments";
+  }
+
   const filteredFiles = useMemo(() => {
     if (filter === "all") return files;
     return files.filter((f) => getFileCategory(f.Key) === filter);
   }, [files, filter]);
+
+  const sortedFiles = useMemo(() => {
+    const dir = sortDir === "asc" ? 1 : -1;
+    const list = [...filteredFiles];
+    list.sort((a, b) => {
+      if (sortKey === "size") return (a.Size - b.Size) * dir;
+      if (sortKey === "name") return getFileName(a.Key).localeCompare(getFileName(b.Key), "ru") * dir;
+      const ad = Date.parse(a.LastModified ?? "") || 0;
+      const bd = Date.parse(b.LastModified ?? "") || 0;
+      return (ad - bd) * dir;
+    });
+    return list;
+  }, [filteredFiles, sortKey, sortDir]);
+
+  const visibleUploadJobs = useMemo(() => {
+    const list = hideDoneJobs ? uploadJobs.filter((j) => j.status !== "done") : uploadJobs;
+    return list;
+  }, [uploadJobs, hideDoneJobs]);
+
+  const uploadStats = useMemo(() => {
+    const total = uploadJobs.length;
+    const done = uploadJobs.filter((j) => j.status === "done").length;
+    const uploadingCount = uploadJobs.filter((j) => j.status === "uploading" || j.status === "presigning").length;
+    const queued = uploadJobs.filter((j) => j.status === "queued").length;
+    const errors = uploadJobs.filter((j) => j.status === "error").length;
+    return { total, done, uploadingCount, queued, errors };
+  }, [uploadJobs]);
 
   const counts = useMemo(() => {
     const c = { all: files.length, video: 0, image: 0, document: 0 };
@@ -110,47 +227,117 @@ export function AssetManager({
   }, [files]);
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const list = e.target.files;
+    if (!list || list.length === 0) return;
 
-    const autoPrefix = file.type.startsWith("video/")
-      ? "videos"
-      : file.type.startsWith("image/")
-        ? "images"
-        : "attachments";
+    const selected = Array.from(list);
+    const jobs: UploadJob[] = selected.map((f) => ({
+      id: uid(),
+      fileName: f.name,
+      size: f.size,
+      status: "queued",
+      progress: 0,
+    }));
 
     setUploading(true);
-    try {
-      const presignRes = await fetch("/api/s3/presign", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fileName: file.name,
-          contentType: file.type,
-          size: file.size,
-          path: prefix || autoPrefix,
-        }),
-      });
+    setUploadJobs((prev) => [...jobs, ...prev]);
 
-      if (!presignRes.ok) {
-        const err = await presignRes.json();
-        alert(err.error ?? "Ошибка получения URL для загрузки");
-        setUploading(false);
-        return;
+    for (let i = 0; i < selected.length; i++) {
+      const file = selected[i]!;
+      const jobId = jobs[i]!.id;
+      const targetPrefix = (prefix || getAutoPrefix(file)).replace(/\/?$/, "");
+
+      try {
+        if (cancelledJobIdsRef.current.has(jobId)) continue;
+
+        if (!allowDuplicates) {
+          const normalizedPrefix = targetPrefix.replace(/\/?$/, "") + "/";
+          const candidates = files.filter((f) => f.Key.startsWith(normalizedPrefix));
+          const exact = candidates.find((f) => getFileName(f.Key) === file.name);
+          const existingKey = exact?.Key ?? null;
+          if (existingKey) {
+            setUploadJobs((prev) =>
+              prev.map((j) =>
+                j.id === jobId
+                  ? { ...j, status: "error", progress: 0, existingKey, error: "Файл с таким именем уже есть в этой папке" }
+                  : j
+              )
+            );
+            continue;
+          }
+        }
+
+        if (cancelledJobIdsRef.current.has(jobId)) continue;
+
+        setUploadJobs((prev) =>
+          prev.map((j) => (j.id === jobId ? { ...j, status: "presigning", progress: 0 } : j))
+        );
+
+        const presignRes = await fetch("/api/s3/presign", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fileName: file.name,
+            contentType: file.type,
+            size: file.size,
+            path: targetPrefix,
+          }),
+        });
+
+        if (!presignRes.ok) {
+          const err = await presignRes.json().catch(() => ({}));
+          throw new Error(err.error ?? "Ошибка получения URL для загрузки");
+        }
+
+        if (cancelledJobIdsRef.current.has(jobId)) continue;
+
+        const { url, key } = (await presignRes.json()) as { url: string; key: string };
+        setUploadJobs((prev) =>
+          prev.map((j) => (j.id === jobId ? { ...j, status: "uploading", key } : j))
+        );
+
+        const { xhr, done } = await xhrPutWithProgress(url, file, (pct) => {
+          setUploadJobs((prev) => prev.map((j) => (j.id === jobId ? { ...j, progress: pct } : j)));
+        });
+        uploadXhrByJobIdRef.current[jobId] = xhr;
+
+        await done;
+
+        if (cancelledJobIdsRef.current.has(jobId)) continue;
+
+        setUploadJobs((prev) =>
+          prev.map((j) => (j.id === jobId ? { ...j, status: "done", progress: 100 } : j))
+        );
+
+        // Мгновенно отражаем файл в списке, без перезагрузки страницы.
+        setFiles((prev) => {
+          const exists = prev.some((f) => f.Key === key);
+          const nextObj: S3Object = {
+            Key: key,
+            Size: file.size,
+            LastModified: new Date().toISOString(),
+          };
+          if (exists) return prev.map((f) => (f.Key === key ? nextObj : f));
+          return [nextObj, ...prev];
+        });
+
+        scheduleAutoHideDoneJob(jobId);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Ошибка загрузки файла";
+        if (msg.toLowerCase().includes("cancel")) {
+          // job уже удалён из UI при отмене
+          continue;
+        }
+        setUploadJobs((prev) =>
+          prev.map((j) => (j.id === jobId ? { ...j, status: "error", error: msg } : j))
+        );
       }
-
-      const { url, key } = await presignRes.json();
-
-      await fetch(url, {
-        method: "PUT",
-        body: file,
-        headers: { "Content-Type": file.type },
-      });
-
-      await loadFiles();
-    } catch {
-      alert("Ошибка загрузки файла");
     }
+
+    // Финальная синхронизация со стореджем (точные даты/размеры/сортировка).
+    await loadFiles();
+    // Авто-очистка: оставляем только ошибки.
+    setUploadJobs((prev) => prev.filter((j) => j.status === "error"));
     setUploading(false);
     e.target.value = "";
   }
@@ -169,7 +356,6 @@ export function AssetManager({
   }
 
   async function handleDelete(key: string) {
-    if (!confirm(`Удалить файл ${key.split("/").pop()}?`)) return;
     setDeleting(key);
     try {
       await fetch("/api/s3/delete", {
@@ -182,6 +368,55 @@ export function AssetManager({
       alert("Ошибка удаления");
     }
     setDeleting(null);
+  }
+
+  function openRename(key: string) {
+    setRenamingKey(key);
+    setRenameValue(getFileName(key));
+  }
+
+  function getDir(key: string) {
+    const parts = key.split("/");
+    if (parts.length <= 1) return "";
+    return parts.slice(0, -1).join("/") + "/";
+  }
+
+  async function handleRenameSave() {
+    if (!renamingKey) return;
+    const nextName = renameValue.trim();
+    if (!nextName || nextName.includes("/")) {
+      alert("Название файла не должно быть пустым и не должно содержать /");
+      return;
+    }
+
+    const fromKey = renamingKey;
+    const toKey = `${getDir(fromKey)}${nextName}`;
+    if (toKey === fromKey) {
+      setRenamingKey(null);
+      setRenameValue("");
+      return;
+    }
+
+    setRenaming(true);
+    try {
+      const res = await fetch("/api/s3/rename", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fromKey, toKey }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? "Ошибка переименования");
+      }
+      setFiles((prev) => prev.map((f) => (f.Key === fromKey ? { ...f, Key: toKey } : f)));
+      if (preview?.Key === fromKey) setPreview({ ...preview, Key: toKey });
+      setRenamingKey(null);
+      setRenameValue("");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Ошибка переименования";
+      alert(msg);
+    }
+    setRenaming(false);
   }
 
   function getIcon(key: string) {
@@ -200,6 +435,12 @@ export function AssetManager({
 
   function getFileName(key: string) {
     return key.split("/").pop() ?? key;
+  }
+
+  // Пререндер Next.js сравнивает HTML сервера/клиента. Чтобы исключить hydration mismatch,
+  // рендерим UI только после монтирования.
+  if (!mounted) {
+    return <div className="space-y-4" />;
   }
 
   return (
@@ -240,6 +481,7 @@ export function AssetManager({
           <input
             type="file"
             onChange={handleUpload}
+            multiple
             accept="video/*,image/*,.pdf,.doc,.docx,.txt,.zip"
             className="absolute inset-0 opacity-0 cursor-pointer"
             disabled={uploading}
@@ -250,6 +492,155 @@ export function AssetManager({
           </Button>
         </div>
       </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">Сортировка:</span>
+          <select
+            value={sortKey}
+            onChange={(e) => setSortKey(e.target.value as SortKey)}
+            className="flex h-9 rounded-lg border border-input bg-background px-3 py-2 text-sm"
+            aria-label="Сортировка"
+          >
+            <option value="date">По дате</option>
+            <option value="name">По имени</option>
+            <option value="size">По размеру</option>
+          </select>
+          <select
+            value={sortDir}
+            onChange={(e) => setSortDir(e.target.value as SortDir)}
+            className="flex h-9 rounded-lg border border-input bg-background px-3 py-2 text-sm"
+            aria-label="Направление сортировки"
+          >
+            <option value="desc">↓</option>
+            <option value="asc">↑</option>
+          </select>
+        </div>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={allowDuplicates}
+            onChange={(e) => setAllowDuplicates(e.target.checked)}
+            disabled={uploading}
+          />
+          Разрешать дубли (одинаковые имена)
+        </label>
+      </div>
+
+      {/* Upload status */}
+      {uploadJobs.length > 0 && (
+        <Card>
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium">Загрузка</p>
+                {uploading ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : null}
+                <p className="text-xs text-muted-foreground">
+                  {uploading
+                    ? `Идёт загрузка: ${uploadStats.done}/${uploadStats.total}`
+                    : `Завершено: ${uploadStats.done}/${uploadStats.total}`}
+                  {uploadStats.errors > 0 ? ` · Ошибки: ${uploadStats.errors}` : ""}
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setHideDoneJobs((v) => !v)}
+              >
+                {hideDoneJobs ? "Показать завершённые" : "Скрыть завершённые"}
+              </Button>
+            </div>
+            <div className="space-y-2">
+              {visibleUploadJobs.slice(0, uploadJobsLimit).map((j) => (
+                <div key={j.id} className="rounded-lg border p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{j.fileName}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {j.status === "queued" && "В очереди"}
+                        {j.status === "presigning" && "Подготовка…"}
+                        {j.status === "uploading" && `Загрузка… ${j.progress}%`}
+                        {j.status === "done" && "Готово"}
+                        {j.status === "error" && (j.error ?? "Ошибка")}
+                      </p>
+                    </div>
+                    <div className="shrink-0">
+                      {j.status === "uploading" || j.status === "presigning" ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          aria-label="Отменить"
+                          onClick={() => {
+                            cancelledJobIdsRef.current.add(j.id);
+                            const xhr = uploadXhrByJobIdRef.current[j.id];
+                            if (xhr) xhr.abort();
+                            delete uploadXhrByJobIdRef.current[j.id];
+                            setUploadJobs((prev) => prev.filter((x) => x.id !== j.id));
+                          }}
+                        >
+                          <X className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                      ) : j.status === "queued" ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          aria-label="Убрать из очереди"
+                          onClick={() => {
+                            cancelledJobIdsRef.current.add(j.id);
+                            setUploadJobs((prev) => prev.filter((x) => x.id !== j.id));
+                          }}
+                        >
+                          <X className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                      ) : j.status === "done" ? (
+                        <Check className="h-4 w-4 text-green-500" />
+                      ) : j.status === "error" ? (
+                        <X className="h-4 w-4 text-destructive" />
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="mt-2">
+                    <Progress value={j.status === "done" ? 100 : j.progress} />
+                  </div>
+                  {j.status === "error" && j.existingKey ? (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <Button type="button" size="sm" variant="outline" onClick={() => setUploadJobs((prev) => prev.filter((x) => x.id !== j.id))}>
+                        Пропустить
+                      </Button>
+                      <Button type="button" size="sm" onClick={() => setAllowDuplicates(true)} disabled={uploading}>
+                        Всё равно загрузить
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+              {visibleUploadJobs.length > uploadJobsLimit ? (
+                <div className="flex items-center justify-between gap-3 pt-1">
+                  <p className={tokens.typography.small}>Ещё {visibleUploadJobs.length - uploadJobsLimit}…</p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setUploadJobsLimit((n) => Math.min(n + 8, visibleUploadJobs.length))}
+                  >
+                    Показать ещё
+                  </Button>
+                </div>
+              ) : null}
+              {visibleUploadJobs.length > 0 && visibleUploadJobs.length > 8 && uploadJobsLimit > 8 ? (
+                <div className="flex justify-end">
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setUploadJobsLimit(8)}>
+                    Свернуть
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Type filters */}
       {files.length > 0 && (
@@ -283,7 +674,7 @@ export function AssetManager({
 
       {/* File list */}
       <div className="space-y-2">
-        {filteredFiles.map((file) => {
+        {sortedFiles.map((file) => {
           const cat = getFileCategory(file.Key);
           const isImage = cat === "image";
           const url = getPublicUrl(file.Key);
@@ -329,6 +720,15 @@ export function AssetManager({
                     type="button"
                     variant="ghost"
                     size="icon"
+                    onClick={() => openRename(file.Key)}
+                    aria-label="Переименовать"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
                     onClick={() => copyUrl(file.Key)}
                     aria-label="Скопировать URL"
                   >
@@ -342,7 +742,7 @@ export function AssetManager({
                     type="button"
                     variant="ghost"
                     size="icon"
-                    onClick={() => handleDelete(file.Key)}
+                    onClick={() => setDeleteKey(file.Key)}
                     disabled={deleting === file.Key}
                     aria-label="Удалить"
                     className="text-destructive hover:text-destructive hover:bg-destructive/10"
@@ -408,6 +808,80 @@ export function AssetManager({
           </div>
         </div>
       )}
+
+      {/* Rename modal */}
+      {renamingKey && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={() => !renaming && setRenamingKey(null)}>
+          <div className="w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
+            <Card className={tokens.shadow.md}>
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">Переименовать</p>
+                    <p className="text-xs text-muted-foreground truncate">{renamingKey}</p>
+                  </div>
+                  <Button type="button" variant="ghost" size="icon" onClick={() => !renaming && setRenamingKey(null)}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  <Input
+                    value={renameValue}
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), void handleRenameSave())}
+                    disabled={renaming}
+                    placeholder="Новое имя файла"
+                  />
+                  <p className={tokens.typography.small}>Меняется только имя файла в текущей папке (без “/”).</p>
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <Button type="button" variant="outline" onClick={() => !renaming && setRenamingKey(null)} disabled={renaming}>
+                    Отмена
+                  </Button>
+                  <Button type="button" onClick={() => void handleRenameSave()} disabled={renaming}>
+                    {renaming ? "..." : "Сохранить"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirm */}
+      <Dialog open={deleteKey != null} onOpenChange={(open) => !open && setDeleteKey(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Удалить файл?</DialogTitle>
+            <DialogDescription>
+              {deleteKey ? (
+                <>
+                  Файл <span className="font-medium text-foreground">“{getFileName(deleteKey)}”</span> будет удалён без
+                  возможности восстановления.
+                </>
+              ) : null}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" onClick={() => setDeleteKey(null)} disabled={deleting != null}>
+              Отмена
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={async () => {
+                if (!deleteKey) return;
+                const key = deleteKey;
+                setDeleteKey(null);
+                await handleDelete(key);
+              }}
+              disabled={deleteKey == null || deleting != null}
+            >
+              Удалить
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
