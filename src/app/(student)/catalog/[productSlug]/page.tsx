@@ -68,6 +68,8 @@ export default async function ProductDetailsPage({ params, searchParams }: Props
     criteria: t.criteria,
   }));
 
+  const shouldShowTariffs = tariffOptions.length > 0 && !enrollment;
+
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       {paymentQuery === "yoomoney_ok" ? (
@@ -83,6 +85,51 @@ export default async function ProductDetailsPage({ params, searchParams }: Props
         <h1 className={`${tokens.typography.h2} mt-2`}>{product.title}</h1>
         {product.description && <p className={`${tokens.typography.body} mt-2`}>{product.description}</p>}
       </div>
+
+      {shouldShowTariffs ? (
+        <section className="space-y-3" aria-labelledby="catalog-tariffs-heading">
+          <div className="flex items-center justify-between gap-3">
+            <h2 id="catalog-tariffs-heading" className={tokens.typography.h3}>
+              Тарифы
+            </h2>
+            {!session ? (
+              <Button asChild variant="outline" size="sm">
+                <Link href={loginWithReturn}>Войти, чтобы оплатить</Link>
+              </Button>
+            ) : null}
+          </div>
+
+          {session ? (
+            <EnrollButton
+              productId={product.id}
+              productSlug={product.slug}
+              requiresPayment={paid}
+              paymentFormUrl={product.paymentFormUrl}
+              yoomoneyCheckoutEnabled={yoomoneyCheckoutEnabled}
+              tariffs={tariffOptions}
+            />
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2">
+              {tariffOptions.map((t) => (
+                <Card key={t.id} className={tokens.shadow.card}>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-lg">{t.name}</CardTitle>
+                    <p className="text-base font-semibold text-primary">{formatPrice(t.price, t.currency)}</p>
+                  </CardHeader>
+                  <CardContent>
+                    <p className={`${tokens.typography.small} font-medium text-foreground mb-2`}>Входит в тариф</p>
+                    <ul className="space-y-1 text-sm text-muted-foreground">
+                      {t.criteria.map((c) => (
+                        <li key={c}>· {PRODUCT_CRITERION_LABELS[c]}</li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </section>
+      ) : null}
 
       <Card className={tokens.shadow.card}>
         <CardHeader>
@@ -123,14 +170,16 @@ export default async function ProductDetailsPage({ params, searchParams }: Props
               <Link href={`/learn/${product.slug}`}>Открыть</Link>
             </Button>
           ) : (
-            <EnrollButton
-              productId={product.id}
-              productSlug={product.slug}
-              requiresPayment={paid}
-              paymentFormUrl={product.paymentFormUrl}
-              yoomoneyCheckoutEnabled={yoomoneyCheckoutEnabled}
-              tariffs={tariffOptions}
-            />
+            paid ? null : (
+              <EnrollButton
+                productId={product.id}
+                productSlug={product.slug}
+                requiresPayment={paid}
+                paymentFormUrl={product.paymentFormUrl}
+                yoomoneyCheckoutEnabled={yoomoneyCheckoutEnabled}
+                tariffs={tariffOptions}
+              />
+            )
           )}
         </CardFooter>
       </Card>
