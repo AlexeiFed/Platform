@@ -179,7 +179,7 @@ export default async function MarathonEventPage({ params }: Props) {
               </div>
             </div>
             <Button asChild>
-              <Link href={`/learn/${courseSlug}/${event.lesson.slug}`}>
+              <Link href={`/learn/${courseSlug}/${event.lesson.slug}?event=${event.id}`}>
                 <PlayCircle className="h-4 w-4 mr-1" />
                 Открыть материал
               </Link>

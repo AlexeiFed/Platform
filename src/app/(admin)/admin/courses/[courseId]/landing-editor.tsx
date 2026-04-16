@@ -136,7 +136,7 @@ function ImageUploader({
       )}
 
       {showPicker && (
-        <Card className="border-primary/30">
+        <Card className="min-w-0 w-full border-primary/30">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm">Выберите изображение</CardTitle>
@@ -145,10 +145,101 @@ function ImageUploader({
               </Button>
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="min-w-0">
             <AssetManager
               onSelect={(url) => { onChange(url); setShowPicker(false); }}
               defaultFilter="image"
+            />
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// === Загрузка видео (S3 + хранилище, как в уроке / блоке изображение) ===
+
+function VideoUploader({
+  value,
+  onChange,
+  placeholder = "URL видео (файл или внешняя ссылка)",
+}: {
+  value: string;
+  onChange: (url: string) => void;
+  placeholder?: string;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !file.type.startsWith("video/")) return;
+    setUploading(true);
+    try {
+      const res = await fetch("/api/s3/presign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileName: file.name, contentType: file.type, size: file.size, path: "videos" }),
+      });
+      if (!res.ok) return;
+      const { url, key } = await res.json();
+      await fetch(url, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
+      onChange(getPublicUrl(key));
+    } catch { /* silent */ }
+    setUploading(false);
+    e.target.value = "";
+  }
+
+  return (
+    <div className="space-y-2">
+      {value ? (
+        <div className="space-y-2">
+          <div className="aspect-video w-full overflow-hidden rounded-lg border bg-black max-h-48">
+            <video src={value} controls className="h-full w-full object-contain" controlsList="nodownload" />
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <Button type="button" size="sm" variant="outline" onClick={() => onChange("")}>
+              <X className="h-3.5 w-3.5 mr-1" /> Убрать
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={() => setShowPicker((v) => !v)}>
+              <Film className="h-3.5 w-3.5 mr-1" /> Хранилище
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex gap-2 flex-wrap">
+          <Input
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={placeholder}
+            className="flex-1 min-w-[200px]"
+          />
+          <input ref={fileRef} type="file" accept="video/*" className="hidden" onChange={handleUpload} />
+          <Button type="button" size="sm" variant="outline" disabled={uploading} onClick={() => fileRef.current?.click()}>
+            {uploading ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Upload className="h-3.5 w-3.5 mr-1" />}
+            {uploading ? "..." : "Загрузить"}
+          </Button>
+          <Button type="button" size="sm" variant="outline" onClick={() => setShowPicker((v) => !v)}>
+            <Film className="h-3.5 w-3.5 mr-1" /> Хранилище
+          </Button>
+        </div>
+      )}
+
+      {showPicker && (
+        <Card className="min-w-0 w-full border-primary/30">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm">Выберите видео</CardTitle>
+              <Button type="button" variant="ghost" size="icon" onClick={() => setShowPicker(false)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="min-w-0">
+            <AssetManager
+              onSelect={(url) => { onChange(url); setShowPicker(false); }}
+              defaultFilter="video"
             />
           </CardContent>
         </Card>
@@ -281,8 +372,8 @@ function VideoBlockEditor({ block, onChange }: { block: Extract<LandingBlock, { 
   return (
     <div className="space-y-3">
       <div className="space-y-1">
-        <label className={tokens.typography.label}>URL видео</label>
-        <Input value={block.url} onChange={(e) => onChange({ ...block, url: e.target.value })} placeholder="https://..." />
+        <label className={tokens.typography.label}>Видео</label>
+        <VideoUploader value={block.url} onChange={(url) => onChange({ ...block, url })} />
       </div>
       <div className="space-y-1">
         <label className={tokens.typography.label}>Заголовок видео</label>

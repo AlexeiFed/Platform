@@ -16,7 +16,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
           <div className="fixed inset-0 z-50 md:hidden">
             <div className="fixed inset-0 bg-black/50" onClick={() => setMobileMenuOpen(false)} />
             <div className="fixed left-0 top-0 z-50 flex h-full min-h-0 w-64 flex-col overflow-hidden bg-card">
-              <Sidebar variant="student" mobileDrawer />
+              <Sidebar variant="student" mobileDrawer onNavigate={() => setMobileMenuOpen(false)} />
             </div>
           </div>
         )}

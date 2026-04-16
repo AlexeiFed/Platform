@@ -17,10 +17,12 @@ type ContentBlock = {
 
 type Props = {
   params: Promise<{ courseSlug: string; lessonSlug: string }>;
+  searchParams: Promise<{ event?: string }>;
 };
 
-export default async function LessonPage({ params }: Props) {
+export default async function LessonPage({ params, searchParams }: Props) {
   const { courseSlug, lessonSlug } = await params;
+  const { event: eventQuery } = await searchParams;
   const session = await auth();
   if (!session) redirect("/login");
 
@@ -63,6 +65,21 @@ export default async function LessonPage({ params }: Props) {
   });
 
   if (!lesson || !lesson.published) notFound();
+
+  if (product.type === "MARATHON" && eventQuery) {
+    const scopedEvent = await prisma.marathonEvent.findFirst({
+      where: {
+        id: eventQuery,
+        productId: product.id,
+        published: true,
+        lessonId: lesson.id,
+      },
+      select: { id: true },
+    });
+    if (!scopedEvent) {
+      redirect(`/learn/${courseSlug}`);
+    }
+  }
 
   if (product.type === "MARATHON" && product.startDate && lesson.marathonEvents.length > 0) {
     const startDate = new Date(product.startDate);

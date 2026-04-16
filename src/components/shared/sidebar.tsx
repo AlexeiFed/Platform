@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -42,9 +43,12 @@ export function Sidebar({
   variant = "admin",
   /** В оверлее бургер-меню: без `hidden md:flex`, иначе на мобилке панель пустая */
   mobileDrawer = false,
+  /** Закрыть мобильный drawer после перехода по пункту меню */
+  onNavigate,
 }: {
   variant?: "admin" | "student";
   mobileDrawer?: boolean;
+  onNavigate?: () => void;
 }) {
   const pathname = usePathname();
   const items = variant === "admin" ? adminNav : studentNav;
@@ -71,6 +75,7 @@ export function Sidebar({
               <Link
                 key={item.href}
                 href={item.href}
+                onClick={() => onNavigate?.()}
                 className={cn(
                   "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium",
                   tokens.animation.fast,
@@ -85,7 +90,11 @@ export function Sidebar({
             );
           })}
         </nav>
-        {variant === "student" ? <CourseNavSidebarSection /> : null}
+        {variant === "student" ? (
+          <Suspense fallback={null}>
+            <CourseNavSidebarSection onNavigate={onNavigate} />
+          </Suspense>
+        ) : null}
       </div>
     </aside>
   );

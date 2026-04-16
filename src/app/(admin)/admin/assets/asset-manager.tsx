@@ -485,7 +485,7 @@ export function AssetManager({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-4">
       {/* Quick folders */}
       <div className="flex flex-wrap gap-2">
         {QUICK_FOLDERS.map((folder) => (
@@ -611,8 +611,8 @@ export function AssetManager({
               {visibleUploadJobs.slice(0, uploadJobsLimit).map((j) => (
                 <div key={j.id} className="rounded-lg border p-3">
                   <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{j.fileName}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium [overflow-wrap:break-word] [word-break:normal]">{j.fileName}</p>
                       <p className="text-xs text-muted-foreground">
                         {j.status === "queued" && "В очереди"}
                         {j.status === "presigning" && "Подготовка…"}
@@ -729,38 +729,40 @@ export function AssetManager({
       )}
 
       {/* File list */}
-      <div className="space-y-2">
+      <div className="min-w-0 space-y-2">
         {sortedFiles.map((file) => {
           const cat = getFileCategory(file.Key);
           const isImage = cat === "image";
           const url = getPublicUrl(file.Key);
 
           return (
-            <Card key={file.Key} className="group">
-              <CardContent className="flex items-center gap-3 p-3">
-                {/* Thumbnail for images */}
-                {isImage ? (
-                  <div className="h-10 w-10 rounded-md overflow-hidden bg-muted shrink-0">
-                    <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
+            <Card key={file.Key} className="group w-full min-w-0 overflow-hidden">
+              <CardContent className="flex min-w-0 flex-col gap-3 p-3">
+                <div className="flex w-full min-w-0 gap-3">
+                  {isImage ? (
+                    <div className="h-10 w-10 shrink-0 rounded-md overflow-hidden bg-muted">
+                      <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
+                    </div>
+                  ) : (
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-muted">
+                      {getIcon(file.Key)}
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium [overflow-wrap:break-word] [word-break:normal]">
+                      {getFileName(file.Key)}
+                    </p>
+                    <p className="text-xs text-muted-foreground [overflow-wrap:break-word] [word-break:normal]">
+                      <span className="text-muted-foreground/70">{file.Key.split("/").slice(0, -1).join("/")}/</span>
+                      {" · "}
+                      {formatSize(file.Size)}
+                      {" · "}
+                      {new Date(file.LastModified).toLocaleDateString("ru-RU")}
+                    </p>
                   </div>
-                ) : (
-                  <div className="h-10 w-10 rounded-md bg-muted flex items-center justify-center shrink-0">
-                    {getIcon(file.Key)}
-                  </div>
-                )}
-
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{getFileName(file.Key)}</p>
-                  <p className="text-xs text-muted-foreground">
-                    <span className="text-muted-foreground/70">{file.Key.split("/").slice(0, -1).join("/")}/</span>
-                    {" · "}
-                    {formatSize(file.Size)}
-                    {" · "}
-                    {new Date(file.LastModified).toLocaleDateString("ru-RU")}
-                  </p>
                 </div>
 
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex w-full shrink-0 flex-wrap items-center justify-end gap-1 border-t border-border/60 pt-2">
                   {(isImage || cat === "video") && (
                     <Button
                       type="button"
@@ -882,7 +884,7 @@ export function AssetManager({
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-sm font-medium">Переименовать</p>
-                    <p className="text-xs text-muted-foreground truncate">{renamingKey}</p>
+                    <p className="text-xs text-muted-foreground break-words">{renamingKey}</p>
                   </div>
                   <Button type="button" variant="ghost" size="icon" onClick={() => !renaming && setRenamingKey(null)}>
                     <X className="h-4 w-4" />

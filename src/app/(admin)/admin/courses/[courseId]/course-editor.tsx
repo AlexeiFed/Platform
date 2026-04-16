@@ -462,7 +462,7 @@ function MediaBlockEditor({
           </div>
 
           {showPicker && (
-            <Card className="border-primary/30">
+            <Card className="min-w-0 w-full border-primary/30">
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-sm">
@@ -473,7 +473,7 @@ function MediaBlockEditor({
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="min-w-0">
                 <AssetManager
                   onSelect={(url) => { onUpdate(url); setShowPicker(false); }}
                   defaultFilter={block.type === "video" ? "video" : "image"}
@@ -1147,7 +1147,7 @@ export function CourseEditor({
                     </div>
 
                     {showCoverPicker && (
-                      <Card className="border-primary/30">
+                      <Card className="min-w-0 w-full border-primary/30">
                         <CardHeader className="pb-2">
                           <div className="flex items-center justify-between">
                             <CardTitle className="text-sm">Выберите обложку</CardTitle>
@@ -1156,7 +1156,7 @@ export function CourseEditor({
                             </Button>
                           </div>
                         </CardHeader>
-                        <CardContent>
+                        <CardContent className="min-w-0">
                           <AssetManager
                             onSelect={(url) => { setProductForm((p) => ({ ...p, coverUrl: url })); setShowCoverPicker(false); }}
                             defaultFilter="image"
@@ -1195,7 +1195,7 @@ export function CourseEditor({
                     </div>
 
                     {showCoverPicker && (
-                      <Card className="border-primary/30">
+                      <Card className="min-w-0 w-full border-primary/30">
                         <CardHeader className="pb-2">
                           <div className="flex items-center justify-between">
                             <CardTitle className="text-sm">Выберите обложку</CardTitle>
@@ -1204,7 +1204,7 @@ export function CourseEditor({
                             </Button>
                           </div>
                         </CardHeader>
-                        <CardContent>
+                        <CardContent className="min-w-0">
                           <AssetManager
                             onSelect={(url) => { setProductForm((p) => ({ ...p, coverUrl: url })); setShowCoverPicker(false); }}
                             defaultFilter="image"

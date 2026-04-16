@@ -1,15 +1,29 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { CheckCircle2, ChevronRight, FileText, Lock, MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { tokens } from "@/lib/design-tokens";
 import { useCourseNavPayload } from "@/components/shared/course-nav-context";
 import { MarathonProcedureToggle } from "@/app/(student)/learn/[courseSlug]/marathon-procedure-toggle";
 import { Badge } from "@/components/ui/badge";
-import type { CourseNavProcedure } from "@/lib/course-nav-types";
+import type { CourseNavMarathonWeek, CourseNavProcedure } from "@/lib/course-nav-types";
+
+function filterMarathonWeeksForEvent(weeks: CourseNavMarathonWeek[], eventId: string): CourseNavMarathonWeek[] {
+  return weeks
+    .map((week) => ({
+      ...week,
+      days: week.days
+        .map((day) => ({
+          ...day,
+          events: day.events.filter((e) => e.id === eventId),
+        }))
+        .filter((day) => day.events.length > 0),
+    }))
+    .filter((week) => week.days.length > 0);
+}
 
 const navItemClass = (active: boolean) =>
   cn(
@@ -69,9 +83,19 @@ function MarathonProcedureSidebarDetails({ procedures }: { procedures: CourseNav
   );
 }
 
-export function CourseNavSidebarSection() {
+export function CourseNavSidebarSection({ onNavigate }: { onNavigate?: () => void }) {
   const payload = useCourseNavPayload();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const scopeEventId = searchParams.get("event");
+
+  const marathonWeeksDisplay = useMemo(() => {
+    if (!payload?.marathonWeeks || payload.productType !== "MARATHON" || !scopeEventId) {
+      return payload?.marathonWeeks ?? [];
+    }
+    const filtered = filterMarathonWeeksForEvent(payload.marathonWeeks, scopeEventId);
+    return filtered.length > 0 ? filtered : payload.marathonWeeks;
+  }, [payload, scopeEventId]);
 
   if (!payload) return null;
 
@@ -88,11 +112,28 @@ export function CourseNavSidebarSection() {
         <p className={cn(tokens.typography.label, "mt-0.5 line-clamp-3 px-1 text-sm leading-snug")}>{payload.title}</p>
       </div>
 
-      <Link href={base} className={navItemClass(overviewActive)} aria-current={overviewActive ? "page" : undefined}>
+      <Link
+        href={base}
+        onClick={() => onNavigate?.()}
+        className={navItemClass(overviewActive)}
+        aria-current={overviewActive ? "page" : undefined}
+      >
         <FileText className="h-4 w-4 shrink-0" />
         <span className="min-w-0 flex-1">Описание и прогресс</span>
         <ChevronRight className="h-4 w-4 shrink-0 opacity-50" aria-hidden />
       </Link>
+
+      {payload.productType === "MARATHON" && scopeEventId ? (
+        <Link
+          href={`${base}/event/${scopeEventId}`}
+          onClick={() => onNavigate?.()}
+          className={navItemClass(pathname === `${base}/event/${scopeEventId}`)}
+          aria-current={pathname === `${base}/event/${scopeEventId}` ? "page" : undefined}
+        >
+          <ChevronRight className="h-4 w-4 shrink-0 rotate-180 opacity-70" aria-hidden />
+          <span className="min-w-0 flex-1 text-sm">К карточке события</span>
+        </Link>
+      ) : null}
 
       {payload.productType === "COURSE" && payload.lessons && (
         <div className="space-y-0.5">
@@ -117,6 +158,7 @@ export function CourseNavSidebarSection() {
                 <li key={lesson.slug}>
                   <Link
                     href={href}
+                    onClick={() => onNavigate?.()}
                     className={navItemClass(active)}
                     aria-current={active ? "page" : undefined}
                   >
@@ -138,6 +180,7 @@ export function CourseNavSidebarSection() {
         <div className="px-1 pb-1">
           <Link
             href={`${base}/feedback`}
+            onClick={() => onNavigate?.()}
             className={navItemClass(pathname === `${base}/feedback`)}
             aria-current={pathname === `${base}/feedback` ? "page" : undefined}
           >
@@ -153,6 +196,7 @@ export function CourseNavSidebarSection() {
             <div className="px-1 pb-2">
               <Link
                 href={`${base}/feedback`}
+                onClick={() => onNavigate?.()}
                 className={navItemClass(pathname === `${base}/feedback`)}
                 aria-current={pathname === `${base}/feedback` ? "page" : undefined}
               >
@@ -165,10 +209,12 @@ export function CourseNavSidebarSection() {
             <MarathonProcedureSidebarDetails procedures={payload.procedures} />
           )}
 
-          {payload.marathonWeeks && payload.marathonWeeks.length > 0 && (
+          {marathonWeeksDisplay && marathonWeeksDisplay.length > 0 && (
             <div className="space-y-1">
-              <p className={cn(tokens.typography.small, "px-1 font-medium text-foreground")}>Расписание</p>
-              {payload.marathonWeeks.map((week) => (
+              <p className={cn(tokens.typography.small, "px-1 font-medium text-foreground")}>
+                {scopeEventId ? "Событие" : "Расписание"}
+              </p>
+              {marathonWeeksDisplay.map((week) => (
                 <details key={week.weekNumber} className="group rounded-md border border-transparent open:border-border open:bg-muted/20">
                   <summary
                     className={cn(
@@ -221,6 +267,7 @@ export function CourseNavSidebarSection() {
                               <li key={event.id}>
                                 <Link
                                   href={href}
+                                  onClick={() => onNavigate?.()}
                                   className={navItemClass(active)}
                                   aria-current={active ? "page" : undefined}
                                 >
