@@ -6,7 +6,7 @@
  */
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   DndContext,
   closestCenter,
@@ -33,10 +33,12 @@ import {
 } from "@/components/ui/dialog";
 import { LandingRenderer } from "@/app/(student)/catalog/[productSlug]/landing-renderer";
 import { tokens } from "@/lib/design-tokens";
+import { cn } from "@/lib/utils";
 import {
   GripVertical, Plus, X, Image as ImageIcon, Film,
   AlignLeft, Heading2, List, Minus, Upload, Loader2,
   LayoutTemplate, Save, Eye, ExternalLink,
+  CheckCircle2, AlertCircle,
 } from "lucide-react";
 import { updateProductLanding } from "../actions";
 import type { LandingBlock } from "@/types/landing";
@@ -441,12 +443,21 @@ type Props = {
   initialBlocks: LandingBlock[];
 };
 
+type SaveNotice = { ok: boolean; text: string };
+
 export function LandingEditor({ productId, productSlug, initialBlocks }: Props) {
   const [blocks, setBlocks] = useState<LandingBlock[]>(initialBlocks);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [saveNotice, setSaveNotice] = useState<SaveNotice | null>(null);
+
+  useEffect(() => {
+    if (!saveNotice) return;
+    const t = window.setTimeout(() => setSaveNotice(null), 4500);
+    return () => window.clearTimeout(t);
+  }, [saveNotice]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -490,12 +501,21 @@ export function LandingEditor({ productId, productSlug, initialBlocks }: Props) 
     setSaving(true);
     setError("");
     setSaved(false);
+    setSaveNotice(null);
     try {
       const result = await updateProductLanding(productId, blocks);
-      if (result.error) setError(result.error);
-      else { setSaved(true); setTimeout(() => setSaved(false), 3000); }
+      if (result.error) {
+        setError(result.error);
+        setSaveNotice({ ok: false, text: `Лендинг не сохранён: ${result.error}` });
+      } else {
+        setSaved(true);
+        setTimeout(() => setSaved(false), 3000);
+        setSaveNotice({ ok: true, text: "Лендинг успешно сохранён" });
+      }
     } catch {
-      setError("Ошибка при сохранении лендинга");
+      const msg = "Ошибка при сохранении лендинга";
+      setError(msg);
+      setSaveNotice({ ok: false, text: "Лендинг не сохранён. Попробуйте ещё раз." });
     } finally {
       setSaving(false);
     }
@@ -503,13 +523,13 @@ export function LandingEditor({ productId, productSlug, initialBlocks }: Props) 
 
   return (
     <>
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <LayoutTemplate className="h-5 w-5 text-purple-500" />
-            <CardTitle className="text-base">Лендинг (публичная страница курса)</CardTitle>
+      <Card className="min-w-0 overflow-hidden">
+        <CardHeader className="flex flex-col gap-3 space-y-0 md:flex-row md:items-center md:justify-between md:gap-4">
+          <div className="flex min-w-0 items-start gap-2">
+            <LayoutTemplate className="mt-0.5 h-5 w-5 shrink-0 text-purple-500" />
+            <CardTitle className="text-base leading-snug break-words">Лендинг (публичная страница курса)</CardTitle>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex w-full min-w-0 flex-wrap items-center justify-end gap-2 md:w-auto md:shrink-0">
             {saved && <Badge variant="success" className="text-xs">Сохранено</Badge>}
             {blocks.length > 0 && (
               <>
@@ -523,7 +543,7 @@ export function LandingEditor({ productId, productSlug, initialBlocks }: Props) 
                 </Button>
               </>
             )}
-            <Button type="button" size="sm" onClick={handleSave} disabled={saving}>
+            <Button type="button" size="sm" className="shrink-0" onClick={handleSave} disabled={saving}>
               {saving ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Save className="h-3.5 w-3.5 mr-1" />}
               {saving ? "Сохранение..." : "Сохранить лендинг"}
             </Button>
@@ -575,8 +595,43 @@ export function LandingEditor({ productId, productSlug, initialBlocks }: Props) 
               })}
             </div>
           </div>
+
+          <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className={`${tokens.typography.small} text-muted-foreground`}>
+              После правок блоков не забудьте сохранить лендинг.
+            </p>
+            <Button type="button" size="sm" className="w-full shrink-0 sm:w-auto" onClick={handleSave} disabled={saving}>
+              {saving ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Save className="h-3.5 w-3.5 mr-1" />}
+              {saving ? "Сохранение..." : "Сохранить лендинг"}
+            </Button>
+          </div>
         </CardContent>
       </Card>
+
+      {saveNotice ? (
+        <div
+          className="pointer-events-none fixed inset-x-0 bottom-0 z-[100] flex justify-center p-4 sm:justify-end sm:p-6"
+          role="status"
+          aria-live="polite"
+        >
+          <div
+            className={cn(
+              "pointer-events-auto flex max-w-md items-start gap-2 rounded-lg border px-4 py-3 text-sm shadow-lg",
+              tokens.radius.md,
+              saveNotice.ok
+                ? "border-emerald-600/30 bg-emerald-500/10 text-emerald-950 dark:text-emerald-50"
+                : "border-destructive/40 bg-destructive/10 text-destructive"
+            )}
+          >
+            {saveNotice.ok ? (
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
+            ) : (
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+            )}
+            <span>{saveNotice.text}</span>
+          </div>
+        </div>
+      ) : null}
 
       {/* === Модальный предпросмотр лендинга === */}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
