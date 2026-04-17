@@ -90,8 +90,22 @@ function TabPills({
 
 // === Shell ===
 export function CourseEditorShell({ product, lessons, marathonEvents, tariffs }: Props) {
+  const storageKey = `editor-tab-${product.id}`;
   const [activeTab, setActiveTab] = useState<TabId>("criteria");
   const { setSlot } = useHeaderSlot();
+
+  // Восстанавливаем последнюю вкладку после монтирования
+  useEffect(() => {
+    const saved = localStorage.getItem(storageKey);
+    if (saved) setActiveTab(saved as TabId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** Смена вкладки с сохранением в localStorage */
+  function handleSetTab(id: TabId) {
+    setActiveTab(id);
+    localStorage.setItem(storageKey, id);
+  }
 
   const tabs: Tab[] = [
     { id: "criteria", label: "Критерии" },
@@ -105,7 +119,7 @@ export function CourseEditorShell({ product, lessons, marathonEvents, tariffs }:
   // Инжектируем таб-плашки в хедер при монтировании / смене таба, очищаем при анмаунте
   useEffect(() => {
     setSlot(
-      <TabPills tabs={tabs} active={activeTab} onChange={setActiveTab} />,
+      <TabPills tabs={tabs} active={activeTab} onChange={handleSetTab} />,
     );
     return () => setSlot(null);
     // tabs зависит от product.type и activeTab
@@ -129,7 +143,7 @@ export function CourseEditorShell({ product, lessons, marathonEvents, tariffs }:
         lessons={lessons}
         marathonEvents={marathonEvents}
         activeTab={activeTab}
-        onRequestTab={(tab) => setActiveTab(tab as TabId)}
+        onRequestTab={(tab) => handleSetTab(tab as TabId)}
       />
     </div>
   );

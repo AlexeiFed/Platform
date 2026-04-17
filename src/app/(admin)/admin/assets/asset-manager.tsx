@@ -19,7 +19,6 @@ import {
   Upload,
   FolderOpen,
   FileIcon,
-  Copy,
   Image,
   Film,
   FileText,
@@ -81,6 +80,31 @@ function getPublicUrl(key: string) {
   return `${endpoint}/${bucket}/${key}`;
 }
 
+/**
+ * VideoThumbnail — показывает первый кадр видео через <video> элемент.
+ * Используем <video> вместо canvas: video-элемент отображает кросс-origin контент
+ * без CORS-заголовков, canvas требует crossOrigin="anonymous" (ломает S3).
+ * После onSeeked кадр отображается нативно браузером (работает в Safari).
+ */
+function VideoThumbnail({ src, className }: { src: string; className?: string }) {
+  const [hasFrame, setHasFrame] = useState(false);
+
+  return (
+    <div className={`relative flex items-center justify-center overflow-hidden bg-muted${className ? ` ${className}` : ""}`}>
+      {/* Film-иконка видна пока кадр не загружен */}
+      {!hasFrame && <Film className="h-4 w-4 text-muted-foreground" />}
+      <video
+        src={src}
+        preload="metadata"
+        muted
+        className={`absolute inset-0 h-full w-full object-cover transition-opacity${hasFrame ? " opacity-100" : " opacity-0"}`}
+        onLoadedMetadata={(e) => { e.currentTarget.currentTime = 0.5; }}
+        onSeeked={() => setHasFrame(true)}
+      />
+    </div>
+  );
+}
+
 export function AssetManager({
   onSelect,
   defaultFilter = "all",
@@ -101,7 +125,6 @@ export function AssetManager({
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [nameQuery, setNameQuery] = useState("");
   const [filter, setFilter] = useState<FileCategory>(defaultFilter);
-  const [copied, setCopied] = useState<string | null>(null);
   const [preview, setPreview] = useState<S3Object | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [deleteKey, setDeleteKey] = useState<string | null>(null);
@@ -381,13 +404,6 @@ export function AssetManager({
     setUploadJobs((prev) => prev.filter((j) => j.status === "error"));
     setUploading(false);
     e.target.value = "";
-  }
-
-  function copyUrl(key: string) {
-    const url = getPublicUrl(key);
-    navigator.clipboard.writeText(url);
-    setCopied(key);
-    setTimeout(() => setCopied(null), 2000);
   }
 
   function handleSelect(file: S3Object) {
@@ -729,31 +745,24 @@ export function AssetManager({
       )}
 
       {/* File list */}
-      <div className="min-w-0 space-y-2">
+      <div className="min-w-0 space-y-3">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
         {sortedFiles.map((file) => {
           const cat = getFileCategory(file.Key);
           const isImage = cat === "image";
           const url = getPublicUrl(file.Key);
 
           return (
-            <Card key={file.Key} className="group w-full min-w-0 overflow-hidden">
-              <CardContent className="flex min-w-0 flex-col gap-3 p-3">
-                <div className="flex w-full min-w-0 gap-3">
+            <Card key={file.Key} className="group w-full min-w-0 overflow-hidden h-full">
+              <CardContent className="flex min-w-0 flex-col gap-3 p-3 h-full">
+                <div className="flex w-full min-w-0 gap-3 flex-1">
                   {isImage ? (
                     <div className="h-10 w-10 shrink-0 rounded-md overflow-hidden bg-muted">
                       <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
                     </div>
                   ) : cat === "video" ? (
-                    // Миниатюра первого кадра видео (16:9, чуть крупнее иконки)
-                    <div className="h-10 w-[72px] shrink-0 rounded-md overflow-hidden bg-muted">
-                      <video
-                        src={url}
-                        preload="metadata"
-                        className="h-full w-full object-cover"
-                        muted
-                        onLoadedMetadata={(e) => { e.currentTarget.currentTime = 0.1; }}
-                      />
-                    </div>
+                    // Вертикальный canvas-thumbnail (portrait 40x56px, Safari-совместимый)
+                    <VideoThumbnail src={url} className="h-14 w-10 shrink-0 rounded-md" />
                   ) : (
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-muted">
                       {getIcon(file.Key)}
@@ -798,19 +807,6 @@ export function AssetManager({
                     type="button"
                     variant="ghost"
                     size="icon"
-                    onClick={() => copyUrl(file.Key)}
-                    aria-label="Скопировать URL"
-                  >
-                    {copied === file.Key ? (
-                      <Check className="h-4 w-4 text-green-500" />
-                    ) : (
-                      <Copy className="h-4 w-4" />
-                    )}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
                     onClick={() => setDeleteKey(file.Key)}
                     disabled={deleting === file.Key}
                     aria-label="Удалить"
@@ -828,6 +824,7 @@ export function AssetManager({
             </Card>
           );
         })}
+        </div>
 
         {hasMoreFiles && (
           <div className="pt-2 flex justify-center">
