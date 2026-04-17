@@ -35,7 +35,7 @@ export function Header({ onMenuToggle }: { onMenuToggle?: () => void }) {
         </div>
       )}
 
-      <div className="flex items-center gap-2 shrink-0">
+      <div className="flex items-center gap-2 shrink-0 ml-auto">
         <ThemeToggle />
         {session?.user ? (
           <div className="relative">

@@ -12,12 +12,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Users, UserCheck, Loader2, CheckCircle2, Circle } from "lucide-react";
+import { Users, UserCheck, Loader2, CheckCircle2, Circle, Trash2 } from "lucide-react";
 import {
   getProductEnrollmentsForProcedures,
   getAllProcedureTypes,
   assignProcedureBulk,
   createProcedureType,
+  deleteUserProcedure,
 } from "./marathon-actions";
 
 // === Types ===
@@ -61,6 +62,7 @@ export function BulkProceduresManager({ productId }: Props) {
   const [newTypeTitle, setNewTypeTitle] = useState("");
 
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -140,6 +142,21 @@ export function BulkProceduresManager({ productId }: Props) {
       router.refresh();
     }
     setSaving(false);
+  }
+
+  // Удаление конкретной процедуры у студента
+  async function handleDeleteProcedure(procedureId: string) {
+    if (deletingId) return;
+    setDeletingId(procedureId);
+    setError("");
+    const result = await deleteUserProcedure(procedureId);
+    if (result.error) {
+      setError(result.error);
+    } else {
+      setRefreshKey((k) => k + 1);
+      router.refresh();
+    }
+    setDeletingId(null);
   }
 
   // Создание нового типа
@@ -327,16 +344,33 @@ export function BulkProceduresManager({ productId }: Props) {
                       {enrollment.procedureCount > 0 && (
                         <div className="mt-1 flex flex-wrap gap-1">
                           {enrollment.procedures.map((p) => (
-                            <Badge
+                            <span
                               key={p.id}
-                              variant={p.completedAt ? "success" : "warning"}
-                              className="text-[10px]"
+                              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                                p.completedAt
+                                  ? "border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950 dark:text-green-300"
+                                  : "border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-800 dark:bg-yellow-950 dark:text-yellow-300"
+                              }`}
                             >
                               {p.completedAt
-                                ? <CheckCircle2 className="mr-1 h-2.5 w-2.5" />
-                                : <Circle className="mr-1 h-2.5 w-2.5" />}
+                                ? <CheckCircle2 className="h-2.5 w-2.5" />
+                                : <Circle className="h-2.5 w-2.5" />}
                               {p.procedureType.title}
-                            </Badge>
+                              <button
+                                type="button"
+                                disabled={deletingId === p.id}
+                                onClick={(e: React.MouseEvent) => {
+                                  e.stopPropagation();
+                                  void handleDeleteProcedure(p.id);
+                                }}
+                                className="ml-0.5 rounded-full opacity-60 hover:opacity-100 disabled:opacity-30"
+                                title="Удалить процедуру"
+                              >
+                                {deletingId === p.id
+                                  ? <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                                  : <Trash2 className="h-2.5 w-2.5" />}
+                              </button>
+                            </span>
                           ))}
                         </div>
                       )}
