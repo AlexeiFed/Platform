@@ -223,9 +223,9 @@ export function RichTextEditor({
           </div>
           {/* Сетка эмодзи */}
           <div className="flex max-h-24 flex-wrap gap-1 overflow-y-auto">
-            {EMOJI_CATEGORIES[emojiCategory]?.map((emoji) => (
+            {EMOJI_CATEGORIES[emojiCategory]?.map((emoji, idx) => (
               <button
-                key={emoji}
+                key={`${emojiCategory}-${idx}`}
                 type="button"
                 title={emoji}
                 onClick={() => {
