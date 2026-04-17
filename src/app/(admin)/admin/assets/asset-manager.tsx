@@ -743,6 +743,16 @@ export function AssetManager({
                     <div className="h-10 w-10 shrink-0 rounded-md overflow-hidden bg-muted">
                       <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
                     </div>
+                  ) : cat === "video" ? (
+                    // Миниатюра первого кадра видео (16:9, чуть крупнее иконки)
+                    <div className="h-10 w-[72px] shrink-0 rounded-md overflow-hidden bg-muted">
+                      <video
+                        src={url}
+                        preload="metadata"
+                        className="h-full w-full object-cover"
+                        muted
+                      />
+                    </div>
                   ) : (
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-muted">
                       {getIcon(file.Key)}
