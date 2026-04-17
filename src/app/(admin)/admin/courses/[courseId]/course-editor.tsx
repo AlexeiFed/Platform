@@ -1068,6 +1068,7 @@ export function CourseEditor({
   }
 
   function openEdit(lesson: SerializedLesson) {
+    returnToScrollYRef.current = window.scrollY;
     setEditingLesson(lesson);
     setShowNewLesson(false);
 

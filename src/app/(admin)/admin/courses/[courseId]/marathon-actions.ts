@@ -582,7 +582,6 @@ const bulkAssignSchema = z.object({
   enrollmentIds: z.array(z.string().min(1)).min(1, "Выберите хотя бы одного студента"),
   procedureTypeId: z.string().min(1),
   scheduledAt: z.string().optional(),
-  completedAt: z.string().optional(),
   notes: z.string().trim().optional(),
 });
 
@@ -624,7 +623,7 @@ export async function assignProcedureBulk(input: z.infer<typeof bulkAssignSchema
             enrollmentId,
             procedureTypeId: data.procedureTypeId,
             scheduledAt: parseOptionalDate(data.scheduledAt),
-            completedAt: parseOptionalDate(data.completedAt),
+            completedAt: null,
             notes: data.notes || null,
             position: (maxPos._max.position ?? -1) + 1,
           },

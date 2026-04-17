@@ -55,7 +55,6 @@ export function BulkProceduresManager({ productId }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [procedureTypeId, setProcedureTypeId] = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
-  const [completedAt, setCompletedAt] = useState("");
   const [notes, setNotes] = useState("");
 
   // Новый тип процедуры
@@ -127,7 +126,6 @@ export function BulkProceduresManager({ productId }: Props) {
       enrollmentIds: Array.from(selectedIds),
       procedureTypeId,
       scheduledAt: scheduledAt || undefined,
-      completedAt: completedAt || undefined,
       notes: notes || undefined,
     });
 
@@ -136,7 +134,6 @@ export function BulkProceduresManager({ productId }: Props) {
     } else if (result.success && result.data) {
       setSuccess(`Процедура назначена ${result.data.count} участникам`);
       setScheduledAt("");
-      setCompletedAt("");
       setNotes("");
       setSelectedIds(new Set());
       setRefreshKey((k) => k + 1);
@@ -239,14 +236,6 @@ export function BulkProceduresManager({ productId }: Props) {
                 type="date"
                 value={scheduledAt}
                 onChange={(e) => setScheduledAt(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Выполнено</label>
-              <Input
-                type="date"
-                value={completedAt}
-                onChange={(e) => setCompletedAt(e.target.value)}
               />
             </div>
             <div className="space-y-2">

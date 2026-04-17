@@ -18,7 +18,7 @@ export function Header({ onMenuToggle }: { onMenuToggle?: () => void }) {
 
   return (
     <header className={`${layout.header.height} border-b bg-card/80 backdrop-blur-sm sticky top-0 z-40 flex items-center px-4 sm:px-6`}>
-      <div className="flex items-center gap-3 flex-1 min-w-0">
+      <div className="flex items-center gap-3 flex-1 min-w-0 md:hidden">
         <Button variant="ghost" size="icon" className="md:hidden" onClick={onMenuToggle} aria-label="Меню">
           <Menu className="h-5 w-5" />
         </Button>
