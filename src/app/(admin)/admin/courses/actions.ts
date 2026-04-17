@@ -143,6 +143,7 @@ export async function updateProduct(id: string, input: z.infer<typeof productSch
     revalidatePath("/admin/courses");
     revalidatePath(`/admin/courses/${id}`);
     revalidatePath("/catalog");
+    revalidatePath("/learn", "layout");
     return { success: true };
   } catch (error) {
     console.error("[updateProduct]", error);
@@ -376,5 +377,126 @@ export async function reorderLessons(productId: string, lessonIds: string[]) {
     return { success: true };
   } catch {
     return { error: "Произошла ошибка" };
+  }
+}
+
+// === Дублирование курса/марафона ===
+
+export async function duplicateProduct(id: string): Promise<{ success: true; newId: string } | { error: string }> {
+  const session = await auth();
+  if (!session || session.user.role !== "ADMIN") return { error: "Нет доступа" };
+
+  try {
+    const original = await prisma.product.findUnique({
+      where: { id },
+      include: {
+        lessons: {
+          include: { attachments: { orderBy: { createdAt: "asc" } } },
+          orderBy: { order: "asc" },
+        },
+        marathonEvents: { orderBy: [{ dayOffset: "asc" }, { position: "asc" }] },
+        tariffs: { where: { deletedAt: null }, orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
+      },
+    });
+
+    if (!original) return { error: "Продукт не найден" };
+
+    const newSlug = `${original.slug}-copy-${Date.now()}`;
+
+    const newProduct = await prisma.$transaction(async (tx) => {
+      // Создаём копию продукта
+      const p = await tx.product.create({
+        data: {
+          type: original.type,
+          title: `${original.title} (Копия)`,
+          slug: newSlug,
+          description: original.description,
+          rules: original.rules,
+          coverUrl: original.coverUrl,
+          price: original.price,
+          currency: original.currency,
+          paymentFormUrl: original.paymentFormUrl,
+          durationDays: original.durationDays,
+          landingBlocks: original.landingBlocks ?? undefined,
+          enabledCriteria: original.enabledCriteria,
+          published: false,
+          startDate: null,
+        },
+      });
+
+      // Копируем уроки с вложениями
+      for (const lesson of original.lessons) {
+        const newLesson = await tx.lesson.create({
+          data: {
+            productId: p.id,
+            title: lesson.title,
+            slug: lesson.slug,
+            order: lesson.order,
+            content: lesson.content,
+            videoUrl: lesson.videoUrl,
+            blocks: lesson.blocks ?? undefined,
+            homeworkEnabled: lesson.homeworkEnabled,
+            homeworkQuestions: lesson.homeworkQuestions ?? undefined,
+            unlockRule: lesson.unlockRule,
+            unlockDate: lesson.unlockDate,
+            unlockDay: lesson.unlockDay,
+            published: lesson.published,
+          },
+        });
+        for (const att of lesson.attachments) {
+          await tx.lessonAttachment.create({
+            data: {
+              lessonId: newLesson.id,
+              name: att.name,
+              url: att.url,
+              type: att.type,
+              size: att.size,
+            },
+          });
+        }
+      }
+
+      // Копируем события марафона
+      for (const event of original.marathonEvents) {
+        await tx.marathonEvent.create({
+          data: {
+            productId: p.id,
+            title: event.title,
+            description: event.description,
+            type: event.type,
+            track: event.track,
+            dayOffset: event.dayOffset,
+            weekNumber: event.weekNumber,
+            position: event.position,
+            lessonId: event.lessonId,
+            blocks: event.blocks ?? undefined,
+            published: event.published,
+          },
+        });
+      }
+
+      // Копируем тарифы
+      for (const tariff of original.tariffs) {
+        await tx.productTariff.create({
+          data: {
+            productId: p.id,
+            name: tariff.name,
+            price: tariff.price,
+            currency: tariff.currency,
+            sortOrder: tariff.sortOrder,
+            published: tariff.published,
+            criteria: tariff.criteria,
+          },
+        });
+      }
+
+      return p;
+    });
+
+    revalidatePath("/admin/courses");
+    return { success: true, newId: newProduct.id };
+  } catch (error) {
+    console.error("[duplicateProduct]", error);
+    return { error: "Ошибка при копировании" };
   }
 }

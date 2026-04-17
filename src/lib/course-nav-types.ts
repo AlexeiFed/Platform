@@ -44,6 +44,11 @@ export type CourseNavPayload = {
   curatorFeedback: boolean;
   /** Правила курса/марафона в markdown. Если задано — показывать раздел «Правила» в сайдбаре. */
   rules?: string | null;
+  /**
+   * Доступ к марафону истёк: startDate + durationDays + 30 дней прошло.
+   * Layout редиректит студента на /catalog.
+   */
+  accessExpired?: boolean;
   lessons?: CourseNavLesson[];
   procedures?: CourseNavProcedure[];
   marathonWeeks?: CourseNavMarathonWeek[];

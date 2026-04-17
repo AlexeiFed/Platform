@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { tokens } from "@/lib/design-tokens";
 import { Plus, Pencil } from "lucide-react";
 import { lessonsLabel } from "@/lib/utils";
+import { DuplicateProductButton } from "./duplicate-product-button";
 
 export default async function AdminCoursesPage({
   searchParams,
@@ -74,11 +75,14 @@ export default async function AdminCoursesPage({
                   </div>
                 </div>
               </div>
-              <Button variant="ghost" size="icon" asChild>
-                <Link href={`/admin/courses/${product.id}`}>
-                  <Pencil className="h-4 w-4" />
-                </Link>
-              </Button>
+              <div className="flex items-center gap-1">
+                <DuplicateProductButton productId={product.id} />
+                <Button variant="ghost" size="icon" asChild>
+                  <Link href={`/admin/courses/${product.id}`}>
+                    <Pencil className="h-4 w-4" />
+                  </Link>
+                </Button>
+              </div>
             </CardContent>
           </Card>
         ))}

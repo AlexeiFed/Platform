@@ -15,6 +15,9 @@ export default async function LearnCourseLayout({ children, params }: Props) {
 
   const payload = await getCourseNavPayload(courseSlug, session.user.id);
 
+  // Марафон закрыт через 30 дней после окончания
+  if (payload?.accessExpired) redirect("/catalog");
+
   return (
     <>
       {payload ? <CourseNavSync payload={payload} /> : null}

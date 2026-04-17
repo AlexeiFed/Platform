@@ -180,12 +180,24 @@ export async function getCourseNavPayload(
 
   const criteriaSet = effectiveCriteriaSet(enrollment);
 
+  // Марафон: 30 дней после окончания — доступ истекает
+  const accessExpired =
+    product.type === "MARATHON" &&
+    !!product.startDate &&
+    !!product.durationDays &&
+    (() => {
+      const expiry = new Date(product.startDate!);
+      expiry.setDate(expiry.getDate() + product.durationDays! + 30);
+      return new Date() > expiry;
+    })();
+
   const base: CourseNavPayload = {
     courseSlug: product.slug,
     title: product.title,
     productType: product.type,
     curatorFeedback: enrollmentHasCriterion(enrollment, "CURATOR_FEEDBACK"),
     rules: product.rules ?? null,
+    accessExpired,
   };
 
   if (product.type === "COURSE") {

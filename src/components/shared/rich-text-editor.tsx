@@ -114,11 +114,11 @@ export function RichTextEditor({
     [value, onChange]
   );
 
-  // Tab = красная строка (4 пробела)
+  // Tab = красная строка (4 NBSP — не влияет на markdown-разметку как code block)
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Tab") {
       e.preventDefault();
-      insertAtCursor("    ");
+      insertAtCursor("\u00A0\u00A0\u00A0\u00A0");
     }
   }
 
@@ -183,7 +183,7 @@ export function RichTextEditor({
           size="icon"
           className="h-7 w-7"
           title="Красная строка / отступ (также клавиша Tab)"
-          onClick={() => insertAtCursor("    ")}
+          onClick={() => insertAtCursor("\u00A0\u00A0\u00A0\u00A0")}
         >
           <Indent className="h-3.5 w-3.5" />
         </Button>
