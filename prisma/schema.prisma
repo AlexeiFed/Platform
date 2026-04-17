@@ -279,11 +279,13 @@ model EnrollmentTariffHistory {
 }
 
 model CuratorFeedbackMessage {
-  id           String   @id @default(uuid())
+  id           String    @id @default(uuid())
   enrollmentId String
   userId       String
-  content      String   @db.Text
-  createdAt    DateTime @default(now())
+  content      String    @db.Text
+  createdAt    DateTime  @default(now())
+  /// null = не прочитано получателем. Для студенческих сообщений — когда куратор/админ открыл тред.
+  readAt       DateTime?
 
   enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
   user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)

@@ -388,6 +388,19 @@ export async function createProcedureType(input: z.infer<typeof procedureTypeSch
   }
 }
 
+export async function deleteProcedureType(id: string) {
+  const session = await assertAdminOrCurator();
+  if (!session) return { error: "Нет доступа" };
+
+  try {
+    await prisma.procedureType.delete({ where: { id } });
+    revalidatePath("/admin/users");
+    return { success: true };
+  } catch {
+    return { error: "Нельзя удалить — тип используется в процедурах студентов" };
+  }
+}
+
 export async function assignProcedureToEnrollment(
   input: z.infer<typeof userProcedureSchema>
 ) {

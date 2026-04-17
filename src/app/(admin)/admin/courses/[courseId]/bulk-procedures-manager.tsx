@@ -18,6 +18,7 @@ import {
   getAllProcedureTypes,
   assignProcedureBulk,
   createProcedureType,
+  deleteProcedureType,
   deleteUserProcedure,
 } from "./marathon-actions";
 
@@ -62,6 +63,7 @@ export function BulkProceduresManager({ productId }: Props) {
   const [newTypeTitle, setNewTypeTitle] = useState("");
 
   const [saving, setSaving] = useState(false);
+  const [deletingTypeId, setDeletingTypeId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -144,6 +146,21 @@ export function BulkProceduresManager({ productId }: Props) {
     setSaving(false);
   }
 
+  // Удаление типа процедуры
+  async function handleDeleteType(typeId: string) {
+    if (deletingTypeId) return;
+    setDeletingTypeId(typeId);
+    setError("");
+    const result = await deleteProcedureType(typeId);
+    if (result.error) {
+      setError(result.error);
+    } else {
+      setProcedureTypes((prev) => prev.filter((t) => t.id !== typeId));
+      if (procedureTypeId === typeId) setProcedureTypeId("");
+    }
+    setDeletingTypeId(null);
+  }
+
   // Удаление конкретной процедуры у студента
   async function handleDeleteProcedure(procedureId: string) {
     if (deletingId) return;
@@ -201,7 +218,20 @@ export function BulkProceduresManager({ productId }: Props) {
               <span className="text-sm text-muted-foreground">Типы ещё не созданы.</span>
             ) : (
               procedureTypes.map((t) => (
-                <Badge key={t.id} variant="outline">{t.title}</Badge>
+                <span key={t.id} className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-xs font-medium">
+                  {t.title}
+                  <button
+                    type="button"
+                    disabled={deletingTypeId === t.id}
+                    onClick={() => void handleDeleteType(t.id)}
+                    className="ml-0.5 rounded-full opacity-40 hover:opacity-100 disabled:opacity-20"
+                    title="Удалить тип"
+                  >
+                    {deletingTypeId === t.id
+                      ? <Loader2 className="h-3 w-3 animate-spin" />
+                      : <Trash2 className="h-3 w-3" />}
+                  </button>
+                </span>
               ))
             )}
           </div>

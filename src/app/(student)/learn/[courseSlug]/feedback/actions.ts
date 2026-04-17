@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { notifyAdminsOnStudentMessage } from "@/app/(admin)/admin/feedback/actions";
 import { enrollmentHasCriterion, loadEnrollmentForCriteria } from "@/lib/enrollment-criteria";
 
 const messageSchema = z.object({
@@ -19,7 +20,11 @@ export async function submitCuratorFeedbackMessage(input: z.infer<typeof message
     const data = messageSchema.parse(input);
     const enrollment = await prisma.enrollment.findUnique({
       where: { id: data.enrollmentId, userId: session.user.id },
-      select: { id: true, productId: true },
+      select: {
+        id: true,
+        productId: true,
+        product: { select: { slug: true, title: true } },
+      },
     });
     if (!enrollment) return { error: "Запись не найдена" };
 
@@ -36,13 +41,16 @@ export async function submitCuratorFeedbackMessage(input: z.infer<typeof message
       },
     });
 
-    const product = await prisma.product.findUnique({
-      where: { id: enrollment.productId },
-      select: { slug: true },
+    revalidatePath(`/learn/${enrollment.product.slug}/feedback`);
+
+    // Уведомляем кураторов/админов (email + Telegram) — не блокируем ответ
+    void notifyAdminsOnStudentMessage({
+      studentName: session.user.name ?? session.user.email ?? "Студент",
+      productTitle: enrollment.product.title,
+      messageContent: data.content,
+      enrollmentId: enrollment.id,
     });
-    if (product) {
-      revalidatePath(`/learn/${product.slug}/feedback`);
-    }
+
     return { success: true };
   } catch (e) {
     if (e instanceof z.ZodError) return { error: "Некорректные данные" };
