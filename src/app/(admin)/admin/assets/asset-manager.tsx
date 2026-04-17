@@ -751,6 +751,7 @@ export function AssetManager({
                         preload="metadata"
                         className="h-full w-full object-cover"
                         muted
+                        onLoadedMetadata={(e) => { e.currentTarget.currentTime = 0.1; }}
                       />
                     </div>
                   ) : (

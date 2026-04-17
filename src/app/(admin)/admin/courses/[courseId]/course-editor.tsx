@@ -447,19 +447,20 @@ function MediaBlockEditor({
             </div>
           )}
           {block.type === "video" && (
-            <div className="space-y-2">
-              {/* Миниатюра первого кадра видео */}
-              <div className="rounded-lg overflow-hidden border bg-muted max-h-32">
+            // Thumbnail слева (вертикальный, не на всю ширину) + имя файла справа
+            <div className="flex items-start gap-3 p-2 rounded-lg bg-muted/50 border">
+              <div className="h-20 w-14 shrink-0 rounded-md overflow-hidden border bg-muted">
                 <video
                   src={block.content}
                   preload="metadata"
-                  className="w-full max-h-32 object-contain"
+                  className="h-full w-full object-cover"
                   muted
+                  onLoadedMetadata={(e) => { e.currentTarget.currentTime = 0.1; }}
                 />
               </div>
-              <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 border">
+              <div className="min-w-0 flex-1 flex items-center gap-2 pt-1">
                 <Film className="h-4 w-4 text-primary shrink-0" />
-                <span className="text-xs truncate flex-1">{block.content.split("/").pop()}</span>
+                <span className="text-xs break-all">{block.content.split("/").pop()}</span>
               </div>
             </div>
           )}
