@@ -13,6 +13,8 @@ type ContentBlock = {
   id: string;
   type: "text" | "video" | "image";
   content: string;
+  /** Ширина блока (только для image): full = полная, half = ½, third = ⅓ */
+  size?: "full" | "half" | "third";
 };
 
 type Props = {
@@ -125,29 +127,37 @@ export default async function LessonPage({ params, searchParams }: Props) {
 
       {/* === BLOCK-BASED CONTENT === */}
       {hasBlocks ? (
-        <div className="space-y-6">
+        // flex-wrap: half/third изображения встают в ряд на широких экранах (галерея)
+        <div className="flex flex-wrap gap-4">
           {blocks.map((block) => {
             if (block.type === "video" && block.content) {
               return (
-                <div key={block.id} className="aspect-video w-full rounded-xl overflow-hidden bg-black">
+                <div key={block.id} className="w-full aspect-video rounded-xl overflow-hidden bg-black">
                   <video src={block.content} controls className="h-full w-full" controlsList="nodownload" />
                 </div>
               );
             }
             if (block.type === "image" && block.content) {
+              const imgSize = block.size ?? "full";
+              const sizeClass =
+                imgSize === "half" ? "w-full md:w-[calc(50%-8px)]" :
+                imgSize === "third" ? "w-full md:w-[calc(33.333%-11px)]" :
+                "w-full";
               return (
-                <div key={block.id} className="rounded-xl overflow-hidden border bg-muted">
+                <div key={block.id} className={`${sizeClass} rounded-xl overflow-hidden border bg-muted`}>
                   <img src={block.content} alt="" className="w-full h-auto" loading="lazy" />
                 </div>
               );
             }
             if (block.type === "text" && block.content) {
               return (
-                <Card key={block.id}>
-                  <CardContent className="prose prose-neutral dark:prose-invert max-w-none p-6">
-                    <div dangerouslySetInnerHTML={{ __html: block.content }} />
-                  </CardContent>
-                </Card>
+                <div key={block.id} className="w-full">
+                  <Card>
+                    <CardContent className="prose prose-neutral dark:prose-invert max-w-none p-6">
+                      <div dangerouslySetInnerHTML={{ __html: block.content }} />
+                    </CardContent>
+                  </Card>
+                </div>
               );
             }
             return null;

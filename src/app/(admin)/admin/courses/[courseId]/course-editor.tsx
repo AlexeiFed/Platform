@@ -58,6 +58,8 @@ export type ContentBlock = {
   id: string;
   type: "text" | "video" | "image";
   content: string;
+  /** Только для type=image: ширина блока на странице студента */
+  size?: "full" | "half" | "third";
 };
 
 type SerializedProduct = {
@@ -372,7 +374,7 @@ function MediaBlockEditor({
   onRemove,
 }: {
   block: ContentBlock;
-  onUpdate: (content: string) => void;
+  onUpdate: (updates: Partial<Omit<ContentBlock, "id">>) => void;
   onRemove: () => void;
 }) {
   const [showPicker, setShowPicker] = useState(false);
@@ -393,7 +395,7 @@ function MediaBlockEditor({
       if (!presignRes.ok) { setUploading(false); return; }
       const { url, key } = await presignRes.json();
       await fetch(url, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
-      onUpdate(getPublicUrl(key));
+      onUpdate({ content: getPublicUrl(key) });
     } catch { /* silent */ }
     setUploading(false);
     e.target.value = "";
@@ -401,7 +403,7 @@ function MediaBlockEditor({
 
   function applyUrl() {
     const val = urlRef.current?.value?.trim();
-    if (val) onUpdate(val);
+    if (val) onUpdate({ content: val });
   }
 
   const typeLabel = block.type === "video" ? "Видео" : "Изображение";
@@ -422,17 +424,46 @@ function MediaBlockEditor({
       {block.content ? (
         <div className="space-y-2">
           {block.type === "image" && (
-            <div className="rounded-lg overflow-hidden border bg-muted max-h-48">
-              <img src={block.content} alt="" className="w-full h-auto max-h-48 object-contain" />
+            <div className="space-y-2">
+              <div className="rounded-lg overflow-hidden border bg-muted max-h-48">
+                <img src={block.content} alt="" className="w-full h-auto max-h-48 object-contain" />
+              </div>
+              {/* Выбор размера отображения у студента */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground shrink-0">Размер:</span>
+                {(["full", "half", "third"] as const).map((s) => (
+                  <Button
+                    key={s}
+                    type="button"
+                    variant={(block.size ?? "full") === s ? "default" : "outline"}
+                    size="sm"
+                    className="h-6 px-2 text-xs"
+                    onClick={() => onUpdate({ size: s })}
+                  >
+                    {s === "full" ? "Полная" : s === "half" ? "½ ширины" : "⅓ ширины"}
+                  </Button>
+                ))}
+              </div>
             </div>
           )}
           {block.type === "video" && (
-            <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 border">
-              <Film className="h-4 w-4 text-primary shrink-0" />
-              <span className="text-xs truncate flex-1">{block.content.split("/").pop()}</span>
+            <div className="space-y-2">
+              {/* Миниатюра первого кадра видео */}
+              <div className="rounded-lg overflow-hidden border bg-muted max-h-32">
+                <video
+                  src={block.content}
+                  preload="metadata"
+                  className="w-full max-h-32 object-contain"
+                  muted
+                />
+              </div>
+              <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 border">
+                <Film className="h-4 w-4 text-primary shrink-0" />
+                <span className="text-xs truncate flex-1">{block.content.split("/").pop()}</span>
+              </div>
             </div>
           )}
-          <Button type="button" variant="outline" size="sm" onClick={() => onUpdate("")}>
+          <Button type="button" variant="outline" size="sm" onClick={() => onUpdate({ content: "" })}>
             <X className="h-3 w-3 mr-1" /> Убрать
           </Button>
         </div>
@@ -478,7 +509,7 @@ function MediaBlockEditor({
               </CardHeader>
               <CardContent className="min-w-0">
                 <AssetManager
-                  onSelect={(url) => { onUpdate(url); setShowPicker(false); }}
+                  onSelect={(url) => { onUpdate({ content: url }); setShowPicker(false); }}
                   defaultFilter={block.type === "video" ? "video" : "image"}
                 />
               </CardContent>
@@ -496,7 +527,7 @@ function SortableBlock({
   block, onUpdate, onRemove,
 }: {
   block: ContentBlock;
-  onUpdate: (content: string) => void;
+  onUpdate: (updates: Partial<Omit<ContentBlock, "id">>) => void;
   onRemove: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: block.id });
@@ -521,7 +552,7 @@ function SortableBlock({
               </div>
               <textarea
                 value={block.content}
-                onChange={(e) => onUpdate(e.target.value)}
+                onChange={(e) => onUpdate({ content: e.target.value })}
                 placeholder="Текст (HTML/Markdown)..."
                 className="w-full min-h-[120px] rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
@@ -944,8 +975,8 @@ export function CourseEditor({
     setBlocks((prev) => [...prev, { id: uid(), type, content: "" }]);
   }
 
-  function updateBlock(id: string, content: string) {
-    setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, content } : b)));
+  function updateBlock(id: string, updates: Partial<Omit<ContentBlock, "id">>) {
+    setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, ...updates } : b)));
   }
 
   function removeBlock(id: string) {
@@ -1556,7 +1587,7 @@ export function CourseEditor({
                           <SortableBlock
                             key={block.id}
                             block={block}
-                            onUpdate={(c) => updateBlock(block.id, c)}
+                            onUpdate={(updates) => updateBlock(block.id, updates)}
                             onRemove={() => removeBlock(block.id)}
                           />
                         ))}

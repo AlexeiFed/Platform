@@ -16,6 +16,8 @@ type ContentBlock = {
   id: string;
   type: "text" | "video" | "image";
   content: string;
+  /** Ширина блока (только для image): full = полная, half = ½, third = ⅓ */
+  size?: "full" | "half" | "third";
 };
 
 type Props = {
@@ -184,19 +186,25 @@ export default async function MarathonEventPage({ params }: Props) {
           <CardHeader>
             <CardTitle className="text-base">Контент события</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          {/* flex-wrap: half/third изображения встают в ряд на широких экранах */}
+          <CardContent className="flex flex-wrap gap-4">
             {blocks.map((block) => {
               if (block.type === "video" && block.content) {
                 return (
-                  <div key={block.id} className="aspect-video w-full overflow-hidden rounded-xl bg-black">
+                  <div key={block.id} className="w-full aspect-video overflow-hidden rounded-xl bg-black">
                     <video src={block.content} controls className="h-full w-full" controlsList="nodownload" />
                   </div>
                 );
               }
 
               if (block.type === "image" && block.content) {
+                const imgSize = block.size ?? "full";
+                const sizeClass =
+                  imgSize === "half" ? "w-full md:w-[calc(50%-8px)]" :
+                  imgSize === "third" ? "w-full md:w-[calc(33.333%-11px)]" :
+                  "w-full";
                 return (
-                  <div key={block.id} className="overflow-hidden rounded-xl border bg-muted">
+                  <div key={block.id} className={`${sizeClass} overflow-hidden rounded-xl border bg-muted`}>
                     <img src={block.content} alt="" className="h-auto w-full" loading="lazy" />
                   </div>
                 );
@@ -204,11 +212,13 @@ export default async function MarathonEventPage({ params }: Props) {
 
               if (block.type === "text" && block.content) {
                 return (
-                  <Card key={block.id}>
-                    <CardContent className="prose prose-neutral max-w-none p-6 dark:prose-invert">
-                      <div dangerouslySetInnerHTML={{ __html: block.content }} />
-                    </CardContent>
-                  </Card>
+                  <div key={block.id} className="w-full">
+                    <Card>
+                      <CardContent className="prose prose-neutral max-w-none p-6 dark:prose-invert">
+                        <div dangerouslySetInnerHTML={{ __html: block.content }} />
+                      </CardContent>
+                    </Card>
+                  </div>
                 );
               }
 
