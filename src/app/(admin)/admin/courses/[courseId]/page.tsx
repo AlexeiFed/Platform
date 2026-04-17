@@ -2,8 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import { tokens } from "@/lib/design-tokens";
 import { Badge } from "@/components/ui/badge";
-import { CourseEditor } from "./course-editor";
-import { TariffsAndCriteriaEditor } from "./tariffs-and-criteria-editor";
+import { CourseEditorShell } from "./course-editor-shell";
 import type { ContentBlock } from "./course-editor";
 import type { LandingBlock } from "@/types/landing";
 
@@ -106,18 +105,11 @@ export default async function CourseEditorPage({ params }: Props) {
         </div>
       </div>
 
-      <div id="admin-section-criteria">
-        <TariffsAndCriteriaEditor
-          productId={product.id}
-          initialEnabled={productData.enabledCriteria}
-          tariffs={serializedTariffs}
-        />
-      </div>
-
-      <CourseEditor
+      <CourseEditorShell
         product={serializedProduct}
         lessons={serializedLessons}
         marathonEvents={serializedMarathonEvents}
+        tariffs={serializedTariffs}
       />
     </div>
   );

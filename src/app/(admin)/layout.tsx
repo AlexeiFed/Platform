@@ -2,12 +2,14 @@
 
 import { Sidebar } from "@/components/shared/sidebar";
 import { Header } from "@/components/shared/header";
+import { HeaderSlotProvider } from "@/lib/header-slot";
 import { useState } from "react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
+    <HeaderSlotProvider>
     <div className="flex min-h-screen">
       <Sidebar variant="admin" />
       {mobileMenuOpen && (
@@ -23,5 +25,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <main className="flex-1 p-4 sm:p-6 lg:p-8">{children}</main>
       </div>
     </div>
+    </HeaderSlotProvider>
   );
 }
