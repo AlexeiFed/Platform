@@ -44,6 +44,7 @@ export default async function CourseEditorPage({ params }: Props) {
     title: productData.title,
     slug: productData.slug,
     description: productData.description,
+    rules: productData.rules ?? null,
     coverUrl: productData.coverUrl,
     price: productData.price ? Number(productData.price) : null,
     currency: productData.currency,
@@ -105,11 +106,13 @@ export default async function CourseEditorPage({ params }: Props) {
         </div>
       </div>
 
-      <TariffsAndCriteriaEditor
-        productId={product.id}
-        initialEnabled={productData.enabledCriteria}
-        tariffs={serializedTariffs}
-      />
+      <div id="admin-section-criteria">
+        <TariffsAndCriteriaEditor
+          productId={product.id}
+          initialEnabled={productData.enabledCriteria}
+          tariffs={serializedTariffs}
+        />
+      </div>
 
       <CourseEditor
         product={serializedProduct}

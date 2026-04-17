@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { CheckCircle2, ChevronRight, FileText, Lock, MessageCircle } from "lucide-react";
+import { CheckCircle2, ChevronRight, FileText, Lock, MessageCircle, ScrollText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { tokens } from "@/lib/design-tokens";
 import { useCourseNavPayload } from "@/components/shared/course-nav-context";
@@ -122,6 +122,20 @@ export function CourseNavSidebarSection({ onNavigate }: { onNavigate?: () => voi
         <span className="min-w-0 flex-1">Описание и прогресс</span>
         <ChevronRight className="h-4 w-4 shrink-0 opacity-50" aria-hidden />
       </Link>
+
+      {/* Правила — показываем только если они заданы администратором */}
+      {payload.rules ? (
+        <Link
+          href={`${base}/rules`}
+          onClick={() => onNavigate?.()}
+          className={navItemClass(pathname === `${base}/rules`)}
+          aria-current={pathname === `${base}/rules` ? "page" : undefined}
+        >
+          <ScrollText className="h-4 w-4 shrink-0" />
+          <span className="min-w-0 flex-1">Правила</span>
+          <ChevronRight className="h-4 w-4 shrink-0 opacity-50" aria-hidden />
+        </Link>
+      ) : null}
 
       {payload.productType === "MARATHON" && scopeEventId ? (
         <Link

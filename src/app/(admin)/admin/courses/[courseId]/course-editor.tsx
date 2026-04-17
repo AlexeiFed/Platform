@@ -48,6 +48,7 @@ import {
 } from "./marathon-actions";
 import { AssetManager } from "../../assets/asset-manager";
 import { LandingEditor } from "./landing-editor";
+import { RichTextEditor } from "@/components/shared/rich-text-editor";
 import type { LandingBlock } from "@/types/landing";
 import type { MarathonEventType, MarathonTrack, ProductCriterion, ProductType, UnlockRule } from "@prisma/client";
 
@@ -65,6 +66,7 @@ type SerializedProduct = {
   title: string;
   slug: string;
   description: string | null;
+  rules: string | null;
   coverUrl: string | null;
   price: number | null;
   currency: string;
@@ -119,6 +121,7 @@ type SerializedMarathonEvent = {
 type ProductForm = {
   title: string;
   description: string;
+  rules: string;
   coverUrl: string;
   price: string;
   paymentFormUrl: string;
@@ -207,11 +210,11 @@ function MarathonEventFields({
 
       <div className="space-y-2">
         <label className={tokens.typography.label}>Описание</label>
-        <textarea
+        <RichTextEditor
           value={form.description}
-          onChange={(e) => onPatch({ description: e.target.value })}
+          onChange={(val) => onPatch({ description: val })}
           placeholder="Короткое описание события, что нужно сделать или посмотреть"
-          className="flex min-h-[100px] w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          minHeight="100px"
         />
       </div>
 
@@ -570,6 +573,7 @@ export function CourseEditor({
   const [productForm, setProductForm] = useState<ProductForm>({
     title: product.title,
     description: product.description ?? "",
+    rules: product.rules ?? "",
     coverUrl: product.coverUrl ?? "",
     price: product.price ? String(product.price) : "",
     paymentFormUrl: product.paymentFormUrl ?? "",
@@ -593,13 +597,14 @@ export function CourseEditor({
     setProductForm({
       title: product.title,
       description: product.description ?? "",
+      rules: product.rules ?? "",
       coverUrl: product.coverUrl ?? "",
       price: product.price ? String(product.price) : "",
       paymentFormUrl: product.paymentFormUrl ?? "",
       startDate: toDateInputValue(product.startDate),
       durationDays: product.durationDays ? String(product.durationDays) : "",
     });
-  }, [product.id, product.title, product.description, product.coverUrl, product.price, product.paymentFormUrl, product.startDate, product.durationDays]);
+  }, [product.id, product.title, product.description, product.rules, product.coverUrl, product.price, product.paymentFormUrl, product.startDate, product.durationDays]);
 
   const lessonSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -629,6 +634,7 @@ export function CourseEditor({
         title: productForm.title.trim(),
         type: product.type as "COURSE" | "MARATHON",
         description: productForm.description.trim() || undefined,
+        rules: productForm.rules.trim() || undefined,
         coverUrl: productForm.coverUrl.trim() || undefined,
         price: productForm.price.trim() ? Number(productForm.price.trim()) : undefined,
         currency: product.currency,
@@ -658,6 +664,7 @@ export function CourseEditor({
 
       const title = productForm.title.trim();
       const description = productForm.description.trim();
+      const rules = productForm.rules.trim();
       const coverUrl = productForm.coverUrl.trim();
       const priceNum = productForm.price.trim() ? Number(productForm.price.trim()) : undefined;
       const startDate = productForm.startDate.trim();
@@ -667,6 +674,7 @@ export function CourseEditor({
         title,
         type: product.type as "COURSE" | "MARATHON",
         description: description || undefined,
+        rules: rules || undefined,
         coverUrl: coverUrl || undefined,
         price: Number.isFinite(priceNum as number) ? (priceNum as number) : undefined,
         currency: product.currency,
@@ -1050,6 +1058,22 @@ export function CourseEditor({
     openNew();
   }
 
+  // === Sticky tabs: прокрутка к разделу по id ===
+  function scrollToSection(id: string) {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  const adminTabs = [
+    { id: "admin-section-criteria", label: "Критерии" },
+    { id: "admin-section-description", label: "Описание" },
+    { id: "admin-section-rules", label: "Правила" },
+    { id: "admin-section-landing", label: "Лендинг" },
+    { id: "admin-section-lessons", label: "Уроки" },
+    ...(product.type === "MARATHON"
+      ? [{ id: "admin-section-schedule", label: "Расписание" }]
+      : []),
+  ];
+
   const marathonEventsByDay = marathonEvents.reduce<Record<number, SerializedMarathonEvent[]>>((acc, event) => {
     if (!acc[event.dayOffset]) {
       acc[event.dayOffset] = [];
@@ -1065,10 +1089,26 @@ export function CourseEditor({
 
   return (
     <div className="space-y-6">
+      {/* === STICKY TAB BAR === */}
+      <div className="sticky top-0 z-20 -mx-4 bg-background/95 px-4 py-2 backdrop-blur border-b border-border">
+        <div className="flex gap-1 overflow-x-auto">
+          {adminTabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => scrollToSection(tab.id)}
+              className="shrink-0 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {error && <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-lg">{error}</div>}
       {successMsg && <div className="bg-green-500/10 text-green-700 dark:text-green-400 text-sm p-3 rounded-lg">{successMsg}</div>}
 
-      <Card>
+      <Card id="admin-section-description">
         <CardHeader className="flex flex-row items-center justify-between gap-4">
           <CardTitle className="text-base">Курс / марафон</CardTitle>
           <div className="flex items-center gap-2">
@@ -1287,8 +1327,52 @@ export function CourseEditor({
         </CardContent>
       </Card>
 
+      {/* === ПРАВИЛА === */}
+      <Card id="admin-section-rules">
+        <CardHeader>
+          <CardTitle className="text-base">Правила</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className={tokens.typography.small}>
+            Правила отображаются у студента в разделе «Правила» (левое меню). Если поле пустое — раздел не показывается.
+            Поддерживается форматирование: <strong>жирный</strong>, <em>курсив</em>, списки, заголовки, эмодзи.
+          </p>
+          <RichTextEditor
+            value={productForm.rules}
+            onChange={(val) => setProductForm((p) => ({ ...p, rules: val }))}
+            placeholder="Опишите правила марафона: режим дня, питание, запреты, рекомендации..."
+            minHeight="160px"
+          />
+          <Button
+            type="button"
+            disabled={saving}
+            onClick={async () => {
+              setSaving(true);
+              const result = await updateProduct(product.id, {
+                title: productForm.title.trim(),
+                type: product.type as "COURSE" | "MARATHON",
+                description: productForm.description.trim() || undefined,
+                rules: productForm.rules.trim() || undefined,
+                coverUrl: productForm.coverUrl.trim() || undefined,
+                price: productForm.price.trim() ? Number(productForm.price.trim()) : undefined,
+                currency: product.currency,
+                paymentFormUrl: productForm.paymentFormUrl.trim() || undefined,
+                published: product.published,
+                startDate: product.type === "MARATHON" ? productForm.startDate || undefined : undefined,
+                durationDays: product.type === "MARATHON" && productForm.durationDays.trim() ? Number(productForm.durationDays.trim()) : undefined,
+              });
+              setSaving(false);
+              if (result.error) setError(result.error);
+              else { setSuccessMsg("Правила сохранены"); setTimeout(() => setSuccessMsg(""), 3000); router.refresh(); }
+            }}
+          >
+            {saving ? "Сохраняем..." : "Сохранить правила"}
+          </Button>
+        </CardContent>
+      </Card>
+
       {product.type === "MARATHON" && (
-        <Card>
+        <Card id="admin-section-schedule">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <CalendarDays className="h-4 w-4 text-primary" />
@@ -1573,10 +1657,12 @@ export function CourseEditor({
       )}
 
       {/* === LANDING EDITOR === */}
-      <LandingEditor productId={product.id} productSlug={product.slug} initialBlocks={product.landingBlocks} />
+      <div id="admin-section-landing">
+        <LandingEditor productId={product.id} productSlug={product.slug} initialBlocks={product.landingBlocks} />
+      </div>
 
       {/* === LESSONS LIST === */}
-      <div className="space-y-2">
+      <div id="admin-section-lessons" className="space-y-2">
         <h2 className={tokens.typography.h4}>Уроки ({lessons.length})</h2>
         {mounted ? (
           <DndContext sensors={lessonSensors} collisionDetection={closestCenter} onDragEnd={handleLessonDragEnd}>

@@ -14,6 +14,7 @@ const productSchema = z.object({
   title: z.string().min(1),
   type: z.enum(["COURSE", "MARATHON"]),
   description: z.string().optional(),
+  rules: z.string().optional(),
   price: z.coerce.number().min(0).optional(),
   currency: z.string().optional().default("RUB"),
   published: z.boolean().default(false),
@@ -123,6 +124,7 @@ export async function updateProduct(id: string, input: z.infer<typeof productSch
           durationDays: data.type === "MARATHON" ? data.durationDays ?? null : null,
           price: data.price ?? null,
           paymentFormUrl: data.paymentFormUrl?.trim() || null,
+          rules: data.rules?.trim() || null,
         },
       });
       const baseTariff = await tx.productTariff.findFirst({

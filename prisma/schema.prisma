@@ -160,6 +160,8 @@ model Product {
   durationDays Int? // for MARATHON type, used for event scheduling
   /// Блоки лендинга продукта: [{id, type, ...fields}]
   landingBlocks Json?
+  /// Правила курса/марафона (markdown). Если задано — отображается в сайдбаре студента.
+  rules        String?     @db.Text
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
   deletedAt    DateTime?

@@ -42,6 +42,8 @@ export type CourseNavPayload = {
   productType: "COURSE" | "MARATHON";
   /** Отдельный канал обратной связи по тарифу. */
   curatorFeedback: boolean;
+  /** Правила курса/марафона в markdown. Если задано — показывать раздел «Правила» в сайдбаре. */
+  rules?: string | null;
   lessons?: CourseNavLesson[];
   procedures?: CourseNavProcedure[];
   marathonWeeks?: CourseNavMarathonWeek[];

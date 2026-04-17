@@ -185,6 +185,7 @@ export async function getCourseNavPayload(
     title: product.title,
     productType: product.type,
     curatorFeedback: enrollmentHasCriterion(enrollment, "CURATOR_FEEDBACK"),
+    rules: product.rules ?? null,
   };
 
   if (product.type === "COURSE") {
