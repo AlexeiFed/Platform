@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { useHeaderSlot } from "@/lib/header-slot";
 import { TariffsAndCriteriaEditor } from "./tariffs-and-criteria-editor";
 import { CourseEditor } from "./course-editor";
+import { BulkProceduresManager } from "./bulk-procedures-manager";
 import type { ProductCriterion, ProductType } from "@prisma/client";
 import type { LandingBlock } from "@/types/landing";
 
@@ -53,7 +54,7 @@ type Props = {
 };
 
 // === Типы табов ===
-type TabId = "criteria" | "description" | "rules" | "schedule" | "landing" | "lessons";
+type TabId = "criteria" | "description" | "rules" | "schedule" | "landing" | "lessons" | "procedures";
 
 type Tab = { id: TabId; label: string };
 
@@ -113,7 +114,12 @@ export function CourseEditorShell({ product, lessons, marathonEvents, tariffs }:
     { id: "rules", label: "Правила" },
     { id: "landing", label: "Лендинг" },
     { id: "lessons", label: "Уроки" },
-    ...(product.type === "MARATHON" ? ([{ id: "schedule", label: "Расписание" }] as Tab[]) : []),
+    ...(product.type === "MARATHON"
+      ? ([
+          { id: "schedule", label: "Расписание" },
+          { id: "procedures", label: "Процедуры" },
+        ] as Tab[])
+      : []),
   ];
 
   // Инжектируем таб-плашки в хедер при монтировании / смене таба, очищаем при анмаунте
@@ -136,6 +142,13 @@ export function CourseEditorShell({ product, lessons, marathonEvents, tariffs }:
           tariffs={tariffs}
         />
       </div>
+
+      {/* Процедуры марафона — массовое назначение */}
+      {product.type === "MARATHON" && (
+        <div className={activeTab !== "procedures" ? "hidden" : undefined}>
+          <BulkProceduresManager productId={product.id} />
+        </div>
+      )}
 
       {/* Описание, Правила, Расписание, Лендинг, Уроки — управляет CourseEditor */}
       <CourseEditor

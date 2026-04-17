@@ -519,6 +519,132 @@ export async function updateUserProcedure(
   }
 }
 
+/** Возвращает список всех типов процедур */
+export async function getAllProcedureTypes() {
+  const session = await assertAdminOrCurator();
+  if (!session) return { error: "Нет доступа" };
+  try {
+    const types = await prisma.procedureType.findMany({ orderBy: { title: "asc" } });
+    return { success: true, data: types.map((t) => ({ id: t.id, title: t.title })) };
+  } catch {
+    return { error: "Произошла ошибка" };
+  }
+}
+
+/** Возвращает всех участников марафона с их процедурами для массового управления */
+export async function getProductEnrollmentsForProcedures(productId: string) {
+  const session = await assertAdminOrCurator();
+  if (!session) return { error: "Нет доступа" };
+
+  try {
+    const enrollments = await prisma.enrollment.findMany({
+      where: { productId, product: { type: "MARATHON" } },
+      select: {
+        id: true,
+        user: { select: { id: true, name: true, email: true } },
+        procedures: {
+          select: {
+            id: true,
+            scheduledAt: true,
+            completedAt: true,
+            notes: true,
+            procedureType: { select: { id: true, title: true } },
+          },
+          orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+        },
+      },
+      orderBy: { createdAt: "asc" },
+    });
+
+    return {
+      success: true,
+      data: enrollments.map((e) => ({
+        id: e.id,
+        user: e.user,
+        procedureCount: e.procedures.length,
+        completedCount: e.procedures.filter((p) => p.completedAt).length,
+        procedures: e.procedures.map((p) => ({
+          id: p.id,
+          scheduledAt: p.scheduledAt?.toISOString() ?? null,
+          completedAt: p.completedAt?.toISOString() ?? null,
+          notes: p.notes ?? null,
+          procedureType: p.procedureType,
+        })),
+      })),
+    };
+  } catch {
+    return { error: "Произошла ошибка" };
+  }
+}
+
+const bulkAssignSchema = z.object({
+  productId: z.string().min(1),
+  enrollmentIds: z.array(z.string().min(1)).min(1, "Выберите хотя бы одного студента"),
+  procedureTypeId: z.string().min(1),
+  scheduledAt: z.string().optional(),
+  completedAt: z.string().optional(),
+  notes: z.string().trim().optional(),
+});
+
+/** Массово назначает процедуру нескольким (или всем) участникам марафона */
+export async function assignProcedureBulk(input: z.infer<typeof bulkAssignSchema>) {
+  const session = await assertAdminOrCurator();
+  if (!session) return { error: "Нет доступа" };
+
+  try {
+    const data = bulkAssignSchema.parse(input);
+
+    const productResult = await ensureMarathonProduct(data.productId);
+    if ("error" in productResult) return { error: productResult.error };
+
+    const procedureType = await prisma.procedureType.findUnique({
+      where: { id: data.procedureTypeId },
+      select: { id: true },
+    });
+    if (!procedureType) return { error: "Тип процедуры не найден" };
+
+    // Проверяем что все enrollment принадлежат этому продукту
+    const found = await prisma.enrollment.findMany({
+      where: { id: { in: data.enrollmentIds }, productId: data.productId },
+      select: { id: true },
+    });
+    if (found.length !== data.enrollmentIds.length) {
+      return { error: "Некоторые участники не найдены в этом марафоне" };
+    }
+
+    // Создаём процедуры для каждого участника в транзакции
+    await prisma.$transaction(async (tx) => {
+      for (const enrollmentId of data.enrollmentIds) {
+        const maxPos = await tx.userMarathonProcedure.aggregate({
+          where: { enrollmentId },
+          _max: { position: true },
+        });
+        await tx.userMarathonProcedure.create({
+          data: {
+            enrollmentId,
+            procedureTypeId: data.procedureTypeId,
+            scheduledAt: parseOptionalDate(data.scheduledAt),
+            completedAt: parseOptionalDate(data.completedAt),
+            notes: data.notes || null,
+            position: (maxPos._max.position ?? -1) + 1,
+          },
+        });
+      }
+    });
+
+    await Promise.all(data.enrollmentIds.map((id) => syncMarathonEnrollmentProgress(id)));
+    revalidateMarathonProductPaths(productResult.product);
+    revalidatePath("/admin/users");
+
+    return { success: true, data: { count: data.enrollmentIds.length } };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return { error: error.issues[0]?.message ?? "Некорректные данные" };
+    }
+    return { error: "Произошла ошибка" };
+  }
+}
+
 export async function deleteUserProcedure(procedureId: string) {
   const session = await assertAdminOrCurator();
   if (!session) return { error: "Нет доступа" };
