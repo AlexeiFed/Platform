@@ -156,6 +156,8 @@ const contentBlockSchema = z.object({
   id: z.string(),
   type: z.enum(["text", "video", "image"]),
   content: z.string(),
+  /** Ширина блока изображения на странице студента */
+  size: z.enum(["full", "half", "third"]).optional(),
 });
 
 const lessonSchema = z.object({
