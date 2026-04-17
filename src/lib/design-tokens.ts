@@ -41,6 +41,8 @@ export const tokens = {
     body: "text-base text-muted-foreground",
     small: "text-sm text-muted-foreground",
     label: "text-sm font-medium",
+    /** Основной текстовый контент (правила, описания уроков). text-base без muted. */
+    prose: "text-base leading-relaxed",
   },
   animation: {
     fast: "transition-all duration-150 ease-in-out",

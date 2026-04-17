@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { tokens } from "@/lib/design-tokens";
-import { CalendarDays, CheckCircle2, Clock3, PlayCircle } from "lucide-react";
+import { CheckCircle2, Clock3, PlayCircle } from "lucide-react";
 import { MarathonEventCompletionToggle } from "./completion-toggle";
 import { criterionForMarathonEventType } from "@/lib/product-criteria";
 import { enrollmentHasCriterion, loadEnrollmentForCriteriaByUserProduct } from "@/lib/enrollment-criteria";
@@ -105,17 +105,8 @@ export default async function MarathonEventPage({ params }: Props) {
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="space-y-3">
+        {/* Только статус выполнения — технические мета-поля скрыты от студента */}
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="secondary">Событие марафона</Badge>
-          <Badge variant="outline">{event.type}</Badge>
-          <Badge variant="outline">{event.track}</Badge>
-          {event.weekNumber && <Badge variant="outline">Неделя {event.weekNumber}</Badge>}
-          {eventDate && (
-            <Badge variant="outline">
-              <CalendarDays className="h-3.5 w-3.5 mr-1" />
-              {new Intl.DateTimeFormat("ru-RU").format(eventDate)}
-            </Badge>
-          )}
           <Badge variant={isCompleted ? "success" : "warning"}>
             {isCompleted ? "Выполнено" : "Не завершено"}
           </Badge>
@@ -165,6 +156,7 @@ export default async function MarathonEventPage({ params }: Props) {
       </Card>
 
       {event.lesson?.published ? (
+        // Прикреплён опубликованный урок — показываем карточку материала
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Материал события</CardTitle>
@@ -186,50 +178,45 @@ export default async function MarathonEventPage({ params }: Props) {
             </Button>
           </CardContent>
         </Card>
-      ) : (
+      ) : blocks.length > 0 ? (
+        // Нет урока, но есть контентные блоки — показываем
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Контент события</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {blocks.length === 0 ? (
-              <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                Для этого события пока не прикреплён отдельный урок или контентный блок.
-              </div>
-            ) : (
-              blocks.map((block) => {
-                if (block.type === "video" && block.content) {
-                  return (
-                    <div key={block.id} className="aspect-video w-full overflow-hidden rounded-xl bg-black">
-                      <video src={block.content} controls className="h-full w-full" controlsList="nodownload" />
-                    </div>
-                  );
-                }
+            {blocks.map((block) => {
+              if (block.type === "video" && block.content) {
+                return (
+                  <div key={block.id} className="aspect-video w-full overflow-hidden rounded-xl bg-black">
+                    <video src={block.content} controls className="h-full w-full" controlsList="nodownload" />
+                  </div>
+                );
+              }
 
-                if (block.type === "image" && block.content) {
-                  return (
-                    <div key={block.id} className="overflow-hidden rounded-xl border bg-muted">
-                      <img src={block.content} alt="" className="h-auto w-full" loading="lazy" />
-                    </div>
-                  );
-                }
+              if (block.type === "image" && block.content) {
+                return (
+                  <div key={block.id} className="overflow-hidden rounded-xl border bg-muted">
+                    <img src={block.content} alt="" className="h-auto w-full" loading="lazy" />
+                  </div>
+                );
+              }
 
-                if (block.type === "text" && block.content) {
-                  return (
-                    <Card key={block.id}>
-                      <CardContent className="prose prose-neutral max-w-none p-6 dark:prose-invert">
-                        <div dangerouslySetInnerHTML={{ __html: block.content }} />
-                      </CardContent>
-                    </Card>
-                  );
-                }
+              if (block.type === "text" && block.content) {
+                return (
+                  <Card key={block.id}>
+                    <CardContent className="prose prose-neutral max-w-none p-6 dark:prose-invert">
+                      <div dangerouslySetInnerHTML={{ __html: block.content }} />
+                    </CardContent>
+                  </Card>
+                );
+              }
 
-                return null;
-              })
-            )}
+              return null;
+            })}
           </CardContent>
         </Card>
-      )}
+      ) : null /* Нет ни урока, ни блоков — карточку не показываем */}
         </>
       )}
     </div>
