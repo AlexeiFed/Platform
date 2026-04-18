@@ -88,19 +88,48 @@ function getPublicUrl(key: string) {
  */
 function VideoThumbnail({ src, className }: { src: string; className?: string }) {
   const [hasFrame, setHasFrame] = useState(false);
+  // Lazy-load: src ставится только когда элемент попадает в viewport.
+  // Раньше 50 видео параллельно грузили metadata с S3 — часть коннектов падала.
+  const [visible, setVisible] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            setVisible(true);
+            io.disconnect();
+            break;
+          }
+        }
+      },
+      { rootMargin: "200px" }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
 
   return (
-    <div className={`relative flex items-center justify-center overflow-hidden bg-muted${className ? ` ${className}` : ""}`}>
+    <div
+      ref={wrapperRef}
+      className={`relative flex items-center justify-center overflow-hidden bg-muted${className ? ` ${className}` : ""}`}
+    >
       {/* Film-иконка видна пока кадр не загружен */}
       {!hasFrame && <Film className="h-4 w-4 text-muted-foreground" />}
-      <video
-        src={src}
-        preload="metadata"
-        muted
-        className={`absolute inset-0 h-full w-full object-cover transition-opacity${hasFrame ? " opacity-100" : " opacity-0"}`}
-        onLoadedMetadata={(e) => { e.currentTarget.currentTime = 0.5; }}
-        onSeeked={() => setHasFrame(true)}
-      />
+      {visible && (
+        <video
+          src={src}
+          preload="metadata"
+          muted
+          className={`absolute inset-0 h-full w-full object-cover transition-opacity${hasFrame ? " opacity-100" : " opacity-0"}`}
+          onLoadedMetadata={(e) => { e.currentTarget.currentTime = 0.5; }}
+          onSeeked={() => setHasFrame(true)}
+          onError={() => setHasFrame(false)}
+        />
+      )}
     </div>
   );
 }
@@ -151,7 +180,7 @@ export function AssetManager({
 
   function loadFilesImmediate(p: string) {
     setLoading(true);
-    fetch(`/api/s3/list?prefix=${encodeURIComponent(p)}&maxKeys=50`)
+    fetch(`/api/s3/list?prefix=${encodeURIComponent(p)}&maxKeys=1000`)
       .then((r) => r.json())
       .then((data) => {
         setFiles(data.files ?? []);
@@ -165,7 +194,7 @@ export function AssetManager({
     setLoading(true);
     try {
       const p = searchPrefix ?? prefix;
-      const res = await fetch(`/api/s3/list?prefix=${encodeURIComponent(p)}&maxKeys=50`);
+      const res = await fetch(`/api/s3/list?prefix=${encodeURIComponent(p)}&maxKeys=1000`);
       const data = await res.json();
       setFiles(data.files ?? []);
       setHasMoreFiles(Boolean(data.hasMore));
@@ -182,7 +211,7 @@ export function AssetManager({
     setLoading(true);
     try {
       const res = await fetch(
-        `/api/s3/list?prefix=${encodeURIComponent(prefix)}&maxKeys=50&token=${encodeURIComponent(nextFilesToken)}`
+        `/api/s3/list?prefix=${encodeURIComponent(prefix)}&maxKeys=1000&token=${encodeURIComponent(nextFilesToken)}`
       );
       const data = await res.json();
       const incoming: S3Object[] = data.files ?? [];
