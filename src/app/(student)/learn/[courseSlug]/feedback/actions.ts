@@ -58,3 +58,26 @@ export async function submitCuratorFeedbackMessage(input: z.infer<typeof message
     return { error: "Ошибка" };
   }
 }
+
+// Polling новых сообщений для студента (после метки since)
+export async function pollStudentFeedbackMessages(enrollmentId: string, since: string) {
+  const session = await auth();
+  if (!session) return { error: "Не авторизован" };
+
+  const enrollment = await prisma.enrollment.findUnique({
+    where: { id: enrollmentId, userId: session.user.id },
+    select: { id: true },
+  });
+  if (!enrollment) return { error: "Нет доступа" };
+
+  try {
+    const messages = await prisma.curatorFeedbackMessage.findMany({
+      where: { enrollmentId, createdAt: { gt: new Date(since) } },
+      orderBy: { createdAt: "asc" },
+      include: { user: { select: { name: true, email: true, role: true } } },
+    });
+    return { success: true, data: messages };
+  } catch {
+    return { error: "Ошибка" };
+  }
+}

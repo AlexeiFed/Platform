@@ -8,7 +8,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Send, Loader2, MessageSquare, RefreshCw } from "lucide-react";
+import { Send, Loader2, MessageSquare, RefreshCw, ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { tokens } from "@/lib/design-tokens";
 import {
@@ -53,6 +53,10 @@ export function FeedbackChat({ initialThreads, initialEnrollmentId }: Props) {
   const [threads, setThreads] = useState<Thread[]>(initialThreads);
   const [activeId, setActiveId] = useState<string | null>(
     initialEnrollmentId ?? initialThreads[0]?.enrollmentId ?? null
+  );
+  // Мобильный view: "threads" — список контактов, "chat" — открытый чат
+  const [mobileView, setMobileView] = useState<"threads" | "chat">(
+    initialEnrollmentId ? "chat" : "threads"
   );
   const [messages, setMessages] = useState<Message[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -152,6 +156,7 @@ export function FeedbackChat({ initialThreads, initialEnrollmentId }: Props) {
   // Смена треда
   function openThread(enrollmentId: string) {
     setActiveId(enrollmentId);
+    setMobileView("chat"); // на мобиле переключаемся в вид чата
     const params = new URLSearchParams(searchParams.toString());
     params.set("enrollment", enrollmentId);
     router.replace(`/admin/feedback?${params.toString()}`, { scroll: false });
@@ -196,7 +201,12 @@ export function FeedbackChat({ initialThreads, initialEnrollmentId }: Props) {
   return (
     <div className="flex h-[calc(100vh-theme(spacing.32))] min-h-96 overflow-hidden rounded-xl border">
       {/* === Левая колонка: список тредов === */}
-      <div className="flex w-72 shrink-0 flex-col border-r">
+      {/* На мобиле: видна только если mobileView === "threads" */}
+      <div
+        className={`flex-col border-r md:flex md:w-72 md:shrink-0 ${
+          mobileView === "threads" ? "flex w-full" : "hidden"
+        }`}
+      >
         <div className="shrink-0 border-b px-4 py-3">
           <p className="text-sm font-semibold">Чаты</p>
           <p className="text-xs text-muted-foreground">{threads.length} студентов</p>
@@ -244,14 +254,30 @@ export function FeedbackChat({ initialThreads, initialEnrollmentId }: Props) {
       </div>
 
       {/* === Правая колонка: чат === */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      {/* На мобиле: видна только если mobileView === "chat" */}
+      <div
+        className={`flex-col md:flex md:min-w-0 md:flex-1 ${
+          mobileView === "chat" ? "flex min-w-0 flex-1" : "hidden"
+        }`}
+      >
         {/* Header чата */}
         {activeThread ? (
-          <div className="shrink-0 border-b px-4 py-3">
-            <p className="text-sm font-semibold">
-              {activeThread.user.name ?? activeThread.user.email}
-            </p>
-            <p className="text-xs text-muted-foreground">{activeThread.product.title}</p>
+          <div className="flex shrink-0 items-center gap-2 border-b px-4 py-3">
+            {/* Кнопка назад — только мобиле */}
+            <button
+              type="button"
+              onClick={() => setMobileView("threads")}
+              className="md:hidden -ml-1 rounded-full p-1 hover:bg-accent"
+              aria-label="Назад к контактам"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold">
+                {activeThread.user.name ?? activeThread.user.email}
+              </p>
+              <p className="truncate text-xs text-muted-foreground">{activeThread.product.title}</p>
+            </div>
           </div>
         ) : (
           <div className="shrink-0 border-b px-4 py-3">

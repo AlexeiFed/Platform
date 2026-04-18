@@ -4,7 +4,7 @@ import { redirect, notFound } from "next/navigation";
 import { tokens } from "@/lib/design-tokens";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { enrollmentHasCriterion, loadEnrollmentForCriteria } from "@/lib/enrollment-criteria";
-import { FeedbackForm } from "./feedback-form";
+import { FeedbackLive } from "./feedback-live";
 
 type Props = { params: Promise<{ courseSlug: string }> };
 
@@ -46,27 +46,14 @@ export default async function CuratorFeedbackPage({ params }: Props) {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Сообщения</CardTitle>
+          <CardTitle className="text-base">Сообщения с куратором</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {messages.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Пока нет сообщений — напишите первым.</p>
-          ) : (
-            <ul className="space-y-3">
-              {messages.map((m) => (
-                <li key={m.id} className="rounded-lg border p-3 text-sm">
-                  <div className="text-xs text-muted-foreground mb-1">
-                    {(m.user.name ?? m.user.email) + " · " + new Intl.DateTimeFormat("ru-RU", {
-                      dateStyle: "short",
-                      timeStyle: "short",
-                    }).format(m.createdAt)}
-                  </div>
-                  <div className="whitespace-pre-wrap">{m.content}</div>
-                </li>
-              ))}
-            </ul>
-          )}
-          <FeedbackForm enrollmentId={enrollment.id} />
+        <CardContent>
+          <FeedbackLive
+            enrollmentId={enrollment.id}
+            studentUserId={session.user.id}
+            initialMessages={messages}
+          />
         </CardContent>
       </Card>
     </div>
