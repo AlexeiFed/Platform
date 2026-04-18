@@ -44,6 +44,19 @@ type Props = {
   initialEnrollmentId?: string;
 };
 
+// === Helpers ===
+
+function sortThreads(list: Thread[]): Thread[] {
+  return [...list].sort((a, b) => {
+    // Непрочитанные — выше
+    if (b.unreadCount !== a.unreadCount) return b.unreadCount - a.unreadCount;
+    // Затем по дате последнего сообщения (новее = выше)
+    const aDate = a.lastMessage?.createdAt ?? "";
+    const bDate = b.lastMessage?.createdAt ?? "";
+    return bDate.localeCompare(aDate);
+  });
+}
+
 // === Component ===
 
 export function FeedbackChat({ initialThreads, initialEnrollmentId }: Props) {
@@ -132,22 +145,21 @@ export function FeedbackChat({ initialThreads, initialEnrollmentId }: Props) {
     };
   }, [activeId]);
 
-  // Polling: обновление списка тредов (каждые 10с)
+  // Polling: обновление списка тредов (каждые 5с)
   useEffect(() => {
     threadPollRef.current = setInterval(async () => {
       const result = await getAdminFeedbackThreads();
       if (result.success && result.data) {
-        setThreads(
-          result.data!.map((fresh) => {
-            // Не обнуляем unreadCount активного треда (он уже прочитан)
-            if (fresh.enrollmentId === activeId) {
-              return { ...fresh, unreadCount: 0 };
-            }
-            return fresh;
-          })
-        );
+        // Сервер уже сортирует; дополнительно применяем клиентскую сортировку
+        setThreads(sortThreads(
+          result.data.map((t) => ({
+            ...t,
+            // Активный трек уже прочитан — сбрасываем счётчик
+            unreadCount: t.enrollmentId === activeId ? 0 : t.unreadCount,
+          }))
+        ));
       }
-    }, 10000);
+    }, 5000);
     return () => {
       if (threadPollRef.current) clearInterval(threadPollRef.current);
     };
@@ -179,18 +191,21 @@ export function FeedbackChat({ initialThreads, initialEnrollmentId }: Props) {
       setMessages((prev) => [...prev, result.data!]);
       lastMessageTimeRef.current = result.data.createdAt;
       // Обновляем превью треда
-      setThreads((prev) =>
-        prev.map((t) =>
-          t.enrollmentId === activeId
-            ? {
-                ...t,
-                lastMessage: {
-                  content: result.data!.content,
-                  createdAt: result.data!.createdAt,
-                  fromStudent: false,
-                },
-              }
-            : t
+      // Обновляем превью треда и поднимаем его наверх
+    setThreads((prev) =>
+        sortThreads(
+          prev.map((t) =>
+            t.enrollmentId === activeId
+              ? {
+                  ...t,
+                  lastMessage: {
+                    content: result.data!.content,
+                    createdAt: result.data!.createdAt,
+                    fromStudent: false,
+                  },
+                }
+              : t
+          )
         )
       );
     }
