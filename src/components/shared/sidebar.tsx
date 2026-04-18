@@ -13,10 +13,12 @@ import {
   GraduationCap,
   ShoppingBag,
   Wallet,
+  MessageSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { tokens, layout } from "@/lib/design-tokens";
 import { CourseNavSidebarSection } from "@/components/shared/course-nav-sidebar-section";
+import { FeedbackUnreadBadge } from "@/components/shared/feedback-unread-badge";
 
 type NavItem = {
   label: string;
@@ -29,6 +31,7 @@ const adminNav: NavItem[] = [
   { label: "Курсы", href: "/admin/courses", icon: BookOpen },
   { label: "Пользователи", href: "/admin/users", icon: Users },
   { label: "Домашние задания", href: "/admin/homework", icon: ClipboardCheck },
+  { label: "Обратная связь", href: "/admin/feedback", icon: MessageSquare },
   { label: "Оплата", href: "/admin/payments", icon: Wallet },
   { label: "Файлы", href: "/admin/assets", icon: FolderOpen },
   { label: "Настройки", href: "/admin/settings", icon: Settings },
@@ -85,7 +88,10 @@ export function Sidebar({
                 )}
               >
                 <item.icon className="h-5 w-5" />
-                {item.label}
+                <span className="flex-1">{item.label}</span>
+                {item.href === "/admin/feedback" && variant === "admin" && (
+                  <FeedbackUnreadBadge />
+                )}
               </Link>
             );
           })}

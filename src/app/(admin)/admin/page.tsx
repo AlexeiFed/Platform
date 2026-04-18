@@ -1,15 +1,20 @@
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { tokens } from "@/lib/design-tokens";
-import { Users, BookOpen, ClipboardCheck, TrendingUp } from "lucide-react";
+import { Users, BookOpen, ClipboardCheck, TrendingUp, MessageSquare, ArrowRight } from "lucide-react";
 
 export default async function AdminDashboardPage() {
-  const [usersCount, productsCount, pendingHomework, enrollmentsCount] = await Promise.all([
-    prisma.user.count(),
-    prisma.product.count(),
-    prisma.homeworkSubmission.count({ where: { status: "PENDING" } }),
-    prisma.enrollment.count(),
-  ]);
+  const [usersCount, productsCount, pendingHomework, enrollmentsCount, unreadFeedback] =
+    await Promise.all([
+      prisma.user.count(),
+      prisma.product.count(),
+      prisma.homeworkSubmission.count({ where: { status: "PENDING" } }),
+      prisma.enrollment.count(),
+      prisma.curatorFeedbackMessage.count({
+        where: { readAt: null, user: { role: "USER" } },
+      }),
+    ]);
 
   const stats = [
     { label: "Пользователей", value: usersCount, icon: Users, color: "text-blue-500" },
@@ -35,6 +40,37 @@ export default async function AdminDashboardPage() {
           </Card>
         ))}
       </div>
+
+      {/* Обратная связь */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between pb-3">
+          <div className="flex items-center gap-2">
+            <MessageSquare className="h-5 w-5 text-primary" />
+            <CardTitle className="text-base">Обратная связь</CardTitle>
+            {unreadFeedback > 0 && (
+              <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-bold text-primary-foreground">
+                {unreadFeedback} новых
+              </span>
+            )}
+          </div>
+          <Link
+            href="/admin/feedback"
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          >
+            Открыть чат <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </CardHeader>
+        <CardContent>
+          {unreadFeedback > 0 ? (
+            <p className={tokens.typography.body}>
+              У вас <strong>{unreadFeedback}</strong> непрочитанных{" "}
+              {unreadFeedback === 1 ? "сообщение" : unreadFeedback < 5 ? "сообщения" : "сообщений"} от студентов.
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">Нет новых сообщений.</p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

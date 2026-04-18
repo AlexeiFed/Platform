@@ -26,28 +26,17 @@ export async function getAdminFeedbackThreads() {
   try {
     // Получаем все enrollments у которых есть хотя бы одно сообщение
     const threads = await prisma.enrollment.findMany({
-      where: {
-        curatorFeedbackMessages: { some: {} },
-      },
+      where: { feedbackMessages: { some: {} } },
       select: {
         id: true,
+        userId: true,
         user: { select: { id: true, name: true, email: true } },
         product: { select: { id: true, title: true } },
-        curatorFeedbackMessages: {
+        feedbackMessages: {
           orderBy: { createdAt: "desc" },
           take: 1,
-          select: { content: true, createdAt: true, userId: true, readAt: true },
+          select: { content: true, createdAt: true, userId: true },
         },
-        _count: {
-          select: {
-            // Непрочитанные = сообщения от студента (userId === enrollment.userId) без readAt
-            curatorFeedbackMessages: true,
-          },
-        },
-      },
-      orderBy: {
-        // Сортируем по последнему сообщению
-        curatorFeedbackMessages: { _count: "desc" },
       },
     });
 
@@ -57,11 +46,11 @@ export async function getAdminFeedbackThreads() {
         const unreadCount = await prisma.curatorFeedbackMessage.count({
           where: {
             enrollmentId: t.id,
-            userId: t.user.id, // от студента
+            userId: t.userId, // сообщения именно от студента
             readAt: null,
           },
         });
-        const last = t.curatorFeedbackMessages[0];
+        const last = t.feedbackMessages[0];
         return {
           enrollmentId: t.id,
           user: t.user,
@@ -70,7 +59,7 @@ export async function getAdminFeedbackThreads() {
             ? {
                 content: last.content.slice(0, 80),
                 createdAt: last.createdAt.toISOString(),
-                fromStudent: last.userId === t.user.id,
+                fromStudent: last.userId === t.userId,
               }
             : null,
           unreadCount,
@@ -109,14 +98,7 @@ export async function getThreadMessages(enrollmentId: string) {
     const messages = await prisma.curatorFeedbackMessage.findMany({
       where: { enrollmentId },
       orderBy: { createdAt: "asc" },
-      select: {
-        id: true,
-        userId: true,
-        content: true,
-        createdAt: true,
-        readAt: true,
-        user: { select: { name: true, email: true } },
-      },
+      include: { user: { select: { name: true, email: true } } },
     });
 
     return {
@@ -159,14 +141,7 @@ export async function pollThreadMessages(enrollmentId: string, since: string) {
         createdAt: { gt: new Date(since) },
       },
       orderBy: { createdAt: "asc" },
-      select: {
-        id: true,
-        userId: true,
-        content: true,
-        createdAt: true,
-        readAt: true,
-        user: { select: { name: true, email: true } },
-      },
+      include: { user: { select: { name: true, email: true } } },
     });
 
     return {
@@ -285,7 +260,7 @@ export async function markThreadRead(enrollmentId: string) {
     await prisma.curatorFeedbackMessage.updateMany({
       where: {
         enrollmentId,
-        userId: enrollment.userId, // только сообщения студента
+        userId: enrollment.userId,
         readAt: null,
       },
       data: { readAt: new Date() },
@@ -308,15 +283,7 @@ export async function getAdminUnreadCount() {
     const count = await prisma.curatorFeedbackMessage.count({
       where: {
         readAt: null,
-        // Только сообщения от студентов — исключаем сообщения самих кураторов
-        enrollment: {
-          user: {
-            role: "STUDENT",
-          },
-        },
-        user: {
-          role: "STUDENT",
-        },
+        user: { role: "USER" }, // только от студентов (роль USER)
       },
     });
     return { count };
