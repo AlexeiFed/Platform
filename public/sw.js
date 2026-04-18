@@ -1,4 +1,4 @@
-const CACHE_NAME = "learnhub-v2";
+const CACHE_NAME = "learnhub-v3";
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -18,17 +18,26 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(event.request.url);
 
-  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/_next/")) return;
+  // Пропускаем: API, Next.js, и все cross-origin (S3, внешние CDN и т.д.)
+  if (
+    url.origin !== self.location.origin ||
+    url.pathname.startsWith("/api/") ||
+    url.pathname.startsWith("/_next/")
+  ) return;
 
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        if (response.ok && url.origin === self.location.origin) {
+        if (response.ok) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
         }
         return response;
       })
-      .catch(() => caches.match(event.request))
+      .catch(() =>
+        caches.match(event.request).then(
+          (cached) => cached ?? new Response("Offline", { status: 503, statusText: "Offline" })
+        )
+      )
   );
 });
