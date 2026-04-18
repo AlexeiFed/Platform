@@ -154,9 +154,6 @@ export function FeedbackLive({ enrollmentId, studentUserId, initialMessages }: P
           {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
         </Button>
       </div>
-      <p className="text-[10px] text-muted-foreground">
-        Новые сообщения от куратора появляются автоматически (каждые 5 сек.)
-      </p>
     </div>
   );
 }

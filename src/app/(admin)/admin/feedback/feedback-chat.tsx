@@ -8,7 +8,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Send, Loader2, MessageSquare, RefreshCw, ChevronLeft } from "lucide-react";
+import { Send, Loader2, MessageSquare, ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { tokens } from "@/lib/design-tokens";
 import {
@@ -199,7 +199,7 @@ export function FeedbackChat({ initialThreads, initialEnrollmentId }: Props) {
   const activeThread = threads.find((t) => t.enrollmentId === activeId);
 
   return (
-    <div className="flex h-[calc(100vh-theme(spacing.32))] min-h-96 overflow-hidden rounded-xl border">
+    <div className="flex h-[calc(100svh-theme(spacing.52))] md:h-[calc(100vh-theme(spacing.32))] min-h-96 overflow-hidden rounded-xl border">
       {/* === Левая колонка: список тредов === */}
       {/* На мобиле: видна только если mobileView === "threads" */}
       <div
@@ -368,23 +368,6 @@ export function FeedbackChat({ initialThreads, initialEnrollmentId }: Props) {
                 )}
               </Button>
             </div>
-            <p className="mt-1 text-[10px] text-muted-foreground">
-              Polling: новые сообщения каждые 3 сек.{" "}
-              <button
-                type="button"
-                className="inline-flex items-center gap-0.5 underline"
-                onClick={() => {
-                  if (!activeId) return;
-                  void getThreadMessages(activeId).then((r) => {
-                    if (r.success && r.data) {
-                      setMessages(r.data.messages);
-                    }
-                  });
-                }}
-              >
-                <RefreshCw className="h-2.5 w-2.5" /> Обновить
-              </button>
-            </p>
           </div>
         )}
       </div>
