@@ -33,6 +33,7 @@ import {
   addMeasurement,
   deleteMeasurement,
 } from "./actions";
+import { measurementFields } from "@/lib/measurement-fields";
 
 // === Types ===
 
@@ -74,22 +75,6 @@ type Props = {
   photos: ProgressPhoto[];
   measurements: Measurement[];
 };
-
-// Поля замеров: единый источник для формы/таблицы
-const measureFields: { key: keyof Omit<Measurement, "id" | "date">; label: string }[] = [
-  { key: "shoulders", label: "Плечи" },
-  { key: "aboveChest", label: "Над грудью" },
-  { key: "belowChest", label: "Под грудью" },
-  { key: "waist", label: "Талия" },
-  { key: "abdomen", label: "Живот" },
-  { key: "hips", label: "Бёдра" },
-  { key: "thighRight", label: "Бедро правое" },
-  { key: "thighLeft", label: "Бедро левое" },
-  { key: "calfRight", label: "Голень правая" },
-  { key: "calfLeft", label: "Голень левая" },
-  { key: "armRight", label: "Рука правая" },
-  { key: "armLeft", label: "Рука левая" },
-];
 
 const dateFmt = new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "short", year: "numeric" });
 
@@ -347,12 +332,12 @@ function PhotosCard({ photos }: { photos: ProgressPhoto[] }) {
 
 // === Measurements ===
 
-type MeasureForm = Record<(typeof measureFields)[number]["key"], string> & { date: string };
+type MeasureForm = Record<(typeof measurementFields)[number]["key"], string> & { date: string };
 
 function emptyForm(): MeasureForm {
   const today = new Date().toISOString().slice(0, 10);
   const base = { date: today } as MeasureForm;
-  for (const f of measureFields) base[f.key] = "";
+  for (const f of measurementFields) base[f.key] = "";
   return base;
 }
 
@@ -367,7 +352,7 @@ function MeasurementsCard({ measurements }: { measurements: Measurement[] }) {
     e.preventDefault();
     setError("");
     const numeric: Record<string, number | null> = {};
-    for (const f of measureFields) {
+    for (const f of measurementFields) {
       const raw = form[f.key].trim();
       if (raw === "") {
         numeric[f.key] = null;
@@ -441,7 +426,7 @@ function MeasurementsCard({ measurements }: { measurements: Measurement[] }) {
               </div>
             </div>
             <div className="grid gap-3 sm:grid-cols-3 md:grid-cols-4">
-              {measureFields.map((f) => (
+              {measurementFields.map((f) => (
                 <div key={f.key} className="space-y-1">
                   <label className={tokens.typography.label}>{f.label} (см)</label>
                   <Input
@@ -484,7 +469,7 @@ function MeasurementsCard({ measurements }: { measurements: Measurement[] }) {
               <thead className="text-xs text-muted-foreground">
                 <tr className="border-b">
                   <th className="py-2 pr-3 text-left font-medium">Дата</th>
-                  {measureFields.map((f) => (
+                  {measurementFields.map((f) => (
                     <th key={f.key} className="py-2 px-2 text-right font-medium whitespace-nowrap">
                       {f.label}
                     </th>
@@ -498,7 +483,7 @@ function MeasurementsCard({ measurements }: { measurements: Measurement[] }) {
                     <td className="py-2 pr-3 whitespace-nowrap font-medium">
                       {dateFmt.format(new Date(m.date))}
                     </td>
-                    {measureFields.map((f) => (
+                    {measurementFields.map((f) => (
                       <td key={f.key} className="py-2 px-2 text-right tabular-nums">
                         {m[f.key] == null ? "—" : m[f.key]}
                       </td>

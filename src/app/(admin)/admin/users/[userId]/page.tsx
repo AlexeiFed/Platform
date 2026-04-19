@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +9,7 @@ import { tokens } from "@/lib/design-tokens";
 import { calculateMarathonProgress } from "@/lib/marathon-progress";
 import { formatDate, getInitials, lessonsLabel } from "@/lib/utils";
 import { formatHomeworkDateTime } from "@/lib/homework";
+import { measurementFields } from "@/lib/measurement-fields";
 import { MarathonProceduresManager } from "./marathon-procedures-manager";
 
 type Props = {
@@ -99,6 +101,12 @@ export default async function AdminUserDetailsPage({ params }: Props) {
           },
         },
       },
+      progressPhotos: {
+        orderBy: [{ type: "asc" }, { position: "asc" }],
+      },
+      measurements: {
+        orderBy: { date: "desc" },
+      },
     },
   });
 
@@ -161,12 +169,108 @@ export default async function AdminUserDetailsPage({ params }: Props) {
               <Badge>{roleLabel}</Badge>
             </div>
             <div className="text-sm text-muted-foreground">{user.email}</div>
-            <div className="mt-1 text-sm text-muted-foreground">
-              Зарегистрирован: {formatDate(user.createdAt)}
+            <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+              <span>Зарегистрирован: {formatDate(user.createdAt)}</span>
+              <span>Вес: {user.weight != null ? `${user.weight} кг` : "—"}</span>
+              <span>Рост: {user.height != null ? `${user.height} см` : "—"}</span>
             </div>
           </div>
         </CardContent>
       </Card>
+
+      {user.progressPhotos.length > 0 && (
+        <section className="space-y-3">
+          <h2 className={tokens.typography.h4}>Фото прогресса</h2>
+          <Card>
+            <CardContent className="space-y-5 p-6">
+              {(["BEFORE", "AFTER"] as const).map((type) => {
+                const rowPhotos = user.progressPhotos.filter((p) => p.type === type);
+                if (rowPhotos.length === 0) return null;
+                return (
+                  <div key={type} className="space-y-2">
+                    <p className={tokens.typography.label}>{type === "BEFORE" ? "До" : "После"}</p>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      {Array.from({ length: 4 }).map((_, pos) => {
+                        const p = rowPhotos.find((x) => x.position === pos);
+                        return (
+                          <div
+                            key={`${type}-${pos}`}
+                            className="relative aspect-square overflow-hidden rounded-lg border bg-muted"
+                          >
+                            {p ? (
+                              <a
+                                href={p.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="absolute inset-0"
+                              >
+                                <Image
+                                  src={p.url}
+                                  alt={`${type === "BEFORE" ? "До" : "После"} ${pos + 1}`}
+                                  fill
+                                  sizes="(max-width: 640px) 50vw, 200px"
+                                  className="object-cover"
+                                  unoptimized
+                                />
+                              </a>
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">—</div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </CardContent>
+          </Card>
+        </section>
+      )}
+
+      {user.measurements.length > 0 && (
+        <section className="space-y-3">
+          <h2 className={tokens.typography.h4}>Замеры</h2>
+          <Card>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-xs text-muted-foreground">
+                    <tr className="border-b">
+                      <th className="py-2 px-3 text-left font-medium whitespace-nowrap">Дата</th>
+                      {measurementFields.map((f) => (
+                        <th
+                          key={f.key}
+                          className="py-2 px-2 text-right font-medium whitespace-nowrap"
+                        >
+                          {f.label}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {user.measurements.map((m) => (
+                      <tr key={m.id} className="border-b last:border-0 hover:bg-accent/30">
+                        <td className="py-2 px-3 whitespace-nowrap font-medium">
+                          {formatDate(m.date)}
+                        </td>
+                        {measurementFields.map((f) => (
+                          <td
+                            key={f.key}
+                            className="py-2 px-2 text-right tabular-nums"
+                          >
+                            {m[f.key] == null ? "—" : m[f.key]}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+      )}
 
       <section className="space-y-3">
         <h2 className={tokens.typography.h4}>Приобретенные курсы / марафоны</h2>
