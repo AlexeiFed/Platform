@@ -65,6 +65,8 @@ echo "→ pnpm install (offline cache если есть)"
 sudo -u appuser bash -lc "
   set -euo pipefail
   cd '$ROOT'
+  # Увеличиваем heap Node — next build + tsc падают по OOM на слабом VPS.
+  export NODE_OPTIONS='--max-old-space-size=4096'
   pnpm install --frozen-lockfile --prefer-offline
   pnpm exec prisma generate
   set +e
