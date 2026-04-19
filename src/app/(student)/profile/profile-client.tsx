@@ -10,6 +10,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Image from "next/image";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -283,11 +284,13 @@ function PhotosCard({ photos }: { photos: ProgressPhoto[] }) {
             >
               {p ? (
                 <>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
+                  <Image
                     src={p.url}
                     alt={`${type === "BEFORE" ? "До" : "После"} ${pos + 1}`}
-                    className="h-full w-full object-cover"
+                    fill
+                    sizes="(max-width: 640px) 50vw, 200px"
+                    className="object-cover"
+                    unoptimized
                   />
                   <button
                     type="button"

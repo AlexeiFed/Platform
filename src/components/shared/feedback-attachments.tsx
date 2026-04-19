@@ -8,6 +8,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Image from "next/image";
 import { Paperclip, Loader2, X, FileIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -140,8 +141,14 @@ export function AttachmentsPreview({
           className="relative h-20 w-20 overflow-hidden rounded-lg border bg-muted"
         >
           {a.type === "image" ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={a.url} alt={a.name ?? "attachment"} className="h-full w-full object-cover" />
+            <Image
+              src={a.url}
+              alt={a.name ?? "attachment"}
+              fill
+              sizes="80px"
+              className="object-cover"
+              unoptimized
+            />
           ) : a.type === "video" ? (
             <video src={a.url} className="h-full w-full object-cover" muted />
           ) : (
@@ -177,10 +184,16 @@ export function AttachmentsView({ items }: { items: FeedbackAttachment[] }) {
               href={a.url}
               target="_blank"
               rel="noreferrer"
-              className="block overflow-hidden rounded-lg border"
+              className="relative block h-32 w-full overflow-hidden rounded-lg border"
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={a.url} alt={a.name ?? "image"} className="h-32 w-full object-cover" />
+              <Image
+                src={a.url}
+                alt={a.name ?? "image"}
+                fill
+                sizes="(max-width: 640px) 50vw, 200px"
+                className="object-cover"
+                unoptimized
+              />
             </a>
           );
         }
