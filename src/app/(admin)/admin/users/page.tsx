@@ -19,11 +19,32 @@ export default async function AdminUsersPage() {
     orderBy: { createdAt: "desc" },
   });
 
-  const products = await prisma.product.findMany({
+  const rawProducts = await prisma.product.findMany({
     where: { deletedAt: null },
-    select: { id: true, title: true },
+    select: {
+      id: true,
+      title: true,
+      tariffs: {
+        where: { deletedAt: null },
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+        select: { id: true, name: true, price: true, currency: true, published: true },
+      },
+    },
     orderBy: { title: "asc" },
   });
+
+  // Сериализация Decimal → number для передачи в клиентские компоненты
+  const products = rawProducts.map((p) => ({
+    id: p.id,
+    title: p.title,
+    tariffs: p.tariffs.map((t) => ({
+      id: t.id,
+      name: t.name,
+      price: Number(t.price),
+      currency: t.currency,
+      published: t.published,
+    })),
+  }));
 
   const roleLabels: Record<string, string> = {
     ADMIN: "Админ",

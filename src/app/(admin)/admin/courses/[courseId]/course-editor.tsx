@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { tokens } from "@/lib/design-tokens";
+import { confirmDeletion } from "@/lib/confirm-deletion";
 import {
   Plus, GripVertical, FileText, Film, X, Pencil, Trash2,
   Eye, EyeOff, Image as ImageIcon, Upload, Loader2,
@@ -330,28 +331,69 @@ function SortableLesson({
     : lesson.videoUrl ? "В" : lesson.content ? "Т" : "—";
 
   return (
-    <Card ref={setNodeRef} style={style} className="group">
-      <CardContent className="flex items-center gap-3 p-3">
-        <button type="button" {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing touch-none" aria-label="Перетащить">
+    <Card ref={setNodeRef} style={style} className="group cursor-pointer">
+      <CardContent
+        className="flex items-center gap-3 p-3"
+        onClick={(e) => {
+          if ((e.target as HTMLElement).closest("[data-stop-lesson-card-click]")) return;
+          onEdit();
+        }}
+      >
+        <button
+          type="button"
+          data-stop-lesson-card-click
+          {...attributes}
+          {...listeners}
+          className="cursor-grab touch-none active:cursor-grabbing"
+          aria-label="Перетащить"
+        >
           <GripVertical className="h-5 w-5 text-muted-foreground" />
         </button>
-        <span className="text-sm text-muted-foreground w-8">{index + 1}</span>
-        <div className="flex-1 min-w-0">
-          <p className="font-medium text-sm truncate">{lesson.title}</p>
+        <span className="w-8 text-sm text-muted-foreground">{index + 1}</span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium">{lesson.title}</p>
           <p className="text-xs text-muted-foreground">
             [{blockSummary}]
             {lesson.homeworkEnabled && " · ДЗ"}
           </p>
         </div>
         <div className="flex items-center gap-1">
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <Button type="button" variant="ghost" size="icon" onClick={onTogglePublish}>
+          <div
+            data-stop-lesson-card-click
+            className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100"
+          >
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={(e) => {
+                e.stopPropagation();
+                onTogglePublish();
+              }}
+            >
               {lesson.published ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </Button>
-            <Button type="button" variant="ghost" size="icon" onClick={onEdit}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit();
+              }}
+            >
               <Pencil className="h-4 w-4" />
             </Button>
-            <Button type="button" variant="ghost" size="icon" onClick={onDelete} className="text-destructive hover:text-destructive">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              className="text-destructive hover:text-destructive"
+            >
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>
@@ -836,8 +878,9 @@ export function CourseEditor({
     }
   }
 
-  async function handleDeleteMarathonEvent(eventId: string) {
+  async function handleDeleteMarathonEvent(eventId: string, eventTitle: string) {
     if (marathonSaving) return;
+    if (!confirmDeletion(`Удалить событие марафона «${eventTitle}»? Действие нельзя отменить.`)) return;
 
     try {
       setMarathonSaving(true);
@@ -956,8 +999,8 @@ export function CourseEditor({
     }
   }
 
-  async function handleDeleteLesson(lessonId: string) {
-    if (!confirm("Удалить урок? Действие нельзя отменить.")) return;
+  async function handleDeleteLesson(lessonId: string, lessonTitle: string) {
+    if (!confirmDeletion(`Удалить урок «${lessonTitle}»? Действие нельзя отменить.`)) return;
     try {
       const result = await deleteLesson(lessonId);
       if (result.success) {
@@ -982,6 +1025,7 @@ export function CourseEditor({
   }
 
   function removeBlock(id: string) {
+    if (!confirmDeletion("Удалить этот блок контента? Изменения вступят в силу после сохранения урока.")) return;
     setBlocks((prev) => prev.filter((b) => b.id !== id));
   }
 
@@ -1532,7 +1576,7 @@ export function CourseEditor({
                                 size="sm"
                                 className="text-destructive hover:text-destructive"
                                 disabled={marathonSaving}
-                                onClick={() => handleDeleteMarathonEvent(event.id)}
+                                onClick={() => handleDeleteMarathonEvent(event.id, event.title)}
                               >
                                 <Trash2 className="h-3.5 w-3.5 mr-1" />
                                 Удалить
@@ -1694,7 +1738,7 @@ export function CourseEditor({
                   index={idx}
                   onEdit={() => openEdit(lesson)}
                   onTogglePublish={() => handleToggleLessonPublish(lesson)}
-                  onDelete={() => handleDeleteLesson(lesson.id)}
+                  onDelete={() => handleDeleteLesson(lesson.id, lesson.title)}
                 />
               ))}
             </SortableContext>

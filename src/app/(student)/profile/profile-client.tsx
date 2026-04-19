@@ -16,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { tokens } from "@/lib/design-tokens";
+import { confirmDeletion } from "@/lib/confirm-deletion";
 import { getInitials } from "@/lib/utils";
 import {
   Camera,
@@ -246,6 +247,7 @@ function PhotosCard({ photos }: { photos: ProgressPhoto[] }) {
   }
 
   async function onRemove(photo: ProgressPhoto) {
+    if (!confirmDeletion("Удалить это фото прогресса?")) return;
     // Оптимистичное удаление
     setItems((prev) => prev.filter((p) => p.id !== photo.id));
     const res = await removeProgressPhoto(photo.id);
@@ -398,7 +400,8 @@ function MeasurementsCard({ measurements }: { measurements: Measurement[] }) {
     });
   }
 
-  async function onDelete(id: string) {
+  async function onDelete(id: string, dateLabel: string) {
+    if (!confirmDeletion(`Удалить замер от ${dateLabel}? Данные нельзя восстановить.`)) return;
     setItems((prev) => prev.filter((m) => m.id !== id));
     await deleteMeasurement(id);
   }
@@ -494,7 +497,7 @@ function MeasurementsCard({ measurements }: { measurements: Measurement[] }) {
                         variant="ghost"
                         size="icon"
                         className="h-7 w-7 text-destructive"
-                        onClick={() => onDelete(m.id)}
+                        onClick={() => void onDelete(m.id, dateFmt.format(new Date(m.date)))}
                         aria-label="Удалить замер"
                       >
                         <Trash2 className="h-3.5 w-3.5" />

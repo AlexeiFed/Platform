@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { confirmDeletion } from "@/lib/confirm-deletion";
 import { Users, UserCheck, Loader2, CheckCircle2, Circle, Trash2 } from "lucide-react";
 import {
   getProductEnrollmentsForProcedures,
@@ -147,8 +148,9 @@ export function BulkProceduresManager({ productId }: Props) {
   }
 
   // Удаление типа процедуры
-  async function handleDeleteType(typeId: string) {
+  async function handleDeleteType(typeId: string, typeTitle: string) {
     if (deletingTypeId) return;
+    if (!confirmDeletion(`Удалить тип процедуры «${typeTitle}»? Связанные записи могут стать неконсистентными.`)) return;
     setDeletingTypeId(typeId);
     setError("");
     const result = await deleteProcedureType(typeId);
@@ -162,8 +164,15 @@ export function BulkProceduresManager({ productId }: Props) {
   }
 
   // Удаление конкретной процедуры у студента
-  async function handleDeleteProcedure(procedureId: string) {
+  async function handleDeleteProcedure(procedureId: string, procedureTitle: string, studentLabel: string) {
     if (deletingId) return;
+    if (
+      !confirmDeletion(
+        `Удалить процедуру «${procedureTitle}» у участника ${studentLabel}? Действие нельзя отменить.`,
+      )
+    ) {
+      return;
+    }
     setDeletingId(procedureId);
     setError("");
     const result = await deleteUserProcedure(procedureId);
@@ -223,7 +232,7 @@ export function BulkProceduresManager({ productId }: Props) {
                   <button
                     type="button"
                     disabled={deletingTypeId === t.id}
-                    onClick={() => void handleDeleteType(t.id)}
+                    onClick={() => void handleDeleteType(t.id, t.title)}
                     className="ml-0.5 rounded-full opacity-40 hover:opacity-100 disabled:opacity-20"
                     title="Удалить тип"
                   >
@@ -391,7 +400,11 @@ export function BulkProceduresManager({ productId }: Props) {
                                 disabled={deletingId === p.id}
                                 onClick={(e: React.MouseEvent) => {
                                   e.stopPropagation();
-                                  void handleDeleteProcedure(p.id);
+                                  void handleDeleteProcedure(
+                                    p.id,
+                                    p.procedureType.title,
+                                    enrollment.user.name ?? enrollment.user.email,
+                                  );
                                 }}
                                 className="ml-0.5 rounded-full opacity-60 hover:opacity-100 disabled:opacity-30"
                                 title="Удалить процедуру"

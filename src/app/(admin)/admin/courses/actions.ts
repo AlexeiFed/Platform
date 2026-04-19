@@ -502,3 +502,26 @@ export async function duplicateProduct(id: string): Promise<{ success: true; new
     return { error: "Ошибка при копировании" };
   }
 }
+
+/** Мягкое удаление продукта: скрытие из админки и каталога, связи в БД сохраняются. */
+export async function softDeleteProduct(productId: string): Promise<{ success: true } | { error: string }> {
+  const session = await auth();
+  if (!session || session.user.role !== "ADMIN") return { error: "Нет доступа" };
+
+  try {
+    const result = await prisma.product.updateMany({
+      where: { id: productId, deletedAt: null },
+      data: { deletedAt: new Date(), published: false },
+    });
+    if (result.count === 0) return { error: "Продукт не найден или уже удалён" };
+
+    revalidatePath("/admin/courses");
+    revalidatePath("/catalog");
+    revalidatePath(`/admin/courses/${productId}`);
+    revalidatePath("/learn", "layout");
+    return { success: true };
+  } catch (error) {
+    console.error("[softDeleteProduct]", error);
+    return { error: "Не удалось удалить продукт" };
+  }
+}

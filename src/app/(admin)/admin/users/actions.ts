@@ -13,26 +13,39 @@ const createCuratorSchema = z.object({
   password: z.string().min(8, "Пароль должен быть не короче 8 символов"),
 });
 
-export async function grantAccess(userId: string, productId: string) {
+export async function grantAccess(userId: string, productId: string, tariffId?: string) {
   const session = await auth();
   if (!session || session.user.role !== "ADMIN") return { error: "Нет доступа" };
 
   try {
-    const tariff =
-      (await getDefaultTariffForProduct(productId)) ??
-      (await prisma.productTariff.findFirst({
-        where: { productId, deletedAt: null },
-        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    // Если админ явно указал тариф — проверяем, что он принадлежит продукту и не удалён.
+    let resolvedTariffId: string | null = null;
+    if (tariffId) {
+      const chosen = await prisma.productTariff.findFirst({
+        where: { id: tariffId, productId, deletedAt: null },
         select: { id: true },
-      }));
-    if (!tariff) {
-      return { error: "У продукта нет тарифа — создайте тариф в админке курса" };
+      });
+      if (!chosen) return { error: "Тариф не найден или не принадлежит продукту" };
+      resolvedTariffId = chosen.id;
+    } else {
+      // Фолбэк: первый опубликованный → первый любой не удалённый.
+      const tariff =
+        (await getDefaultTariffForProduct(productId)) ??
+        (await prisma.productTariff.findFirst({
+          where: { productId, deletedAt: null },
+          orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+          select: { id: true },
+        }));
+      if (!tariff) {
+        return { error: "У продукта нет тарифа — создайте тариф в админке курса" };
+      }
+      resolvedTariffId = tariff.id;
     }
 
     await prisma.enrollment.upsert({
       where: { userId_productId: { userId, productId } },
-      create: { userId, productId, tariffId: tariff.id },
-      update: { tariffId: tariff.id },
+      create: { userId, productId, tariffId: resolvedTariffId },
+      update: { tariffId: resolvedTariffId },
     });
 
     revalidatePath("/admin/users");

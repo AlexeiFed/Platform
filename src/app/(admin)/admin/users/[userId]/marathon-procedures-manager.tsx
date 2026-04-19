@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { confirmDeletion } from "@/lib/confirm-deletion";
 import {
   assignProcedureToEnrollment,
   createProcedureType,
@@ -201,8 +202,9 @@ export const MarathonProceduresManager = ({
     }
   };
 
-  const handleDeleteProcedure = async (procedureId: string) => {
+  const handleDeleteProcedure = async (procedureId: string, procedureTypeTitle: string) => {
     if (loading) return;
+    if (!confirmDeletion(`Удалить процедуру «${procedureTypeTitle}»? Действие нельзя отменить.`)) return;
 
     try {
       setLoading(true);
@@ -470,7 +472,7 @@ export const MarathonProceduresManager = ({
                           <Button
                             type="button"
                             variant="destructive"
-                            onClick={() => handleDeleteProcedure(procedure.id)}
+                            onClick={() => handleDeleteProcedure(procedure.id, procedure.procedureType.title)}
                             disabled={loading}
                           >
                             Удалить

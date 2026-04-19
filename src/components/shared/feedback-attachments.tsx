@@ -11,6 +11,7 @@ import { useRef, useState } from "react";
 import Image from "next/image";
 import { Paperclip, Loader2, X, FileIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { confirmDeletion } from "@/lib/confirm-deletion";
 
 const S3_BUCKET = process.env.NEXT_PUBLIC_S3_BUCKET;
 const publicUrl = (key: string) =>
@@ -159,7 +160,10 @@ export function AttachmentsPreview({
           )}
           <button
             type="button"
-            onClick={() => onRemove(i)}
+            onClick={() => {
+              if (!confirmDeletion("Убрать вложение из списка перед отправкой?")) return;
+              onRemove(i);
+            }}
             className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white"
             aria-label="Удалить вложение"
           >

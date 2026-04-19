@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { confirmDeletion } from "@/lib/confirm-deletion";
 import { toggleCuratorProduct } from "./actions";
 
 type Props = {
@@ -21,6 +22,11 @@ export function CuratorProductsForm({
   const [loadingProductId, setLoadingProductId] = useState<string | null>(null);
 
   async function handleToggle(productId: string) {
+    const assigned = assignedProductIds.includes(productId);
+    if (assigned) {
+      const p = products.find((x) => x.id === productId);
+      if (!confirmDeletion(`Снять с куратора курс/марафон «${p?.title ?? "продукт"}»?`)) return;
+    }
     setLoadingProductId(productId);
     await toggleCuratorProduct(userId, productId);
     setLoadingProductId(null);

@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/dialog";
 import { LandingRenderer } from "@/app/(student)/catalog/[productSlug]/landing-renderer";
 import { tokens } from "@/lib/design-tokens";
+import { confirmDeletion } from "@/lib/confirm-deletion";
 import { cn } from "@/lib/utils";
 import {
   GripVertical, Plus, X, Image as ImageIcon, Film,
@@ -484,6 +485,7 @@ export function LandingEditor({ productId, productSlug, initialBlocks }: Props) 
   }
 
   function removeBlock(id: string) {
+    if (!confirmDeletion("Удалить этот блок лендинга? Изменения вступят в силу после сохранения.")) return;
     setBlocks((prev) => prev.filter((b) => b.id !== id));
   }
 

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { tokens } from "@/lib/design-tokens";
+import { confirmDeletion } from "@/lib/confirm-deletion";
 import type { ProductCriterion } from "@prisma/client";
 import { ALL_PRODUCT_CRITERIA, PRODUCT_CRITERION_LABELS } from "@/lib/product-criteria";
 import {
@@ -128,7 +129,8 @@ export const TariffsAndCriteriaEditor = ({ productId, initialEnabled, tariffs: i
     router.refresh();
   };
 
-  const removeTariff = async (tariffId: string) => {
+  const removeTariff = async (tariffId: string, tariffName: string) => {
+    if (!confirmDeletion(`Удалить тариф «${tariffName}»? Он скроется из продажи; связанные данные сохранятся.`)) return;
     setMsg("");
     const res = await softDeleteProductTariff(productId, tariffId);
     if (res.error) {
@@ -196,7 +198,7 @@ export const TariffsAndCriteriaEditor = ({ productId, initialEnabled, tariffs: i
                 />
                 <div className="flex items-center gap-2">
                   <Badge variant={t.published ? "success" : "outline"}>{t.published ? "В продаже" : "Скрыт"}</Badge>
-                  <Button type="button" size="sm" variant="ghost" onClick={() => removeTariff(t.id)}>
+                  <Button type="button" size="sm" variant="ghost" onClick={() => removeTariff(t.id, t.name)}>
                     Удалить
                   </Button>
                 </div>

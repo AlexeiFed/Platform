@@ -1,12 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { tokens } from "@/lib/design-tokens";
-import { Plus, Pencil } from "lucide-react";
-import { lessonsLabel } from "@/lib/utils";
-import { DuplicateProductButton } from "./duplicate-product-button";
+import { Plus } from "lucide-react";
+import { ProductListRow } from "./product-list-row";
 
 export default async function AdminCoursesPage({
   searchParams,
@@ -50,41 +47,16 @@ export default async function AdminCoursesPage({
 
       <div className="space-y-3">
         {products.map((product) => (
-          <Card key={product.id}>
-            <CardContent className="flex items-center justify-between p-4">
-              <div className="flex items-center gap-4 min-w-0">
-                {product.coverUrl && (
-                  <img
-                    src={product.coverUrl}
-                    alt=""
-                    className="h-12 w-20 rounded-md object-cover shrink-0"
-                  />
-                )}
-                <div className="min-w-0">
-                  <h3 className="font-medium truncate">{product.title}</h3>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Badge variant={product.type === "COURSE" ? "default" : "secondary"} className="text-xs">
-                      {product.type === "COURSE" ? "Курс" : "Марафон"}
-                    </Badge>
-                    <Badge variant={product.published ? "success" : "outline"} className="text-xs">
-                      {product.published ? "Опубликован" : "Черновик"}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground">
-                      {lessonsLabel(product._count.lessons)} · {product._count.enrollments} студентов
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-1">
-                <DuplicateProductButton productId={product.id} />
-                <Button variant="ghost" size="icon" asChild>
-                  <Link href={`/admin/courses/${product.id}`}>
-                    <Pencil className="h-4 w-4" />
-                  </Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+          <ProductListRow
+            key={product.id}
+            productId={product.id}
+            title={product.title}
+            coverUrl={product.coverUrl}
+            type={product.type}
+            published={product.published}
+            lessonsCount={product._count.lessons}
+            enrollmentsCount={product._count.enrollments}
+          />
         ))}
 
         {products.length === 0 && (
