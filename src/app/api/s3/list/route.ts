@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   const prefix = req.nextUrl.searchParams.get("prefix") ?? undefined;
   const continuationToken = req.nextUrl.searchParams.get("token") ?? undefined;
   const maxKeysParam = req.nextUrl.searchParams.get("maxKeys");
-  const maxKeys = maxKeysParam ? Math.max(1, Math.min(200, Number(maxKeysParam) || 50)) : 50;
+  const maxKeys = maxKeysParam ? Math.max(1, Math.min(1000, Number(maxKeysParam) || 50)) : 50;
 
   const result = await listObjects(prefix, maxKeys, continuationToken);
 

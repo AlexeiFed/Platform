@@ -150,8 +150,8 @@ export function AssetManager({
   const [uploadJobsLimit, setUploadJobsLimit] = useState(8);
   const [hideDoneJobs, setHideDoneJobs] = useState(true);
   const [allowDuplicates, setAllowDuplicates] = useState(false);
-  const [sortKey, setSortKey] = useState<SortKey>("date");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [sortKey, setSortKey] = useState<SortKey>("name");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [nameQuery, setNameQuery] = useState("");
   const [filter, setFilter] = useState<FileCategory>(defaultFilter);
   const [preview, setPreview] = useState<S3Object | null>(null);
@@ -283,9 +283,13 @@ export function AssetManager({
 
   const sortedFiles = useMemo(() => {
     const dir = sortDir === "asc" ? 1 : -1;
-    const q = nameQuery.trim().toLowerCase();
+    // NFC-нормализация: macOS хранит имена в NFD (декомпозиция),
+    // строка из input приходит в NFC — без нормализации .includes() не срабатывает.
+    const q = nameQuery.trim().toLowerCase().normalize("NFC");
     const list = q
-      ? filteredFiles.filter((f) => fileNameOf(f.Key).toLowerCase().includes(q))
+      ? filteredFiles.filter((f) =>
+          fileNameOf(f.Key).toLowerCase().normalize("NFC").includes(q)
+        )
       : [...filteredFiles];
     list.sort((a, b) => {
       if (sortKey === "size") return (a.Size - b.Size) * dir;
@@ -699,7 +703,19 @@ export function AssetManager({
                       ) : j.status === "done" ? (
                         <Check className="h-4 w-4 text-green-500" />
                       ) : j.status === "error" ? (
-                        <X className="h-4 w-4 text-destructive" />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          aria-label="Убрать"
+                          onClick={() => {
+                            cancelledJobIdsRef.current.add(j.id);
+                            delete uploadXhrByJobIdRef.current[j.id];
+                            setUploadJobs((prev) => prev.filter((x) => x.id !== j.id));
+                          }}
+                        >
+                          <X className="h-4 w-4 text-destructive" />
+                        </Button>
                       ) : null}
                     </div>
                   </div>
