@@ -11,6 +11,7 @@ import { redirect, notFound } from "next/navigation";
 import { tokens } from "@/lib/design-tokens";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { ScrollText } from "lucide-react";
 
 // Всегда динамический рендер — отображает свежие данные после сохранения админом
 export const dynamic = "force-dynamic";
@@ -46,53 +47,85 @@ export default async function CourseRulesPage({ params }: Props) {
   const olState = { count: 0 };
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      <div>
-        <h1 className={tokens.typography.h2}>Правила</h1>
-        <p className={`${tokens.typography.small} mt-1`}>{product.title}</p>
-      </div>
+    <div className="mx-auto max-w-3xl space-y-6">
+      {/* Eyebrow + title — минималистично, с иконкой-маркером раздела */}
+      <header className="space-y-2">
+        <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-primary">
+          <ScrollText className="h-3.5 w-3.5" aria-hidden />
+          Правила
+        </div>
+        <h1 className={`${tokens.typography.h2} text-balance`}>{product.title}</h1>
+      </header>
 
-      {/* Рендер markdown без карточки-обёртки; типографика через design-tokens */}
-      <div className="space-y-2">
+      {/* Длинный текст: ограничиваем строку до ~68ch, используем Inter (font-prose) для лучшей читаемости */}
+      <article className="font-prose max-w-[68ch] text-[15px] leading-relaxed text-foreground/90">
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           components={{
-            h1: ({ children }) => <h1 className={`${tokens.typography.h3} mt-5 mb-2`}>{children}</h1>,
-            h2: ({ children }) => <h2 className={`${tokens.typography.h4} mt-4 mb-1`}>{children}</h2>,
-            h3: ({ children }) => <h3 className="text-base font-semibold mt-3 mb-1">{children}</h3>,
-            p: ({ children }) => <p className={`${tokens.typography.prose} my-1`}>{children}</p>,
-            strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+            h1: ({ children }) => (
+              <h1 className="mb-3 mt-8 text-2xl font-bold tracking-tight text-foreground first:mt-0">
+                {children}
+              </h1>
+            ),
+            h2: ({ children }) => (
+              <h2 className="mb-2 mt-7 border-b border-border pb-1.5 text-xl font-semibold tracking-tight text-foreground first:mt-0">
+                {children}
+              </h2>
+            ),
+            h3: ({ children }) => (
+              <h3 className="mb-1.5 mt-5 text-base font-semibold text-foreground">{children}</h3>
+            ),
+            p: ({ children }) => <p className="my-3 leading-relaxed">{children}</p>,
+            strong: ({ children }) => (
+              <strong className="font-semibold text-foreground">{children}</strong>
+            ),
             em: ({ children }) => <em className="italic">{children}</em>,
-            ul: ({ children }) => <ul className="list-disc pl-5 space-y-0.5 text-base">{children}</ul>,
-            // Непрерывная нумерация: следующий ol продолжает счёт предыдущего
+            ul: ({ children }) => (
+              <ul className="my-3 space-y-1.5 pl-1 [&_li]:relative [&_li]:pl-5 [&_li]:before:absolute [&_li]:before:left-0 [&_li]:before:top-[0.7em] [&_li]:before:h-1.5 [&_li]:before:w-1.5 [&_li]:before:rounded-full [&_li]:before:bg-primary/70">
+                {children}
+              </ul>
+            ),
             ol: ({ children, start }) => {
               const s = typeof start === "number" ? start : olState.count + 1;
-              // Считаем li-потомков для корректного сдвига счётчика
               const liCount = Children.toArray(children).filter((c) => isValidElement(c)).length;
               olState.count = s + (liCount || 1) - 1;
               return (
-                <ol start={s} className="list-decimal pl-5 space-y-0.5 text-base">
+                <ol
+                  start={s}
+                  className="my-3 list-decimal space-y-1.5 pl-6 marker:font-semibold marker:text-primary"
+                >
                   {children}
                 </ol>
               );
             },
-            li: ({ children }) => <li className={tokens.typography.prose}>{children}</li>,
+            li: ({ children }) => <li className="leading-relaxed">{children}</li>,
             blockquote: ({ children }) => (
-              <blockquote className="border-l-4 border-primary/40 pl-4 italic text-muted-foreground text-base">
+              <blockquote className="my-4 rounded-lg border-l-4 border-primary/60 bg-primary/5 px-4 py-3 text-foreground/80">
                 {children}
               </blockquote>
             ),
-            // pre: старый контент с Tab (4 пробела) рендерится как code block — показываем как текст
-            pre: ({ children }) => <div className={tokens.typography.prose}>{children}</div>,
+            pre: ({ children }) => <div className="my-3">{children}</div>,
             code: ({ children }) => (
-              <code className="bg-muted rounded px-1 py-0.5 text-sm font-mono">{children}</code>
+              <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.9em]">
+                {children}
+              </code>
             ),
-            hr: () => <hr className="border-border my-4" />,
+            hr: () => <hr className="my-6 border-border" />,
+            a: ({ children, href }) => (
+              <a
+                href={href}
+                className="font-medium text-primary underline-offset-4 hover:underline"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {children}
+              </a>
+            ),
           }}
         >
           {product.rules}
         </ReactMarkdown>
-      </div>
+      </article>
     </div>
   );
 }

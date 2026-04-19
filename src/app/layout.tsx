@@ -1,11 +1,26 @@
+// Корневой layout приложения. Подключает глобальные шрифты (Manrope для UI/заголовков,
+// Inter для длинного текста), тему, провайдеры сессии и регистрацию service worker.
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { Manrope, Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/shared/theme-provider";
 import { SessionProvider } from "@/components/shared/session-provider";
 import { SwRegister } from "@/components/shared/sw-register";
 
-const inter = Inter({ subsets: ["latin", "cyrillic"] });
+// Manrope — основной UI-шрифт: навигация, кнопки, заголовки. Отличная читаемость кириллицы.
+const manrope = Manrope({
+  subsets: ["latin", "cyrillic"],
+  variable: "--font-sans",
+  display: "swap",
+  weight: ["400", "500", "600", "700", "800"],
+});
+
+// Inter — для длинных текстовых блоков (правила, описания уроков, markdown).
+const inter = Inter({
+  subsets: ["latin", "cyrillic"],
+  variable: "--font-prose",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "LearnHub — Платформа обучения",
@@ -26,7 +41,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ru" suppressHydrationWarning>
-      <body className={inter.className}>
+      <body className={`${manrope.variable} ${inter.variable} font-sans antialiased`}>
         <SessionProvider>
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
             <SwRegister />
