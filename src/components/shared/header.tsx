@@ -52,7 +52,7 @@ export function Header({ onMenuToggle }: { onMenuToggle?: () => void }) {
                   <p className="text-xs text-muted-foreground">{session.user.email}</p>
                 </div>
                 <Link
-                  href="/dashboard"
+                  href="/profile"
                   className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent"
                   onClick={() => setShowMenu(false)}
                 >

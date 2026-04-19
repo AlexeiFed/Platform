@@ -12,6 +12,14 @@ import { Send, Loader2, MessageSquare, ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { tokens } from "@/lib/design-tokens";
 import {
+  AttachButton,
+  AttachmentsPreview,
+  AttachmentsView,
+  parseAttachments,
+  useFeedbackUploader,
+  type FeedbackAttachment,
+} from "@/components/shared/feedback-attachments";
+import {
   getAdminFeedbackThreads,
   getThreadMessages,
   pollThreadMessages,
@@ -33,6 +41,7 @@ type Message = {
   id: string;
   userId: string;
   content: string;
+  attachments?: unknown;
   createdAt: string;
   readAt: string | null;
   senderName: string;
@@ -76,6 +85,8 @@ export function FeedbackChat({ initialThreads, initialEnrollmentId }: Props) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+  const [pending, setPending] = useState<FeedbackAttachment[]>([]);
+  const { uploading, uploadFiles } = useFeedbackUploader("feedback");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastMessageTimeRef = useRef<string>(new Date(0).toISOString());
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -174,13 +185,22 @@ export function FeedbackChat({ initialThreads, initialEnrollmentId }: Props) {
     router.replace(`/admin/feedback?${params.toString()}`, { scroll: false });
   }
 
+  async function handleFiles(files: File[]) {
+    const uploaded = await uploadFiles(files);
+    if (uploaded.length) setPending((prev) => [...prev, ...uploaded].slice(0, 10));
+  }
+
   // Отправка сообщения
   async function handleSend() {
     const content = text.trim();
-    if (!content || !activeId || sending) return;
+    if ((!content && pending.length === 0) || !activeId || sending) return;
     setSending(true);
     setError("");
-    const result = await sendAdminFeedbackMessage({ enrollmentId: activeId, content });
+    const result = await sendAdminFeedbackMessage({
+      enrollmentId: activeId,
+      content,
+      attachments: pending,
+    });
     setSending(false);
     if (result.error) {
       setError(result.error);
@@ -188,6 +208,7 @@ export function FeedbackChat({ initialThreads, initialEnrollmentId }: Props) {
     }
     if (result.success && result.data) {
       setText("");
+      setPending([]);
       setMessages((prev) => [...prev, result.data!]);
       lastMessageTimeRef.current = result.data.createdAt;
       // Обновляем превью треда
@@ -317,7 +338,9 @@ export function FeedbackChat({ initialThreads, initialEnrollmentId }: Props) {
             </div>
           ) : null}
 
-          {messages.map((m) => (
+          {messages.map((m) => {
+            const atts = parseAttachments(m.attachments);
+            return (
             <div
               key={m.id}
               className={`flex ${m.fromStudent ? "justify-start" : "justify-end"}`}
@@ -329,7 +352,10 @@ export function FeedbackChat({ initialThreads, initialEnrollmentId }: Props) {
                     : "rounded-tr-sm bg-primary text-primary-foreground"
                 }`}
               >
-                <div className="whitespace-pre-wrap break-words">{m.content}</div>
+                {m.content && (
+                  <div className="whitespace-pre-wrap break-words">{m.content}</div>
+                )}
+                {atts.length > 0 && <AttachmentsView items={atts} />}
                 <div
                   className={`mt-1 text-[10px] ${
                     m.fromStudent ? "text-muted-foreground" : "text-primary-foreground/70"
@@ -345,7 +371,8 @@ export function FeedbackChat({ initialThreads, initialEnrollmentId }: Props) {
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
           <div ref={messagesEndRef} />
         </div>
 
@@ -355,7 +382,12 @@ export function FeedbackChat({ initialThreads, initialEnrollmentId }: Props) {
             {error && (
               <p className="mb-2 text-xs text-destructive">{error}</p>
             )}
+            <AttachmentsPreview
+              items={pending}
+              onRemove={(i) => setPending((prev) => prev.filter((_, idx) => idx !== i))}
+            />
             <div className="flex items-end gap-2">
+              <AttachButton uploading={uploading} onFiles={handleFiles} />
               <textarea
                 value={text}
                 onChange={(e) => setText(e.target.value)}
@@ -373,7 +405,7 @@ export function FeedbackChat({ initialThreads, initialEnrollmentId }: Props) {
                 type="button"
                 size="icon"
                 onClick={() => void handleSend()}
-                disabled={sending || !text.trim()}
+                disabled={sending || uploading || (!text.trim() && pending.length === 0)}
                 className="h-10 w-10 shrink-0"
               >
                 {sending ? (

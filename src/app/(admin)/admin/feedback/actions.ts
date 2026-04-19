@@ -109,6 +109,7 @@ export async function getThreadMessages(enrollmentId: string) {
           id: m.id,
           userId: m.userId,
           content: m.content,
+          attachments: (m.attachments as unknown) ?? null,
           createdAt: m.createdAt.toISOString(),
           readAt: m.readAt?.toISOString() ?? null,
           senderName: m.user.name ?? m.user.email,
@@ -150,6 +151,7 @@ export async function pollThreadMessages(enrollmentId: string, since: string) {
         id: m.id,
         userId: m.userId,
         content: m.content,
+        attachments: (m.attachments as unknown) ?? null,
         createdAt: m.createdAt.toISOString(),
         readAt: m.readAt?.toISOString() ?? null,
         senderName: m.user.name ?? m.user.email,
@@ -164,9 +166,19 @@ export async function pollThreadMessages(enrollmentId: string, since: string) {
 
 // === Отправить сообщение от имени куратора/админа ===
 
+const attachmentSchema = z.object({
+  url: z.string().url(),
+  type: z.enum(["image", "video", "file"]),
+  name: z.string().max(512).optional(),
+  size: z.number().int().nonnegative().optional(),
+});
+
 const sendSchema = z.object({
   enrollmentId: z.string().uuid(),
-  content: z.string().min(1).max(8000),
+  content: z.string().max(8000),
+  attachments: z.array(attachmentSchema).max(10).optional().default([]),
+}).refine((d) => d.content.trim().length > 0 || d.attachments.length > 0, {
+  message: "Требуется текст или вложение",
 });
 
 export async function sendAdminFeedbackMessage(
@@ -194,11 +206,13 @@ export async function sendAdminFeedbackMessage(
         enrollmentId: data.enrollmentId,
         userId: session.user.id,
         content: data.content,
+        attachments: data.attachments.length ? data.attachments : undefined,
       },
       select: {
         id: true,
         userId: true,
         content: true,
+        attachments: true,
         createdAt: true,
         user: { select: { name: true, email: true } },
       },
@@ -231,6 +245,7 @@ export async function sendAdminFeedbackMessage(
         id: message.id,
         userId: message.userId,
         content: message.content,
+        attachments: (message.attachments as unknown) ?? null,
         createdAt: message.createdAt.toISOString(),
         readAt: null,
         senderName: message.user.name ?? message.user.email,

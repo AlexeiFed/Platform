@@ -85,6 +85,10 @@ model User {
   passwordHash String
   name         String?
   avatarUrl    String?
+  /// Вес в кг (личные данные профиля студента)
+  weight       Float?
+  /// Рост в см
+  height       Float?
   role         Role     @default(USER)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -98,8 +102,56 @@ model User {
   payments        Payment[]
   feedbackMessages CuratorFeedbackMessage[]
   enrollmentTariffAuthorship EnrollmentTariffHistory[] @relation("EnrollmentTariffHistoryAuthor")
+  progressPhotos  UserProgressPhoto[]
+  measurements    UserMeasurement[]
 
   @@map("users")
+}
+
+enum ProgressPhotoType {
+  BEFORE
+  AFTER
+}
+
+/// Фото прогресса студента (до/после), до 4 в каждой категории
+model UserProgressPhoto {
+  id        String            @id @default(uuid())
+  userId    String
+  type      ProgressPhotoType
+  url       String
+  position  Int               @default(0)
+  createdAt DateTime          @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type, position])
+  @@map("user_progress_photos")
+}
+
+/// Замеры студента: все значения в см
+model UserMeasurement {
+  id          String   @id @default(uuid())
+  userId      String
+  date        DateTime
+  shoulders   Float?
+  aboveChest  Float?
+  belowChest  Float?
+  waist       Float?
+  abdomen     Float?
+  hips        Float?
+  thighRight  Float?
+  thighLeft   Float?
+  calfRight   Float?
+  calfLeft    Float?
+  armRight    Float?
+  armLeft     Float?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, date])
+  @@map("user_measurements")
 }
 
 model Account {
@@ -283,6 +335,8 @@ model CuratorFeedbackMessage {
   enrollmentId String
   userId       String
   content      String    @db.Text
+  /// Массив вложений: [{ url, type: "image"|"video"|"file", name, size }]
+  attachments  Json?
   createdAt    DateTime  @default(now())
   /// null = не прочитано получателем. Для студенческих сообщений — когда куратор/админ открыл тред.
   readAt       DateTime?

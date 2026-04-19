@@ -323,6 +323,7 @@ function SortableLesson({
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: lesson.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
+  // type="button" обязателен — иначе drag в форме редактирования урока триггерит submit
   const blocks = lesson.blocks ?? [];
   const blockSummary = blocks.length
     ? blocks.map((b) => (b.type === "text" ? "Т" : b.type === "video" ? "В" : "И")).join("·")
@@ -331,7 +332,7 @@ function SortableLesson({
   return (
     <Card ref={setNodeRef} style={style} className="group">
       <CardContent className="flex items-center gap-3 p-3">
-        <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing touch-none" aria-label="Перетащить">
+        <button type="button" {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing touch-none" aria-label="Перетащить">
           <GripVertical className="h-5 w-5 text-muted-foreground" />
         </button>
         <span className="text-sm text-muted-foreground w-8">{index + 1}</span>
@@ -537,7 +538,7 @@ function SortableBlock({
   return (
     <div ref={setNodeRef} style={style} className="border rounded-lg p-3 bg-card">
       <div className="flex gap-2">
-        <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing touch-none mt-1 shrink-0">
+        <button type="button" {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing touch-none mt-1 shrink-0">
           <GripVertical className="h-4 w-4 text-muted-foreground" />
         </button>
         <div className="flex-1 min-w-0">

@@ -17,7 +17,7 @@ export const FeedbackForm = ({ enrollmentId }: { enrollmentId: string }) => {
     if (!content || loading) return;
     setLoading(true);
     setError("");
-    const res = await submitCuratorFeedbackMessage({ enrollmentId, content });
+    const res = await submitCuratorFeedbackMessage({ enrollmentId, content, attachments: [] });
     setLoading(false);
     if (res.error) {
       setError(res.error);
