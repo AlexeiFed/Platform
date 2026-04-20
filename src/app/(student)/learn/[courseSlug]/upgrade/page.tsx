@@ -22,19 +22,19 @@ export default async function TariffUpgradePage({ params }: Props) {
   const enrollment = await prisma.enrollment.findUnique({
     where: { userId_productId: { userId: session.user.id, productId: product.id } },
     include: {
-      tariff: { select: { id: true, name: true, price: true, currency: true } },
+      tariff: { select: { id: true, name: true, price: true, currency: true, sortOrder: true } },
     },
   });
   if (!enrollment) redirect("/catalog");
 
   const tariffs = await prisma.productTariff.findMany({
     where: { productId: product.id, published: true, deletedAt: null },
-    orderBy: [{ price: "asc" }, { sortOrder: "asc" }],
-    select: { id: true, name: true, price: true, currency: true, criteria: true },
+    orderBy: [{ sortOrder: "asc" }, { price: "asc" }],
+    select: { id: true, name: true, price: true, currency: true, criteria: true, sortOrder: true },
   });
 
   const fromNum = Number(enrollment.tariff.price);
-  const upgrades = tariffs.filter((t) => Number(t.price) > fromNum);
+  const upgrades = tariffs.filter((t) => t.sortOrder > enrollment.tariff.sortOrder);
 
   return (
     <div className="max-w-xl mx-auto space-y-6">
@@ -50,7 +50,7 @@ export default async function TariffUpgradePage({ params }: Props) {
       {upgrades.length === 0 ? (
         <Card>
           <CardContent className={`${tokens.spacing.card} text-sm text-muted-foreground`}>
-            Нет более дорогих опубликованных тарифов. Обратитесь в поддержку или к администратору.
+            Нет тарифов выше вашего уровня. Обратитесь в поддержку или к администратору.
           </CardContent>
         </Card>
       ) : (

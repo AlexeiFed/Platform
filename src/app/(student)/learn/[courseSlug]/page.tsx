@@ -138,7 +138,7 @@ export default async function CoursePage({ params }: Props) {
   const enrollment = await prisma.enrollment.findUnique({
     where: { userId_productId: { userId: session.user.id, productId: product.id } },
     include: {
-      tariff: { select: { price: true, name: true } },
+      tariff: { select: { sortOrder: true, name: true } },
       procedures: {
         include: { procedureType: { select: { id: true, title: true } } },
         orderBy: [{ position: "asc" }, { createdAt: "asc" }],
@@ -153,7 +153,7 @@ export default async function CoursePage({ params }: Props) {
       productId: product.id,
       published: true,
       deletedAt: null,
-      price: { gt: enrollment.tariff.price },
+      sortOrder: { gt: enrollment.tariff.sortOrder },
     },
   });
 

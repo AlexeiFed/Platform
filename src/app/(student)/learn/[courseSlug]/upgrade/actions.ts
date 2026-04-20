@@ -23,7 +23,7 @@ export async function createTariffUpgradeCheckout(input: z.infer<typeof createUp
     const enrollment = await prisma.enrollment.findUnique({
       where: { id: data.enrollmentId, userId: session.user.id },
       include: {
-        tariff: { select: { id: true, price: true, currency: true, productId: true } },
+        tariff: { select: { id: true, price: true, currency: true, productId: true, sortOrder: true } },
         product: {
           select: { slug: true, published: true, paymentFormUrl: true },
         },
@@ -39,12 +39,15 @@ export async function createTariffUpgradeCheckout(input: z.infer<typeof createUp
         published: true,
         deletedAt: null,
       },
-      select: { id: true, price: true, currency: true },
+      select: { id: true, price: true, currency: true, sortOrder: true },
     });
     if (!toTariff) return { error: "Тариф не найден" };
 
     const fromPrice = Number(enrollment.tariff.price);
     const toPrice = Number(toTariff.price);
+    if (toTariff.sortOrder <= enrollment.tariff.sortOrder) {
+      return { error: "Можно перейти только на тариф с более высоким уровнем" };
+    }
     if (toPrice <= fromPrice) {
       return { error: "Можно перейти только на более дорогой тариф" };
     }
