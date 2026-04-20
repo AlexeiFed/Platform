@@ -3,6 +3,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession, signOut } from "next-auth/react";
 import {
   LayoutDashboard,
   BookOpen,
@@ -14,11 +15,14 @@ import {
   ShoppingBag,
   Wallet,
   MessageSquare,
+  User,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { tokens, layout } from "@/lib/design-tokens";
 import { CourseNavSidebarSection } from "@/components/shared/course-nav-sidebar-section";
 import { FeedbackUnreadBadge } from "@/components/shared/feedback-unread-badge";
+import { ThemeToggle } from "@/components/shared/theme-toggle";
 
 type NavItem = {
   label: string;
@@ -54,6 +58,7 @@ export function Sidebar({
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
+  const { data: session } = useSession();
   const items = variant === "admin" ? adminNav : studentNav;
 
   return (
@@ -102,6 +107,43 @@ export function Sidebar({
           </Suspense>
         ) : null}
       </div>
+      {mobileDrawer ? (
+        <div className="shrink-0 space-y-1 border-t border-border px-3 py-4">
+          <div className="flex items-center justify-between rounded-lg px-3 py-2">
+            <span className={tokens.typography.label}>Тема</span>
+            <ThemeToggle />
+          </div>
+          {session?.user ? (
+            <>
+              <Link
+                href="/profile"
+                onClick={() => onNavigate?.()}
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium",
+                  tokens.animation.fast,
+                  pathname.startsWith("/profile")
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                )}
+              >
+                <User className="h-5 w-5" />
+                Профиль
+              </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  onNavigate?.();
+                  void signOut();
+                }}
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-destructive hover:bg-accent"
+              >
+                <LogOut className="h-5 w-5" />
+                Выйти
+              </button>
+            </>
+          ) : null}
+        </div>
+      ) : null}
     </aside>
   );
 }

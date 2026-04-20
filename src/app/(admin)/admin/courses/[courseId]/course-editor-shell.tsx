@@ -69,7 +69,7 @@ function TabPills({
   onChange: (id: TabId) => void;
 }) {
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex w-max min-w-full items-center justify-start gap-1 pr-2">
       {tabs.map((tab) => (
         <button
           key={tab.id}

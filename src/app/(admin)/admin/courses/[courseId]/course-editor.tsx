@@ -325,84 +325,82 @@ function SortableLesson({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: lesson.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
   // type="button" обязателен — иначе drag в форме редактирования урока триггерит submit
-  const blocks = lesson.blocks ?? [];
-  const blockSummary = blocks.length
-    ? blocks.map((b) => (b.type === "text" ? "Т" : b.type === "video" ? "В" : "И")).join("·")
-    : lesson.videoUrl ? "В" : lesson.content ? "Т" : "—";
-
   return (
     <Card ref={setNodeRef} style={style} className="group cursor-pointer">
       <CardContent
-        className="flex items-center gap-3 p-3"
+        className="flex flex-col gap-2 p-3"
         onClick={(e) => {
           if ((e.target as HTMLElement).closest("[data-stop-lesson-card-click]")) return;
           onEdit();
         }}
       >
-        <button
-          type="button"
-          data-stop-lesson-card-click
-          {...attributes}
-          {...listeners}
-          className="cursor-grab touch-none active:cursor-grabbing"
-          aria-label="Перетащить"
-        >
-          <GripVertical className="h-5 w-5 text-muted-foreground" />
-        </button>
-        <span className="w-8 text-sm text-muted-foreground">{index + 1}</span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium">{lesson.title}</p>
-          <p className="text-xs text-muted-foreground">
-            [{blockSummary}]
-            {lesson.homeworkEnabled && " · ДЗ"}
-          </p>
-        </div>
-        <div className="flex items-center gap-1">
-          <div
+        <div className="flex items-start gap-3">
+          <button
+            type="button"
             data-stop-lesson-card-click
-            className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100"
+            {...attributes}
+            {...listeners}
+            className="cursor-grab touch-none shrink-0 active:cursor-grabbing"
+            aria-label="Перетащить"
           >
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={(e) => {
-                e.stopPropagation();
-                onTogglePublish();
-              }}
-            >
-              {lesson.published ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={(e) => {
-                e.stopPropagation();
-                onEdit();
-              }}
-            >
-              <Pencil className="h-4 w-4" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete();
-              }}
-              className="text-destructive hover:text-destructive"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+            <GripVertical className="h-5 w-5 text-muted-foreground" />
+          </button>
+          <span className="w-8 shrink-0 pt-0.5 text-sm text-muted-foreground">{index + 1}</span>
+          <div className="min-w-0 flex-1">
+            <p className="break-words text-sm font-medium leading-snug">{lesson.title}</p>
           </div>
-          <Badge variant={lesson.published ? "success" : "outline"} className="text-xs ml-1">
-            {lesson.published ? "Опубл." : "Черн."}
-          </Badge>
-          {lesson._count.submissions > 0 && (
-            <Badge variant="secondary" className="text-xs">{lesson._count.submissions} ДЗ</Badge>
-          )}
+          <div className="flex shrink-0 flex-col items-end gap-1">
+            <Badge variant={lesson.published ? "success" : "outline"} className="text-xs">
+              {lesson.published ? "Опубл." : "Черн."}
+            </Badge>
+            {lesson._count.submissions > 0 && (
+              <Badge variant="secondary" className="text-xs">
+                {lesson._count.submissions} ДЗ
+              </Badge>
+            )}
+          </div>
+        </div>
+        <div
+          data-stop-lesson-card-click
+          className="flex justify-end gap-1 opacity-100 md:opacity-0 md:transition-opacity md:group-hover:opacity-100"
+        >
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={(e) => {
+              e.stopPropagation();
+              onTogglePublish();
+            }}
+            aria-label={lesson.published ? "Снять с публикации" : "Опубликовать"}
+          >
+            {lesson.published ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit();
+            }}
+            aria-label="Редактировать урок"
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            className="text-destructive hover:text-destructive"
+            aria-label="Удалить урок"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
         </div>
       </CardContent>
     </Card>
@@ -1751,7 +1749,7 @@ export function CourseEditor({
                   <div className="w-5" />
                   <span className="text-sm text-muted-foreground w-8">{idx + 1}</span>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm truncate">{lesson.title}</p>
+                    <p className="break-words text-sm font-medium leading-snug">{lesson.title}</p>
                     {!lesson.slug && (
                       <p className="text-xs text-muted-foreground">⚠ slug пустой — сохраните урок, чтобы ссылка заработала</p>
                     )}
