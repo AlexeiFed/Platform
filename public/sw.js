@@ -1,4 +1,4 @@
-const CACHE_NAME = "learnhub-v3";
+const CACHE_NAME = "learnhub-v4";
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -18,11 +18,23 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(event.request.url);
 
-  // Пропускаем: API, Next.js, и все cross-origin (S3, внешние CDN и т.д.)
+  const accept = event.request.headers.get("Accept") ?? "";
+  const isRscOrFlight =
+    accept.includes("text/x-component") ||
+    accept.includes("application/vnd.nextjs.rsc") ||
+    event.request.headers.get("RSC") === "1" ||
+    event.request.headers.get("Next-Router-Prefetch") === "1" ||
+    event.request.headers.has("Next-Router-State-Tree") ||
+    url.searchParams.has("_rsc");
+
+  // Пропускаем: API, Next.js, RSC/flight (иначе клиентская навигация ломается — Safari:
+  // access control / Load failed), админку (всегда свежие данные), cross-origin.
   if (
     url.origin !== self.location.origin ||
     url.pathname.startsWith("/api/") ||
-    url.pathname.startsWith("/_next/")
+    url.pathname.startsWith("/_next/") ||
+    url.pathname.startsWith("/admin") ||
+    isRscOrFlight
   ) return;
 
   event.respondWith(
