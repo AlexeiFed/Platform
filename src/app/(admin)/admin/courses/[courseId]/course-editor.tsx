@@ -470,39 +470,51 @@ function MediaBlockEditor({
                 <img src={block.content} alt="" className="w-full h-auto max-h-48 object-contain" />
               </div>
               {/* Выбор размера отображения у студента */}
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground shrink-0">Размер:</span>
-                {(["full", "half", "third"] as const).map((s) => (
-                  <Button
-                    key={s}
-                    type="button"
-                    variant={(block.size ?? "full") === s ? "default" : "outline"}
-                    size="sm"
-                    className="h-6 px-2 text-xs"
-                    onClick={() => onUpdate({ size: s })}
-                  >
-                    {s === "full" ? "Полная" : s === "half" ? "½ ширины" : "⅓ ширины"}
-                  </Button>
-                ))}
+              <div className="min-w-0 space-y-1.5">
+                <span className="text-xs text-muted-foreground">Размер у студента</span>
+                <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-3">
+                  {(["full", "half", "third"] as const).map((s) => (
+                    <Button
+                      key={s}
+                      type="button"
+                      variant={(block.size ?? "full") === s ? "default" : "outline"}
+                      size="sm"
+                      className="h-8 min-w-0 shrink px-2 text-xs"
+                      onClick={() => onUpdate({ size: s })}
+                    >
+                      {s === "full" ? "Полная" : s === "half" ? "½ ширины" : "⅓ ширины"}
+                    </Button>
+                  ))}
+                </div>
               </div>
             </div>
           )}
           {block.type === "video" && (
-            // Thumbnail слева (вертикальный, не на всю ширину) + имя файла справа
-            <div className="flex items-start gap-3 p-2 rounded-lg bg-muted/50 border">
-              <div className="h-20 w-14 shrink-0 rounded-md overflow-hidden border bg-muted">
-                <video
-                  src={block.content}
-                  preload="metadata"
-                  className="h-full w-full object-cover"
-                  muted
-                  onLoadedMetadata={(e) => { e.currentTarget.currentTime = 0.1; }}
-                />
+            <div className="min-w-0 space-y-2">
+              <div className="flex min-w-0 items-start gap-3 rounded-lg border bg-muted/50 p-2">
+                <div className="h-20 w-14 shrink-0 overflow-hidden rounded-md border bg-muted">
+                  <video
+                    src={block.content}
+                    preload="metadata"
+                    className="h-full w-full object-cover"
+                    muted
+                    playsInline
+                    onLoadedMetadata={(e) => {
+                      e.currentTarget.currentTime = 0.1;
+                    }}
+                  />
+                </div>
+                <div className="flex min-w-0 flex-1 items-center gap-2 pt-1">
+                  <Film className="h-4 w-4 shrink-0 text-primary" />
+                  <span className="break-all text-xs">{block.content.split("/").pop()}</span>
+                </div>
               </div>
-              <div className="min-w-0 flex-1 flex items-center gap-2 pt-1">
-                <Film className="h-4 w-4 text-primary shrink-0" />
-                <span className="text-xs break-all">{block.content.split("/").pop()}</span>
-              </div>
+              <video
+                src={block.content}
+                controls
+                playsInline
+                className="aspect-video max-h-[min(50vh,420px)] w-full rounded-lg border bg-black"
+              />
             </div>
           )}
           <Button type="button" variant="outline" size="sm" onClick={() => onUpdate({ content: "" })}>
@@ -511,29 +523,31 @@ function MediaBlockEditor({
         </div>
       ) : (
         <div className="space-y-2">
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
             <Input
               ref={urlRef}
               placeholder={block.type === "video" ? "URL видео" : "URL изображения"}
               onBlur={applyUrl}
               onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), applyUrl())}
-              className="flex-1 min-w-[180px]"
+              className="min-w-0 sm:min-w-[180px] sm:flex-1"
             />
-            <Button type="button" variant="outline" size="sm" onClick={() => setShowPicker(!showPicker)}>
-              <Film className="h-3.5 w-3.5 mr-1" /> Хранилище
-            </Button>
-            <div className="relative">
-              <input
-                type="file"
-                accept={block.type === "video" ? "video/*" : "image/*"}
-                onChange={handleUpload}
-                className="absolute inset-0 opacity-0 cursor-pointer"
-                disabled={uploading}
-              />
-              <Button type="button" variant="outline" size="sm" disabled={uploading}>
-                {uploading ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Upload className="h-3.5 w-3.5 mr-1" />}
-                {uploading ? "..." : "Загрузить"}
+            <div className="flex min-w-0 flex-wrap gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setShowPicker(!showPicker)}>
+                <Film className="mr-1 h-3.5 w-3.5" /> Хранилище
               </Button>
+              <div className="relative shrink-0">
+                <input
+                  type="file"
+                  accept={block.type === "video" ? "video/*" : "image/*"}
+                  onChange={handleUpload}
+                  className="absolute inset-0 cursor-pointer opacity-0"
+                  disabled={uploading}
+                />
+                <Button type="button" variant="outline" size="sm" disabled={uploading}>
+                  {uploading ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Upload className="mr-1 h-3.5 w-3.5" />}
+                  {uploading ? "..." : "Загрузить"}
+                </Button>
+              </div>
             </div>
           </div>
 
@@ -576,8 +590,8 @@ function SortableBlock({
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
 
   return (
-    <div ref={setNodeRef} style={style} className="border rounded-lg p-3 bg-card">
-      <div className="flex gap-2">
+    <div ref={setNodeRef} style={style} className="min-w-0 rounded-lg border bg-card p-3">
+      <div className="flex min-w-0 gap-2">
         <button type="button" {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing touch-none mt-1 shrink-0">
           <GripVertical className="h-4 w-4 text-muted-foreground" />
         </button>

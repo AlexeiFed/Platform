@@ -553,33 +553,34 @@ export function AssetManager({
         ))}
       </div>
 
-      {/* Search + Upload */}
-      <div className="flex gap-3">
-        <div className="flex-1 flex gap-2">
-          <Input
-            placeholder="Путь/префикс..."
-            value={prefix}
-            onChange={(e) => setPrefix(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && loadFiles()}
-          />
-          <Button type="button" onClick={() => loadFiles()} disabled={loading}>
-            <FolderOpen className="h-4 w-4 mr-2" />
+      {/* Путь + Обзор/Загрузить — на узком экране в колонку, без вылета за карточку */}
+      <div className="min-w-0 space-y-2">
+        <Input
+          placeholder="Путь/префикс..."
+          value={prefix}
+          onChange={(e) => setPrefix(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && loadFiles()}
+          className="w-full min-w-0"
+        />
+        <div className="flex min-w-0 flex-wrap gap-2">
+          <Button type="button" onClick={() => loadFiles()} disabled={loading} className="shrink-0">
+            <FolderOpen className="mr-2 h-4 w-4" />
             {loading ? "..." : "Обзор"}
           </Button>
-        </div>
-        <div className="relative">
-          <input
-            type="file"
-            onChange={handleUpload}
-            multiple
-            accept="video/*,image/*,.pdf,.doc,.docx,.txt,.zip"
-            className="absolute inset-0 opacity-0 cursor-pointer"
-            disabled={uploading}
-          />
-          <Button type="button" variant="outline" disabled={uploading}>
-            <Upload className="h-4 w-4 mr-2" />
-            {uploading ? "Загружаем..." : "Загрузить"}
-          </Button>
+          <div className="relative shrink-0">
+            <input
+              type="file"
+              onChange={handleUpload}
+              multiple
+              accept="video/*,image/*,.pdf,.doc,.docx,.txt,.zip"
+              className="absolute inset-0 cursor-pointer opacity-0"
+              disabled={uploading}
+            />
+            <Button type="button" variant="outline" disabled={uploading}>
+              <Upload className="mr-2 h-4 w-4" />
+              {uploading ? "Загружаем..." : "Загрузить"}
+            </Button>
+          </div>
         </div>
       </div>
 

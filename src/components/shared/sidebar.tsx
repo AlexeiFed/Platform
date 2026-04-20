@@ -1,9 +1,9 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import {
   LayoutDashboard,
   BookOpen,
@@ -23,6 +23,7 @@ import { tokens, layout } from "@/lib/design-tokens";
 import { CourseNavSidebarSection } from "@/components/shared/course-nav-sidebar-section";
 import { FeedbackUnreadBadge } from "@/components/shared/feedback-unread-badge";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
+import { SignOutConfirmDialog } from "@/components/shared/sign-out-confirm-dialog";
 
 type NavItem = {
   label: string;
@@ -59,6 +60,7 @@ export function Sidebar({
 }) {
   const pathname = usePathname();
   const { data: session } = useSession();
+  const [signOutOpen, setSignOutOpen] = useState(false);
   const items = variant === "admin" ? adminNav : studentNav;
 
   return (
@@ -131,15 +133,17 @@ export function Sidebar({
               </Link>
               <button
                 type="button"
-                onClick={() => {
-                  onNavigate?.();
-                  void signOut();
-                }}
+                onClick={() => setSignOutOpen(true)}
                 className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-destructive hover:bg-accent"
               >
                 <LogOut className="h-5 w-5" />
                 Выйти
               </button>
+              <SignOutConfirmDialog
+                open={signOutOpen}
+                onOpenChange={setSignOutOpen}
+                onBeforeSignOut={() => onNavigate?.()}
+              />
             </>
           ) : null}
         </div>
