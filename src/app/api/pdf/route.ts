@@ -98,7 +98,7 @@ export async function GET(req: NextRequest) {
     if (contentRange) headers.set("Content-Range", contentRange);
     if (res.ContentLength != null && range) headers.set("Content-Length", String(res.ContentLength));
 
-    return new NextResponse(bodyBytes, {
+    return new NextResponse(Buffer.from(bodyBytes), {
       status: contentRange ? 206 : 200,
       headers,
     });
