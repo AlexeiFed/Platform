@@ -28,8 +28,19 @@ declare global {
 }
 
 const PDFJS_VERSION = "4.10.38";
-const PDFJS_SRC = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.min.js`;
-const PDFJS_WORKER_SRC = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.worker.min.js`;
+
+// cdnjs часто блокируется (CSP/AdBlock/провайдер). Делаем несколько источников.
+// Нужен legacy build, чтобы получить window.pdfjsLib.
+const PDFJS_SOURCES = [
+  {
+    script: `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/legacy/build/pdf.min.js`,
+    worker: `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/legacy/build/pdf.worker.min.js`,
+  },
+  {
+    script: `https://unpkg.com/pdfjs-dist@${PDFJS_VERSION}/legacy/build/pdf.min.js`,
+    worker: `https://unpkg.com/pdfjs-dist@${PDFJS_VERSION}/legacy/build/pdf.worker.min.js`,
+  },
+] as const;
 
 let pdfjsLoadPromise: Promise<PdfJsLib> | null = null;
 
@@ -39,34 +50,60 @@ function loadPdfJs(): Promise<PdfJsLib> {
   }
 
   if (window.pdfjsLib) {
-    window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_SRC;
+    // workerSrc может быть переопределён ниже, но тут выставим дефолт.
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_SOURCES[0].worker;
     return Promise.resolve(window.pdfjsLib);
   }
 
   if (!pdfjsLoadPromise) {
     pdfjsLoadPromise = new Promise<PdfJsLib>((resolve, reject) => {
-      const existing = document.querySelector<HTMLScriptElement>(`script[data-pdfjs="${PDFJS_VERSION}"]`);
-      if (existing) {
-        existing.addEventListener("load", () => {
-          if (!window.pdfjsLib) return reject(new Error("pdfjsLib not available after script load"));
-          window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_SRC;
-          resolve(window.pdfjsLib);
-        });
-        existing.addEventListener("error", () => reject(new Error("Failed to load pdf.js")));
-        return;
-      }
+      let idx = 0;
 
-      const s = document.createElement("script");
-      s.src = PDFJS_SRC;
-      s.async = true;
-      s.dataset.pdfjs = PDFJS_VERSION;
-      s.onload = () => {
-        if (!window.pdfjsLib) return reject(new Error("pdfjsLib not available after script load"));
-        window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_SRC;
-        resolve(window.pdfjsLib);
+      const tryNext = () => {
+        const source = PDFJS_SOURCES[idx];
+        if (!source) {
+          reject(new Error("Failed to load pdf.js"));
+          return;
+        }
+
+        const existing = document.querySelector<HTMLScriptElement>(
+          `script[data-pdfjs="${PDFJS_VERSION}"][data-src-idx="${idx}"]`,
+        );
+        if (existing) {
+          existing.addEventListener("load", () => {
+            if (!window.pdfjsLib) return reject(new Error("pdfjsLib not available after script load"));
+            window.pdfjsLib.GlobalWorkerOptions.workerSrc = source.worker;
+            resolve(window.pdfjsLib);
+          });
+          existing.addEventListener("error", () => {
+            idx += 1;
+            tryNext();
+          });
+          return;
+        }
+
+        const s = document.createElement("script");
+        s.src = source.script;
+        s.async = true;
+        s.dataset.pdfjs = PDFJS_VERSION;
+        s.dataset.srcIdx = String(idx);
+        s.onload = () => {
+          if (!window.pdfjsLib) {
+            idx += 1;
+            tryNext();
+            return;
+          }
+          window.pdfjsLib.GlobalWorkerOptions.workerSrc = source.worker;
+          resolve(window.pdfjsLib);
+        };
+        s.onerror = () => {
+          idx += 1;
+          tryNext();
+        };
+        document.head.appendChild(s);
       };
-      s.onerror = () => reject(new Error("Failed to load pdf.js"));
-      document.head.appendChild(s);
+
+      tryNext();
     });
   }
 
