@@ -162,7 +162,9 @@ export function PdfPages({
         const pdfjs = await loadPdfJs();
         if (cancelled) return;
 
-        doc = await pdfjs.getDocument({ url: proxiedUrl }).promise;
+        // Важно: на некоторых устройствах/браузерах pdf.js может не послать cookie,
+        // без этого /api/pdf не увидит сессию.
+        doc = await pdfjs.getDocument({ url: proxiedUrl, withCredentials: true } as any).promise;
         if (cancelled) return;
 
         setPageCount(doc.numPages);
