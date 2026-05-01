@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { tokens } from "@/lib/design-tokens";
 import { confirmDeletion } from "@/lib/confirm-deletion";
 import { getInitials } from "@/lib/utils";
+import { signOut } from "next-auth/react";
 import {
   Camera,
   Loader2,
@@ -33,6 +34,7 @@ import {
   removeProgressPhoto,
   addMeasurement,
   deleteMeasurement,
+  deleteOwnAccount,
 } from "./actions";
 import { measurementFields } from "@/lib/measurement-fields";
 
@@ -100,6 +102,7 @@ function BasicCard({ user }: { user: UserData }) {
   const [height, setHeight] = useState(user.height != null ? String(user.height) : "");
   const [savingBasic, setSavingBasic] = useState(false);
   const { uploading, uploadFiles } = useFeedbackUploader("profile");
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   async function onAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -125,6 +128,27 @@ function BasicCard({ user }: { user: UserData }) {
     setSavingBasic(true);
     await updateProfileBasic({ name: trimmed });
     setSavingBasic(false);
+  }
+
+  async function handleDeleteAccount() {
+    if (
+      !confirmDeletion(
+        "Удалить аккаунт?\n\nБудут удалены ваши доступы к курсам/марафонам и связанные данные. Действие необратимо.",
+      )
+    ) {
+      return;
+    }
+
+    setDeletingAccount(true);
+    const res = await deleteOwnAccount();
+    setDeletingAccount(false);
+
+    if (res && "error" in res && res.error) {
+      window.alert(res.error);
+      return;
+    }
+
+    await signOut({ callbackUrl: "/" });
   }
 
   return (
@@ -201,6 +225,17 @@ function BasicCard({ user }: { user: UserData }) {
             <Loader2 className="h-3 w-3 animate-spin" /> сохраняем…
           </p>
         )}
+
+        <div className="pt-2 border-t">
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={() => void handleDeleteAccount()}
+            disabled={deletingAccount}
+          >
+            {deletingAccount ? "Удаляем аккаунт..." : "Удалить аккаунт"}
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );

@@ -11,7 +11,7 @@ import { enrollmentHasCriterion, loadEnrollmentForCriteriaByUserProduct } from "
 
 type ContentBlock = {
   id: string;
-  type: "text" | "video" | "image";
+  type: "text" | "video" | "image" | "pdf";
   content: string;
   /** Ширина блока (только для image): full = полная, half = ½, third = ⅓ */
   size?: "full" | "half" | "third";
@@ -146,6 +146,35 @@ export default async function LessonPage({ params, searchParams }: Props) {
               return (
                 <div key={block.id} className={`${sizeClass} rounded-xl overflow-hidden border bg-muted`}>
                   <img src={block.content} alt="" className="w-full h-auto" loading="lazy" />
+                </div>
+              );
+            }
+            if (block.type === "pdf" && block.content) {
+              return (
+                <div key={block.id} className="w-full">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-base">
+                        <FileText className="h-4 w-4" />
+                        PDF
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <iframe
+                        src={block.content}
+                        className="h-[75vh] w-full rounded-lg border bg-background"
+                        title="PDF"
+                      />
+                      <a
+                        href={block.content}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-primary hover:underline"
+                      >
+                        Открыть в новой вкладке
+                      </a>
+                    </CardContent>
+                  </Card>
                 </div>
               );
             }

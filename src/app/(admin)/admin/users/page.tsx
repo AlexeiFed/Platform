@@ -11,6 +11,7 @@ import { CreateCuratorForm } from "./create-curator-form";
 import { CuratorProductsForm } from "./curator-products-form";
 import { GrantAccessForm } from "./grant-access-form";
 import { UserRoleForm } from "./user-role-form";
+import { DeleteUserButton } from "./delete-user-button";
 
 export default async function AdminUsersPage() {
   const session = await auth();
@@ -107,6 +108,7 @@ export default async function AdminUsersPage() {
                   />
                 )}
                 {user.role === "USER" && <GrantAccessForm userId={user.id} products={products} />}
+                <DeleteUserButton userId={user.id} userEmail={user.email} />
               </div>
             </CardContent>
           </Card>

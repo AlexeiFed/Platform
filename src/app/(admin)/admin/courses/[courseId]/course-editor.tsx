@@ -57,7 +57,7 @@ import type { MarathonEventType, MarathonTrack, ProductCriterion, ProductType, U
 
 export type ContentBlock = {
   id: string;
-  type: "text" | "video" | "image";
+  type: "text" | "video" | "image" | "pdf";
   content: string;
   /** Только для type=image: ширина блока на странице студента */
   size?: "full" | "half" | "third";
@@ -176,12 +176,10 @@ function MarathonEventFields({
   form,
   onPatch,
   lessons,
-  onCreateLesson,
 }: {
   form: MarathonEventForm;
   onPatch: (patch: Partial<MarathonEventForm>) => void;
   lessons: SerializedLesson[];
-  onCreateLesson?: () => void;
 }) {
   return (
     <>
@@ -257,14 +255,7 @@ function MarathonEventFields({
           </select>
         </div>
         <div className="space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <label className={tokens.typography.label}>Урок</label>
-            {onCreateLesson ? (
-              <Button type="button" variant="outline" size="sm" onClick={onCreateLesson}>
-                <Plus className="h-3.5 w-3.5 mr-1" /> Создать урок
-              </Button>
-            ) : null}
-          </div>
+          <label className={tokens.typography.label}>Урок</label>
           <select
             value={form.lessonId}
             onChange={(e) => onPatch({ lessonId: e.target.value })}
@@ -425,7 +416,12 @@ function MediaBlockEditor({
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const autoPrefix = file.type.startsWith("video/") ? "videos" : "images";
+    const autoPrefix =
+      file.type === "application/pdf"
+        ? "documents"
+        : file.type.startsWith("video/")
+          ? "videos"
+          : "images";
     setUploading(true);
     try {
       const presignRes = await fetch("/api/s3/presign", {
@@ -447,9 +443,10 @@ function MediaBlockEditor({
     if (val) onUpdate({ content: val });
   }
 
-  const typeLabel = block.type === "video" ? "Видео" : "Изображение";
-  const TypeIcon = block.type === "video" ? Film : ImageIcon;
-  const iconColor = block.type === "video" ? "text-primary" : "text-blue-500";
+  const typeLabel = block.type === "video" ? "Видео" : block.type === "pdf" ? "PDF" : "Изображение";
+  const TypeIcon = block.type === "video" ? Film : block.type === "pdf" ? FileText : ImageIcon;
+  const iconColor =
+    block.type === "video" ? "text-primary" : block.type === "pdf" ? "text-orange-500" : "text-blue-500";
 
   return (
     <div className="space-y-2">
@@ -517,6 +514,27 @@ function MediaBlockEditor({
               />
             </div>
           )}
+          {block.type === "pdf" && (
+            <div className="min-w-0 space-y-2">
+              <div className="flex min-w-0 items-center gap-2 rounded-lg border bg-muted/50 p-3">
+                <FileText className="h-4 w-4 shrink-0 text-orange-500" />
+                <a
+                  href={block.content}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="min-w-0 truncate text-xs text-primary hover:underline"
+                  title={block.content}
+                >
+                  {block.content.split("/").pop()}
+                </a>
+              </div>
+              <iframe
+                src={block.content}
+                className="h-[70vh] w-full rounded-lg border bg-background"
+                title="PDF"
+              />
+            </div>
+          )}
           <Button type="button" variant="outline" size="sm" onClick={() => onUpdate({ content: "" })}>
             <X className="h-3 w-3 mr-1" /> Убрать
           </Button>
@@ -526,7 +544,7 @@ function MediaBlockEditor({
           <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
             <Input
               ref={urlRef}
-              placeholder={block.type === "video" ? "URL видео" : "URL изображения"}
+              placeholder={block.type === "video" ? "URL видео" : block.type === "pdf" ? "URL PDF" : "URL изображения"}
               onBlur={applyUrl}
               onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), applyUrl())}
               className="min-w-0 sm:min-w-[180px] sm:flex-1"
@@ -538,7 +556,7 @@ function MediaBlockEditor({
               <div className="relative shrink-0">
                 <input
                   type="file"
-                  accept={block.type === "video" ? "video/*" : "image/*"}
+                  accept={block.type === "video" ? "video/*" : block.type === "pdf" ? "application/pdf" : "image/*"}
                   onChange={handleUpload}
                   className="absolute inset-0 cursor-pointer opacity-0"
                   disabled={uploading}
@@ -556,7 +574,7 @@ function MediaBlockEditor({
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-sm">
-                    {block.type === "video" ? "Выберите видео" : "Выберите изображение"}
+                    {block.type === "video" ? "Выберите видео" : block.type === "pdf" ? "Выберите PDF" : "Выберите изображение"}
                   </CardTitle>
                   <Button type="button" variant="ghost" size="icon" onClick={() => setShowPicker(false)}>
                     <X className="h-4 w-4" />
@@ -566,7 +584,7 @@ function MediaBlockEditor({
               <CardContent className="min-w-0">
                 <AssetManager
                   onSelect={(url) => { onUpdate({ content: url }); setShowPicker(false); }}
-                  defaultFilter={block.type === "video" ? "video" : "image"}
+                  defaultFilter={block.type === "video" ? "video" : block.type === "pdf" ? "document" : "image"}
                 />
               </CardContent>
             </Card>
@@ -1147,12 +1165,6 @@ export function CourseEditor({
     setShowNewLesson(true);
   }
 
-  function openNewFromMarathon() {
-    returnToScrollYRef.current = window.scrollY;
-    openNew();
-    onRequestTab?.("lessons");
-  }
-
   const marathonEventsByDay = marathonEvents.reduce<Record<number, SerializedMarathonEvent[]>>((acc, event) => {
     if (!acc[event.dayOffset]) {
       acc[event.dayOffset] = [];
@@ -1384,9 +1396,6 @@ export function CourseEditor({
               >
                 {product.published ? "Снять с публикации" : "Опубликовать"}
               </Button>
-              <Button type="button" variant="outline" onClick={() => { openNew(); onRequestTab?.("lessons"); }}>
-                <Plus className="h-4 w-4 mr-2" /> Добавить урок
-              </Button>
             </div>
           </form>
         </CardContent>
@@ -1465,7 +1474,6 @@ export function CourseEditor({
                 form={marathonEventForm}
                 onPatch={(patch) => setMarathonEventForm((prev) => ({ ...prev, ...patch }))}
                 lessons={lessons}
-                onCreateLesson={openNewFromMarathon}
               />
 
               <div className="flex gap-3">
@@ -1488,7 +1496,6 @@ export function CourseEditor({
                     form={marathonEditForm}
                     onPatch={(patch) => setMarathonEditForm((prev) => ({ ...prev, ...patch }))}
                     lessons={lessons}
-                  onCreateLesson={openNewFromMarathon}
                   />
                 </form>
                 <DialogFooter className="gap-2 sm:gap-0">
@@ -1671,6 +1678,9 @@ export function CourseEditor({
                   <Button type="button" variant="outline" size="sm" onClick={() => addBlock("image")}>
                     <ImageIcon className="h-3.5 w-3.5 mr-1.5 text-blue-500" /> + Изображение
                   </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => addBlock("pdf")}>
+                    <FileText className="h-3.5 w-3.5 mr-1.5 text-orange-500" /> + PDF
+                  </Button>
                 </div>
               </div>
 
@@ -1739,7 +1749,12 @@ export function CourseEditor({
       )}
 
       <div className="space-y-2">
-        <h2 className={tokens.typography.h4}>Уроки ({lessons.length})</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className={tokens.typography.h4}>Уроки ({lessons.length})</h2>
+          <Button type="button" onClick={openNew}>
+            <Plus className="h-4 w-4 mr-2" /> Создать урок
+          </Button>
+        </div>
         {mounted ? (
           <DndContext sensors={lessonSensors} collisionDetection={closestCenter} onDragEnd={handleLessonDragEnd}>
             <SortableContext items={lessons.map((l) => l.id)} strategy={verticalListSortingStrategy}>

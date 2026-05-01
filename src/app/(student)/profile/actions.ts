@@ -163,3 +163,30 @@ export async function deleteMeasurement(id: string) {
     return { error: "Ошибка" };
   }
 }
+
+export async function deleteOwnAccount() {
+  const session = await requireUser();
+  if (!session) return { error: "Нужно войти" };
+
+  try {
+    const me = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { id: true, role: true },
+    });
+
+    if (!me) return { error: "Пользователь не найден" };
+
+    if (me.role === "ADMIN") {
+      const adminCount = await prisma.user.count({ where: { role: "ADMIN" } });
+      if (adminCount <= 1) {
+        return { error: "Нельзя удалить последнего админа" };
+      }
+    }
+
+    await prisma.user.delete({ where: { id: session.user.id } });
+    return { success: true };
+  } catch (e) {
+    console.error("[deleteOwnAccount]", e);
+    return { error: "Ошибка удаления" };
+  }
+}

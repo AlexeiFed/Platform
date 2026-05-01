@@ -149,3 +149,37 @@ export async function createCurator(input: z.infer<typeof createCuratorSchema>) 
     return { error: "Произошла ошибка" };
   }
 }
+
+export async function deleteUser(userId: string) {
+  const session = await auth();
+  if (!session || session.user.role !== "ADMIN") return { error: "Нет доступа" };
+
+  try {
+    if (session.user.id === userId) {
+      return { error: "Нельзя удалить самого себя" };
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, role: true },
+    });
+
+    if (!user) {
+      return { error: "Пользователь не найден" };
+    }
+
+    if (user.role === "ADMIN") {
+      const adminCount = await prisma.user.count({ where: { role: "ADMIN" } });
+      if (adminCount <= 1) {
+        return { error: "Нельзя удалить последнего админа" };
+      }
+    }
+
+    await prisma.user.delete({ where: { id: userId } });
+
+    revalidatePath("/admin/users");
+    return { success: true };
+  } catch {
+    return { error: "Произошла ошибка" };
+  }
+}

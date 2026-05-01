@@ -154,7 +154,7 @@ export async function updateProduct(id: string, input: z.infer<typeof productSch
 
 const contentBlockSchema = z.object({
   id: z.string(),
-  type: z.enum(["text", "video", "image"]),
+  type: z.enum(["text", "video", "image", "pdf"]),
   content: z.string(),
   /** Ширина блока изображения на странице студента */
   size: z.enum(["full", "half", "third"]).optional(),
