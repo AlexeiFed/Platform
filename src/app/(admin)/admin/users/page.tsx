@@ -5,12 +5,18 @@ import Link from "next/link";
 import { tokens } from "@/lib/design-tokens";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getInitials, formatDate } from "@/lib/utils";
+import { auth } from "@/lib/auth";
+import { redirect } from "next/navigation";
 import { CreateCuratorForm } from "./create-curator-form";
 import { CuratorProductsForm } from "./curator-products-form";
 import { GrantAccessForm } from "./grant-access-form";
 import { UserRoleForm } from "./user-role-form";
 
 export default async function AdminUsersPage() {
+  const session = await auth();
+  if (!session) redirect("/login");
+  if (session.user.role !== "ADMIN") redirect("/admin");
+
   const users = await prisma.user.findMany({
     include: {
       _count: { select: { enrollments: true, submissions: true } },
@@ -60,7 +66,10 @@ export default async function AdminUsersPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className={tokens.typography.h2}>Пользователи</h1>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h1 className={tokens.typography.h2}>Пользователи</h1>
+        <div className="text-sm text-muted-foreground">Всего: {users.length}</div>
+      </div>
 
       <CreateCuratorForm />
 
