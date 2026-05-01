@@ -5,8 +5,15 @@ import { GetObjectCommand } from "@aws-sdk/client-s3";
 
 const BUCKET = process.env.S3_BUCKET!;
 const ENDPOINT = process.env.S3_ENDPOINT ?? "https://storage.yandexcloud.net";
+const PUBLIC_BUCKET = process.env.NEXT_PUBLIC_S3_BUCKET;
 
-function extractKeyFromSource(src: string): string | null {
+function isAllowedBucket(bucket: string) {
+  if (bucket === BUCKET) return true;
+  if (PUBLIC_BUCKET && bucket === PUBLIC_BUCKET) return true;
+  return false;
+}
+
+function extractBucketAndKeyFromSource(src: string): { bucket: string; key: string } | null {
   // Accept:
   // 1) raw key: "documents/file.pdf"
   // 2) public url: https://{bucket}.storage.yandexcloud.net/{key}
@@ -17,21 +24,23 @@ function extractKeyFromSource(src: string): string | null {
       const rawKey = src.replace(/^\/+/, "");
       // если key прилетает url-encoded (с %2F и т.п.)
       try {
-        return decodeURIComponent(rawKey);
+        return { bucket: BUCKET, key: decodeURIComponent(rawKey) };
       } catch {
-        return rawKey;
+        return { bucket: BUCKET, key: rawKey };
       }
     }
 
     const u = new URL(src);
 
     // virtual-hosted style
-    if (u.hostname === `${BUCKET}.storage.yandexcloud.net`) {
+    if (u.hostname.endsWith(".storage.yandexcloud.net")) {
+      const bucket = u.hostname.replace(".storage.yandexcloud.net", "");
+      if (!isAllowedBucket(bucket)) return null;
       const rawKey = u.pathname.replace(/^\/+/, "");
       try {
-        return decodeURIComponent(rawKey);
+        return { bucket, key: decodeURIComponent(rawKey) };
       } catch {
-        return rawKey;
+        return { bucket, key: rawKey };
       }
     }
 
@@ -39,12 +48,13 @@ function extractKeyFromSource(src: string): string | null {
     const endpointHost = new URL(ENDPOINT).hostname;
     if (u.hostname === endpointHost) {
       const parts = u.pathname.split("/").filter(Boolean);
-      if (parts[0] !== BUCKET) return null;
+      const bucket = parts[0] ?? "";
+      if (!bucket || !isAllowedBucket(bucket)) return null;
       const rawKey = parts.slice(1).join("/");
       try {
-        return decodeURIComponent(rawKey);
+        return { bucket, key: decodeURIComponent(rawKey) };
       } catch {
-        return rawKey;
+        return { bucket, key: rawKey };
       }
     }
 
@@ -84,15 +94,16 @@ export async function GET(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const src = req.nextUrl.searchParams.get("src") ?? "";
-  const key = extractKeyFromSource(src);
-  if (!key) return NextResponse.json({ error: "Bad src" }, { status: 400 });
+  const parsed = extractBucketAndKeyFromSource(src);
+  if (!parsed) return NextResponse.json({ error: "Bad src" }, { status: 400 });
+  const { bucket, key } = parsed;
 
   // Range support for pdf.js (mobile + large PDFs)
   const range = req.headers.get("range") ?? undefined;
 
   try {
     const cmd = new GetObjectCommand({
-      Bucket: BUCKET,
+      Bucket: bucket,
       Key: key,
       ...(range ? { Range: range } : {}),
     });

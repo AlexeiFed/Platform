@@ -144,6 +144,7 @@ export function PdfPages({
   const [status, setStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [error, setError] = useState<string>("");
   const [pageCount, setPageCount] = useState<number>(0);
+  const [renderedPages, setRenderedPages] = useState<number>(0);
 
   const proxiedUrl = useMemo(() => `/api/pdf?src=${encodeURIComponent(url)}`, [url]);
   const renderKey = useMemo(() => `${proxiedUrl}::${Math.round(width)}`, [proxiedUrl, width]);
@@ -157,10 +158,17 @@ export function PdfPages({
 
       setStatus("loading");
       setError("");
+      setPageCount(0);
+      setRenderedPages(0);
 
       try {
         const pdfjs = await loadPdfJs();
         if (cancelled) return;
+        if (!pdfjs || typeof pdfjs.getDocument !== "function") {
+          setStatus("error");
+          setError("pdf.js не инициализировался (pdfjsLib missing)");
+          return;
+        }
 
         // Важно: на некоторых устройствах/браузерах pdf.js может не послать cookie,
         // без этого /api/pdf не увидит сессию.
@@ -193,6 +201,7 @@ export function PdfPages({
           if (!ctx) continue;
 
           await page.render({ canvasContext: ctx, viewport }).promise;
+          setRenderedPages((prev) => (prev < i ? i : prev));
         }
       } catch (e) {
         if (cancelled) return;
@@ -228,6 +237,9 @@ export function PdfPages({
 
       {status === "ready" && pageCount > 0 && (
         <div className="space-y-3">
+          <div className="text-xs text-muted-foreground">
+            Страницы: {renderedPages}/{pageCount}
+          </div>
           {Array.from({ length: pageCount }).map((_, idx) => {
             const pageNumber = idx + 1;
             return (
