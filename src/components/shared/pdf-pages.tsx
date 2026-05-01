@@ -131,6 +131,27 @@ function useElementWidth(ref: React.RefObject<HTMLElement | null>) {
   return width;
 }
 
+function nextFrame() {
+  return new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+}
+
+async function waitForCanvas(
+  root: HTMLDivElement,
+  pageNumber: number,
+  timeoutMs = 5000,
+): Promise<HTMLCanvasElement | null> {
+  const start = Date.now();
+  // ждём пока React реально отрисует <canvas>
+  while (Date.now() - start < timeoutMs) {
+    const canvas = root.querySelector<HTMLCanvasElement>(`canvas[data-page="${pageNumber}"]`);
+    if (canvas) return canvas;
+    // небольшая пауза без busy-loop
+    // eslint-disable-next-line no-await-in-loop
+    await nextFrame();
+  }
+  return null;
+}
+
 export function PdfPages({
   url,
   className,
@@ -178,11 +199,22 @@ export function PdfPages({
         setPageCount(doc.numPages);
         setStatus("ready");
 
+        // Дождаться, пока React отрисует канвасы под страницы.
+        await nextFrame();
+        await nextFrame();
+
         // Render sequentially (memory-friendly)
         for (let i = 1; i <= doc.numPages; i++) {
           if (cancelled) return;
-          const canvas = rootRef.current?.querySelector<HTMLCanvasElement>(`canvas[data-page="${i}"]`) ?? null;
-          if (!canvas) continue;
+          const root = rootRef.current;
+          if (!root) return;
+          const canvas = await waitForCanvas(root, i);
+          if (!canvas) {
+            // Если не нашли canvas — значит DOM не совпал с ожиданием, дальше рендер бессмысленен.
+            setStatus("error");
+            setError(`Не удалось подготовить страницу ${i} для рендера`);
+            return;
+          }
 
           const page = await doc.getPage(i);
           if (cancelled) return;
