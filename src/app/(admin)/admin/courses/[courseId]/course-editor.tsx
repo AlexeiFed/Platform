@@ -50,6 +50,7 @@ import {
 import { AssetManager } from "../../assets/asset-manager";
 import { LandingEditor } from "./landing-editor";
 import { RichTextEditor } from "@/components/shared/rich-text-editor";
+import { loadPdfJs } from "@/components/shared/pdfjs-loader";
 import type { LandingBlock } from "@/types/landing";
 import type { MarathonEventType, MarathonTrack, ProductCriterion, ProductType, UnlockRule } from "@prisma/client";
 
@@ -61,6 +62,8 @@ export type ContentBlock = {
   content: string;
   /** Только для type=image: ширина блока на странице студента */
   size?: "full" | "half" | "third";
+  /** Только для type=pdf: готовые картинки страниц (для быстрого рендера у ученика) */
+  pages?: string[];
 };
 
 type SerializedProduct = {
@@ -411,7 +414,76 @@ function MediaBlockEditor({
 }) {
   const [showPicker, setShowPicker] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [generatingPages, setGeneratingPages] = useState(false);
+  const [pagesProgress, setPagesProgress] = useState<{ done: number; total: number } | null>(null);
   const urlRef = useRef<HTMLInputElement>(null);
+
+  async function generatePdfPages(pdfUrl: string) {
+    setGeneratingPages(true);
+    setPagesProgress(null);
+    try {
+      const pdfjs = await loadPdfJs();
+      const proxiedUrl = `/api/pdf?src=${encodeURIComponent(pdfUrl)}`;
+      const doc = await pdfjs.getDocument({ url: proxiedUrl, withCredentials: true } as any).promise;
+
+      const total = doc.numPages;
+      setPagesProgress({ done: 0, total });
+      const pageUrls: string[] = [];
+
+      // ограничение, чтобы не убивать мобилку/браузер
+      const maxPages = 60;
+      const renderTotal = Math.min(total, maxPages);
+
+      for (let i = 1; i <= renderTotal; i++) {
+        const page = await doc.getPage(i);
+        const v1 = page.getViewport({ scale: 1 });
+        // целимся в ~1200px ширины для читабельности без огромных файлов
+        const targetWidth = 1200;
+        const scale = Math.max(0.1, targetWidth / v1.width);
+        const viewport = page.getViewport({ scale });
+
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.floor(viewport.width);
+        canvas.height = Math.floor(viewport.height);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) throw new Error("canvas ctx missing");
+
+        await page.render({ canvasContext: ctx, viewport }).promise;
+
+        const blob: Blob = await new Promise((resolve, reject) => {
+          canvas.toBlob(
+            (b) => (b ? resolve(b) : reject(new Error("toBlob failed"))),
+            "image/webp",
+            0.9
+          );
+        });
+
+        const fileName = `page-${String(i).padStart(3, "0")}-${crypto.randomUUID()}.webp`;
+        const presignRes = await fetch("/api/s3/presign", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fileName,
+            contentType: "image/webp",
+            size: blob.size,
+            path: "documents/pdf-pages",
+          }),
+        });
+        if (!presignRes.ok) throw new Error("presign failed");
+        const { url, key } = await presignRes.json();
+        await fetch(url, { method: "PUT", body: blob, headers: { "Content-Type": "image/webp" } });
+        pageUrls.push(getPublicUrl(key));
+
+        setPagesProgress({ done: i, total: renderTotal });
+      }
+
+      onUpdate({ pages: pageUrls });
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Ошибка генерации страниц PDF");
+    } finally {
+      setGeneratingPages(false);
+    }
+  }
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -432,7 +504,12 @@ function MediaBlockEditor({
       if (!presignRes.ok) { setUploading(false); return; }
       const { url, key } = await presignRes.json();
       await fetch(url, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
-      onUpdate({ content: getPublicUrl(key) });
+      const uploadedUrl = getPublicUrl(key);
+      onUpdate({ content: uploadedUrl, pages: undefined });
+      if (block.type === "pdf") {
+        // Автогенерация для ускорения ученика (можно отменить кнопкой Убрать)
+        void generatePdfPages(uploadedUrl);
+      }
     } catch { /* silent */ }
     setUploading(false);
     e.target.value = "";
@@ -527,12 +604,34 @@ function MediaBlockEditor({
                 >
                   {block.content.split("/").pop()}
                 </a>
+                <div className="flex-1" />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={generatingPages}
+                  onClick={() => void generatePdfPages(block.content)}
+                >
+                  {generatingPages
+                    ? pagesProgress
+                      ? `Генерим ${pagesProgress.done}/${pagesProgress.total}…`
+                      : "Генерим…"
+                    : "Сгенерировать страницы"}
+                </Button>
               </div>
-              <iframe
-                src={block.content}
-                className="h-[70vh] w-full rounded-lg border bg-background"
-                title="PDF"
-              />
+              {block.pages && block.pages.length > 0 ? (
+                <div className="space-y-3">
+                  {block.pages.map((p, idx) => (
+                    <div key={p} className="overflow-hidden rounded-lg border bg-background">
+                      <img src={p} alt={`PDF page ${idx + 1}`} className="block w-full h-auto" loading="lazy" />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
+                  Страницы ещё не сгенерированы. Нажми «Сгенерировать страницы» — ученикам будет открываться быстро.
+                </div>
+              )}
             </div>
           )}
           <Button type="button" variant="outline" size="sm" onClick={() => onUpdate({ content: "" })}>

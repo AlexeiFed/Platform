@@ -158,6 +158,8 @@ const contentBlockSchema = z.object({
   content: z.string(),
   /** Ширина блока изображения на странице студента */
   size: z.enum(["full", "half", "third"]).optional(),
+  /** Для pdf: готовые страницы (URL картинок) */
+  pages: z.array(z.string()).optional(),
 });
 
 const lessonSchema = z.object({

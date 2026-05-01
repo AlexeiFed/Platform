@@ -19,6 +19,7 @@ type ContentBlock = {
   content: string;
   /** Ширина блока (только для image): full = полная, half = ½, third = ⅓ */
   size?: "full" | "half" | "third";
+  pages?: string[];
 };
 
 type Props = {
@@ -219,7 +220,22 @@ export default async function MarathonEventPage({ params }: Props) {
                         <CardTitle className="text-base">PDF</CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-3">
-                        <PdfPages url={block.content} />
+                        {block.pages && block.pages.length > 0 ? (
+                          <div className="space-y-3">
+                            {block.pages.map((p, idx) => (
+                              <div key={p} className="overflow-hidden rounded-lg border bg-background">
+                                <img
+                                  src={p}
+                                  alt={`PDF page ${idx + 1}`}
+                                  className="block h-auto w-full"
+                                  loading="lazy"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <PdfPages url={block.content} />
+                        )}
                       </CardContent>
                     </Card>
                   </div>
