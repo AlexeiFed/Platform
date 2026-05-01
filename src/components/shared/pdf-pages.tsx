@@ -142,7 +142,8 @@ export function PdfPages({
   const [error, setError] = useState<string>("");
   const [pageCount, setPageCount] = useState<number>(0);
 
-  const renderKey = useMemo(() => `${url}::${Math.round(width)}`, [url, width]);
+  const proxiedUrl = useMemo(() => `/api/pdf?src=${encodeURIComponent(url)}`, [url]);
+  const renderKey = useMemo(() => `${proxiedUrl}::${Math.round(width)}`, [proxiedUrl, width]);
 
   useEffect(() => {
     let cancelled = false;
@@ -158,7 +159,7 @@ export function PdfPages({
         const pdfjs = await loadPdfJs();
         if (cancelled) return;
 
-        doc = await pdfjs.getDocument({ url }).promise;
+        doc = await pdfjs.getDocument({ url: proxiedUrl }).promise;
         if (cancelled) return;
 
         setPageCount(doc.numPages);
@@ -207,7 +208,7 @@ export function PdfPages({
       {status === "error" ? (
         <div className="rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground">
           Не удалось загрузить PDF.{" "}
-          <a className="text-primary hover:underline" href={url} target="_blank" rel="noreferrer">
+          <a className="text-primary hover:underline" href={proxiedUrl} target="_blank" rel="noreferrer">
             Открыть в новой вкладке
           </a>
           {error ? <div className="mt-2 text-xs opacity-80">{error}</div> : null}
