@@ -27,22 +27,24 @@ declare global {
   }
 }
 
-const PDFJS_VERSION = "5.7.284";
+// В проде часто запрещены внешние скрипты (CSP), а модульная сборка pdf.js не даёт window.pdfjsLib.
+// Поэтому используем legacy UMD build (pdf.min.js), который кладёт pdfjsLib в window.
+const PDFJS_VERSION = "latest";
 
-// В проде часто запрещены внешние скрипты (CSP). Поэтому первым источником используем self-hosted файлы из public/.
+// Первым источником используем self-hosted файлы из public/.
 // Фолбэки — на случай, если кто-то удалит vendor-файлы.
 const PDFJS_SOURCES = [
   {
-    script: `/vendor/pdfjs/${PDFJS_VERSION}/legacy/build/pdf.mjs`,
-    worker: `/vendor/pdfjs/${PDFJS_VERSION}/legacy/build/pdf.worker.mjs`,
+    script: `/vendor/pdfjs/${PDFJS_VERSION}/legacy/build/pdf.min.js`,
+    worker: `/vendor/pdfjs/${PDFJS_VERSION}/legacy/build/pdf.worker.min.js`,
   },
   {
-    script: `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/legacy/build/pdf.mjs`,
-    worker: `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/legacy/build/pdf.worker.mjs`,
+    script: `https://cdn.jsdelivr.net/npm/pdfjs-dist@latest/legacy/build/pdf.min.js`,
+    worker: `https://cdn.jsdelivr.net/npm/pdfjs-dist@latest/legacy/build/pdf.worker.min.js`,
   },
   {
-    script: `https://unpkg.com/pdfjs-dist@${PDFJS_VERSION}/legacy/build/pdf.mjs`,
-    worker: `https://unpkg.com/pdfjs-dist@${PDFJS_VERSION}/legacy/build/pdf.worker.mjs`,
+    script: `https://unpkg.com/pdfjs-dist@latest/legacy/build/pdf.min.js`,
+    worker: `https://unpkg.com/pdfjs-dist@latest/legacy/build/pdf.worker.min.js`,
   },
 ] as const;
 
@@ -86,8 +88,6 @@ function loadPdfJs(): Promise<PdfJsLib> {
         const s = document.createElement("script");
         s.src = source.script;
         s.async = true;
-        // pdf.mjs требует module
-        s.type = "module";
         s.dataset.pdfjs = PDFJS_VERSION;
         s.dataset.srcIdx = String(idx);
         s.onload = () => {
