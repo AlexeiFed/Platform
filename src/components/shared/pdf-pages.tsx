@@ -27,18 +27,22 @@ declare global {
   }
 }
 
-const PDFJS_VERSION = "4.10.38";
+const PDFJS_VERSION = "5.7.284";
 
-// cdnjs часто блокируется (CSP/AdBlock/провайдер). Делаем несколько источников.
-// Нужен legacy build, чтобы получить window.pdfjsLib.
+// В проде часто запрещены внешние скрипты (CSP). Поэтому первым источником используем self-hosted файлы из public/.
+// Фолбэки — на случай, если кто-то удалит vendor-файлы.
 const PDFJS_SOURCES = [
   {
-    script: `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/legacy/build/pdf.min.js`,
-    worker: `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/legacy/build/pdf.worker.min.js`,
+    script: `/vendor/pdfjs/${PDFJS_VERSION}/legacy/build/pdf.mjs`,
+    worker: `/vendor/pdfjs/${PDFJS_VERSION}/legacy/build/pdf.worker.mjs`,
   },
   {
-    script: `https://unpkg.com/pdfjs-dist@${PDFJS_VERSION}/legacy/build/pdf.min.js`,
-    worker: `https://unpkg.com/pdfjs-dist@${PDFJS_VERSION}/legacy/build/pdf.worker.min.js`,
+    script: `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/legacy/build/pdf.mjs`,
+    worker: `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/legacy/build/pdf.worker.mjs`,
+  },
+  {
+    script: `https://unpkg.com/pdfjs-dist@${PDFJS_VERSION}/legacy/build/pdf.mjs`,
+    worker: `https://unpkg.com/pdfjs-dist@${PDFJS_VERSION}/legacy/build/pdf.worker.mjs`,
   },
 ] as const;
 
@@ -50,7 +54,6 @@ function loadPdfJs(): Promise<PdfJsLib> {
   }
 
   if (window.pdfjsLib) {
-    // workerSrc может быть переопределён ниже, но тут выставим дефолт.
     window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_SOURCES[0].worker;
     return Promise.resolve(window.pdfjsLib);
   }
@@ -66,9 +69,7 @@ function loadPdfJs(): Promise<PdfJsLib> {
           return;
         }
 
-        const existing = document.querySelector<HTMLScriptElement>(
-          `script[data-pdfjs="${PDFJS_VERSION}"][data-src-idx="${idx}"]`,
-        );
+        const existing = document.querySelector<HTMLScriptElement>(`script[data-pdfjs="${PDFJS_VERSION}"][data-src-idx="${idx}"]`);
         if (existing) {
           existing.addEventListener("load", () => {
             if (!window.pdfjsLib) return reject(new Error("pdfjsLib not available after script load"));
@@ -85,6 +86,8 @@ function loadPdfJs(): Promise<PdfJsLib> {
         const s = document.createElement("script");
         s.src = source.script;
         s.async = true;
+        // pdf.mjs требует module
+        s.type = "module";
         s.dataset.pdfjs = PDFJS_VERSION;
         s.dataset.srcIdx = String(idx);
         s.onload = () => {
