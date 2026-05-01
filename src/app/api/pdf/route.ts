@@ -14,14 +14,25 @@ function extractKeyFromSource(src: string): string | null {
   try {
     if (!src) return null;
     if (!src.startsWith("http://") && !src.startsWith("https://")) {
-      return src.replace(/^\/+/, "");
+      const rawKey = src.replace(/^\/+/, "");
+      // если key прилетает url-encoded (с %2F и т.п.)
+      try {
+        return decodeURIComponent(rawKey);
+      } catch {
+        return rawKey;
+      }
     }
 
     const u = new URL(src);
 
     // virtual-hosted style
     if (u.hostname === `${BUCKET}.storage.yandexcloud.net`) {
-      return u.pathname.replace(/^\/+/, "");
+      const rawKey = u.pathname.replace(/^\/+/, "");
+      try {
+        return decodeURIComponent(rawKey);
+      } catch {
+        return rawKey;
+      }
     }
 
     // path-style (endpoint/bucket/key)
@@ -29,7 +40,12 @@ function extractKeyFromSource(src: string): string | null {
     if (u.hostname === endpointHost) {
       const parts = u.pathname.split("/").filter(Boolean);
       if (parts[0] !== BUCKET) return null;
-      return parts.slice(1).join("/");
+      const rawKey = parts.slice(1).join("/");
+      try {
+        return decodeURIComponent(rawKey);
+      } catch {
+        return rawKey;
+      }
     }
 
     return null;
