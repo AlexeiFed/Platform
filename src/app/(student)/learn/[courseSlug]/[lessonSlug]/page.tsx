@@ -5,6 +5,7 @@ import { tokens } from "@/lib/design-tokens";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { FileText, Paperclip, ClipboardList } from "lucide-react";
+import { PdfPages } from "@/components/shared/pdf-pages";
 import { HomeworkForm } from "./homework-form";
 import { HomeworkThread } from "./homework-thread";
 import { enrollmentHasCriterion, loadEnrollmentForCriteriaByUserProduct } from "@/lib/enrollment-criteria";
@@ -160,19 +161,7 @@ export default async function LessonPage({ params, searchParams }: Props) {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
-                      <iframe
-                        src={block.content}
-                        className="h-[75vh] w-full rounded-lg border bg-background"
-                        title="PDF"
-                      />
-                      <a
-                        href={block.content}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm text-primary hover:underline"
-                      >
-                        Открыть в новой вкладке
-                      </a>
+                      <PdfPages url={block.content} />
                     </CardContent>
                   </Card>
                 </div>

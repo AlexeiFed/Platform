@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { tokens } from "@/lib/design-tokens";
 import { CheckCircle2, Clock3, PlayCircle } from "lucide-react";
+import { PdfPages } from "@/components/shared/pdf-pages";
 import { MarathonEventCompletionToggle } from "./completion-toggle";
 import { criterionForMarathonEventType } from "@/lib/product-criteria";
 import { enrollmentHasCriterion, loadEnrollmentForCriteriaByUserProduct } from "@/lib/enrollment-criteria";
@@ -218,19 +219,7 @@ export default async function MarathonEventPage({ params }: Props) {
                         <CardTitle className="text-base">PDF</CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-3">
-                        <iframe
-                          src={block.content}
-                          className="h-[75vh] w-full rounded-lg border bg-background"
-                          title="PDF"
-                        />
-                        <a
-                          href={block.content}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm text-primary hover:underline"
-                        >
-                          Открыть в новой вкладке
-                        </a>
+                        <PdfPages url={block.content} />
                       </CardContent>
                     </Card>
                   </div>
