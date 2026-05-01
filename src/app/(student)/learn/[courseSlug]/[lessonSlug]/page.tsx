@@ -156,12 +156,6 @@ export default async function LessonPage({ params, searchParams }: Props) {
               return (
                 <div key={block.id} className="w-full">
                   <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2 text-base">
-                        <FileText className="h-4 w-4" />
-                        PDF
-                      </CardTitle>
-                    </CardHeader>
                     <CardContent className="space-y-3">
                       {block.pages && block.pages.length > 0 ? (
                         <div className="space-y-3">
@@ -169,9 +163,11 @@ export default async function LessonPage({ params, searchParams }: Props) {
                             <div key={p} className="overflow-hidden rounded-lg border bg-background">
                               <img
                                 src={p}
-                                alt={`PDF page ${idx + 1}`}
+                                alt=""
                                 className="block h-auto w-full"
-                                loading="lazy"
+                                loading={idx < 2 ? "eager" : "lazy"}
+                                fetchPriority={idx === 0 ? "high" : "auto"}
+                                decoding="async"
                               />
                             </div>
                           ))}

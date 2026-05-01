@@ -437,8 +437,8 @@ function MediaBlockEditor({
       for (let i = 1; i <= renderTotal; i++) {
         const page = await doc.getPage(i);
         const v1 = page.getViewport({ scale: 1 });
-        // целимся в ~1200px ширины для читабельности без огромных файлов
-        const targetWidth = 1200;
+        // целимся в ~900px ширины: заметно быстрее на телефонах, вес страниц меньше
+        const targetWidth = 900;
         const scale = Math.max(0.1, targetWidth / v1.width);
         const viewport = page.getViewport({ scale });
 
@@ -454,7 +454,7 @@ function MediaBlockEditor({
           canvas.toBlob(
             (b) => (b ? resolve(b) : reject(new Error("toBlob failed"))),
             "image/webp",
-            0.9
+              0.75
           );
         });
 
