@@ -1,8 +1,9 @@
 type MarathonProgressEvent = {
   id: string;
-  lesson?: {
+  /** Все прикреплённые к событию уроки; достаточно сдать одно ДЗ — событие считается закрытым по ДЗ */
+  lessons?: Array<{
     submissions?: Array<{ status: "PENDING" | "IN_REVIEW" | "APPROVED" | "REJECTED" }>;
-  } | null;
+  } | null>;
   completions?: Array<Record<string, unknown>>;
 };
 
@@ -43,7 +44,10 @@ export const calculateMarathonProgress = ({
 
   const completedEvents = events.filter((event) => {
     const manuallyCompleted = (event.completions?.length ?? 0) > 0;
-    const approvedHomework = event.lesson?.submissions?.some((submission) => submission.status === "APPROVED") ?? false;
+    const approvedHomework =
+      (event.lessons ?? []).some((lesson) =>
+        lesson ? lesson.submissions?.some((submission) => submission.status === "APPROVED") : false
+      ) ?? false;
 
     return manuallyCompleted || approvedHomework;
   }).length;

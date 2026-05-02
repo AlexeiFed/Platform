@@ -42,13 +42,15 @@ function isLessonAccessible(
 }
 
 type MarathonEventLoaded = MarathonEvent & {
-  lesson: {
-    id: string;
-    slug: string;
-    title: string;
-    published: boolean;
-    submissions: Array<{ status: string }>;
-  } | null;
+  eventLessons: Array<{
+    lesson: {
+      id: string;
+      slug: string;
+      title: string;
+      published: boolean;
+      submissions: Array<{ status: string }>;
+    };
+  }>;
   completions: Array<{ id: string }>;
 };
 
@@ -89,8 +91,9 @@ function buildMarathonWeeks(
             ? getMarathonEventDate(product.startDate, event.dayOffset)
             : null;
           const accessible = eventDate ? new Date() >= eventDate : true;
-          const lessonCompleted =
-            event.lesson?.submissions.some((s) => s.status === "APPROVED") ?? false;
+          const lessonCompleted = event.eventLessons.some((el) =>
+            el.lesson.submissions.some((s) => s.status === "APPROVED")
+          );
           const manuallyCompleted = event.completions.length > 0;
           const required = criterionForMarathonEventType(event.type);
           const lockedByTariff = required != null && !criteria.has(required);
@@ -124,16 +127,21 @@ export async function getCourseNavPayload(
         where: { published: true },
         orderBy: [{ dayOffset: "asc" }, { position: "asc" }],
         include: {
-          lesson: {
-            select: {
-              id: true,
-              slug: true,
-              title: true,
-              published: true,
-              submissions: {
-                where: { userId },
-                select: { status: true },
-                take: 1,
+          eventLessons: {
+            orderBy: { position: "asc" },
+            include: {
+              lesson: {
+                select: {
+                  id: true,
+                  slug: true,
+                  title: true,
+                  published: true,
+                  submissions: {
+                    where: { userId },
+                    select: { status: true },
+                    take: 1,
+                  },
+                },
               },
             },
           },

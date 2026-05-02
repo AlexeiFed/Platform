@@ -39,12 +39,17 @@ export async function syncMarathonEnrollmentProgress(enrollmentId: string) {
     orderBy: [{ dayOffset: "asc" }, { position: "asc" }],
     select: {
       id: true,
-      lesson: {
+      eventLessons: {
+        orderBy: { position: "asc" },
         select: {
-          submissions: {
-            where: { userId: enrollment.userId },
-            select: { status: true },
-            take: 1,
+          lesson: {
+            select: {
+              submissions: {
+                where: { userId: enrollment.userId },
+                select: { status: true },
+                take: 1,
+              },
+            },
           },
         },
       },
@@ -53,7 +58,8 @@ export async function syncMarathonEnrollmentProgress(enrollmentId: string) {
 
   const progress = calculateMarathonProgress({
     events: events.map((event) => ({
-      ...event,
+      id: event.id,
+      lessons: event.eventLessons.map((el) => el.lesson),
       completions: enrollment.eventCompletions.filter((completion) => completion.eventId === event.id),
     })),
     procedures: enrollment.procedures,

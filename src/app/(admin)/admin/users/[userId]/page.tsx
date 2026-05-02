@@ -37,12 +37,16 @@ export default async function AdminUserDetailsPage({ params }: Props) {
                 where: { published: true },
                 select: {
                   id: true,
-                  lesson: {
+                  eventLessons: {
                     select: {
-                      submissions: {
-                        where: { userId },
-                        select: { status: true },
-                        take: 1,
+                      lesson: {
+                        select: {
+                          submissions: {
+                            where: { userId },
+                            select: { status: true },
+                            take: 1,
+                          },
+                        },
                       },
                     },
                   },
@@ -286,7 +290,8 @@ export default async function AdminUserDetailsPage({ params }: Props) {
               const progressValue = enrollment.product.type === "MARATHON"
                 ? calculateMarathonProgress({
                     events: enrollment.product.marathonEvents.map((event) => ({
-                      ...event,
+                      id: event.id,
+                      lessons: event.eventLessons.map((el) => el.lesson),
                       completions: enrollment.eventCompletions.filter((completion) => completion.eventId === event.id),
                     })),
                     procedures: enrollment.procedures,

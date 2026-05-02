@@ -398,7 +398,10 @@ export async function duplicateProduct(id: string): Promise<{ success: true; new
           include: { attachments: { orderBy: { createdAt: "asc" } } },
           orderBy: { order: "asc" },
         },
-        marathonEvents: { orderBy: [{ dayOffset: "asc" }, { position: "asc" }] },
+        marathonEvents: {
+          orderBy: [{ dayOffset: "asc" }, { position: "asc" }],
+          include: { eventLessons: { orderBy: { position: "asc" } } },
+        },
         tariffs: { where: { deletedAt: null }, orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
       },
     });
@@ -428,6 +431,8 @@ export async function duplicateProduct(id: string): Promise<{ success: true; new
         },
       });
 
+      const lessonIdMap = new Map<string, string>();
+
       // Копируем уроки с вложениями
       for (const lesson of original.lessons) {
         const newLesson = await tx.lesson.create({
@@ -447,6 +452,7 @@ export async function duplicateProduct(id: string): Promise<{ success: true; new
             published: lesson.published,
           },
         });
+        lessonIdMap.set(lesson.id, newLesson.id);
         for (const att of lesson.attachments) {
           await tx.lessonAttachment.create({
             data: {
@@ -462,7 +468,7 @@ export async function duplicateProduct(id: string): Promise<{ success: true; new
 
       // Копируем события марафона
       for (const event of original.marathonEvents) {
-        await tx.marathonEvent.create({
+        const newEvent = await tx.marathonEvent.create({
           data: {
             productId: p.id,
             title: event.title,
@@ -472,11 +478,22 @@ export async function duplicateProduct(id: string): Promise<{ success: true; new
             dayOffset: event.dayOffset,
             weekNumber: event.weekNumber,
             position: event.position,
-            lessonId: event.lessonId,
             blocks: event.blocks ?? undefined,
             published: event.published,
           },
         });
+        for (const el of event.eventLessons) {
+          const mappedLessonId = lessonIdMap.get(el.lessonId);
+          if (mappedLessonId) {
+            await tx.marathonEventLesson.create({
+              data: {
+                marathonEventId: newEvent.id,
+                lessonId: mappedLessonId,
+                position: el.position,
+              },
+            });
+          }
+        }
       }
 
       // Копируем тарифы

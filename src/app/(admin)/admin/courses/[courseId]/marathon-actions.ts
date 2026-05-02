@@ -33,7 +33,8 @@ const marathonEventSchema = z.object({
   dayOffset: z.coerce.number().int().min(0, "День марафона не может быть отрицательным"),
   weekNumber: z.coerce.number().int().min(0, "Неделя не может быть отрицательной (0 — подготовительный этап)").optional(),
   position: z.coerce.number().int().min(0).optional(),
-  lessonId: z.string().trim().optional(),
+  /** Порядок в списке = порядок уроков в программе (сервер сортирует по `lesson.order`). */
+  lessonIds: z.array(z.string().uuid()).max(50).optional().default([]),
   blocks: z.array(contentBlockSchema).optional(),
   published: z.boolean().default(false),
 });
@@ -101,30 +102,26 @@ const revalidateMarathonProductPaths = (product: { id: string; slug: string }) =
   revalidatePath("/dashboard");
 };
 
-type LessonConnectionResult = { id: string } | { error: string } | null;
-
-const resolveLessonConnection = async (
+const resolveLessonIdsForProduct = async (
   productId: string,
-  lessonId?: string
-): Promise<LessonConnectionResult> => {
-  if (!lessonId?.trim()) {
-    return null;
+  lessonIds: string[] | undefined
+): Promise<{ ids: string[] } | { error: string }> => {
+  const unique = [...new Set((lessonIds ?? []).filter(Boolean))];
+  if (unique.length === 0) {
+    return { ids: [] };
   }
 
-  const lesson = await prisma.lesson.findUnique({
-    where: { id: lessonId },
-    select: { id: true, productId: true },
+  const lessons = await prisma.lesson.findMany({
+    where: { productId, id: { in: unique } },
+    select: { id: true, order: true },
+    orderBy: { order: "asc" },
   });
 
-  if (!lesson) {
-    return { error: "Урок не найден" as const };
+  if (lessons.length !== unique.length) {
+    return { error: "Один из уроков не найден или не относится к этому марафону" };
   }
 
-  if (lesson.productId !== productId) {
-    return { error: "Урок должен принадлежать этому марафону" as const };
-  }
-
-  return { id: lesson.id };
+  return { ids: lessons.map((l) => l.id) };
 };
 
 const ensureMarathonProduct = async (productId: string) => {
@@ -141,36 +138,36 @@ const ensureMarathonProduct = async (productId: string) => {
   return { product };
 };
 
-const buildMarathonEventData = async (
+const buildMarathonEventFields = (
   productId: string,
   input: z.infer<typeof marathonEventSchema>
-): Promise<
-  | { error: string }
-  | {
-      data: Prisma.MarathonEventUncheckedCreateInput;
-    }
-> => {
-  const lessonConnection = await resolveLessonConnection(productId, input.lessonId);
+): Prisma.MarathonEventUncheckedCreateInput => ({
+  productId,
+  title: input.title,
+  description: input.description || null,
+  type: input.type,
+  track: input.track,
+  dayOffset: input.dayOffset,
+  weekNumber: input.weekNumber ?? null,
+  position: input.position ?? 0,
+  blocks: input.blocks ?? undefined,
+  published: input.published,
+});
 
-  if (lessonConnection && "error" in lessonConnection) {
-    return { error: lessonConnection.error };
-  }
-
-  return {
-    data: {
-      productId,
-      title: input.title,
-      description: input.description || null,
-      type: input.type,
-      track: input.track,
-      dayOffset: input.dayOffset,
-      weekNumber: input.weekNumber ?? null,
-      position: input.position ?? 0,
-      lessonId: lessonConnection?.id ?? null,
-      blocks: input.blocks ?? undefined,
-      published: input.published,
-    },
-  };
+const replaceEventLessons = async (
+  tx: Prisma.TransactionClient,
+  marathonEventId: string,
+  lessonIds: string[]
+) => {
+  await tx.marathonEventLesson.deleteMany({ where: { marathonEventId } });
+  if (lessonIds.length === 0) return;
+  await tx.marathonEventLesson.createMany({
+    data: lessonIds.map((lessonId, position) => ({
+      marathonEventId,
+      lessonId,
+      position,
+    })),
+  });
 };
 
 const getEnrollmentRevalidationData = async (enrollmentId: string) => {
@@ -214,8 +211,10 @@ export async function createMarathonEvent(
     if ("error" in productResult) return productResult;
 
     const data = marathonEventSchema.parse(input);
-    const eventData = await buildMarathonEventData(productId, data);
-    if ("error" in eventData) return eventData;
+    const lessonResult = await resolveLessonIdsForProduct(productId, data.lessonIds);
+    if ("error" in lessonResult) return lessonResult;
+
+    const fields = buildMarathonEventFields(productId, data);
 
     if (data.position === undefined) {
       const maxPosition = await prisma.marathonEvent.aggregate({
@@ -226,12 +225,24 @@ export async function createMarathonEvent(
         _max: { position: true },
       });
 
-      eventData.data.position = (maxPosition._max.position ?? -1) + 1;
+      fields.position = (maxPosition._max.position ?? -1) + 1;
     }
 
-    const event = await prisma.marathonEvent.create({
-      data: eventData.data,
-      select: { id: true },
+    const event = await prisma.$transaction(async (tx) => {
+      const ev = await tx.marathonEvent.create({
+        data: fields,
+        select: { id: true },
+      });
+      if (lessonResult.ids.length > 0) {
+        await tx.marathonEventLesson.createMany({
+          data: lessonResult.ids.map((lessonId, position) => ({
+            marathonEventId: ev.id,
+            lessonId,
+            position,
+          })),
+        });
+      }
+      return ev;
     });
 
     await syncMarathonProductEnrollmentsProgress(productId);
@@ -271,12 +282,17 @@ export async function updateMarathonEvent(
     if ("error" in productResult) return productResult;
 
     const data = marathonEventSchema.parse(input);
-    const eventData = await buildMarathonEventData(currentEvent.productId, data);
-    if ("error" in eventData) return eventData;
+    const lessonResult = await resolveLessonIdsForProduct(currentEvent.productId, data.lessonIds);
+    if ("error" in lessonResult) return lessonResult;
 
-    await prisma.marathonEvent.update({
-      where: { id: eventId },
-      data: eventData.data,
+    const fields = buildMarathonEventFields(currentEvent.productId, data);
+
+    await prisma.$transaction(async (tx) => {
+      await replaceEventLessons(tx, eventId, lessonResult.ids);
+      await tx.marathonEvent.update({
+        where: { id: eventId },
+        data: fields,
+      });
     });
 
     await syncMarathonProductEnrollmentsProgress(currentEvent.productId);

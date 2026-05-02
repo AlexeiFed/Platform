@@ -4,7 +4,9 @@ import { redirect, notFound } from "next/navigation";
 import { tokens } from "@/lib/design-tokens";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { FileText, Paperclip, ClipboardList } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeft, FileText, Paperclip, ClipboardList } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { PdfPages } from "@/components/shared/pdf-pages";
 import { HomeworkForm } from "./homework-form";
 import { HomeworkThread } from "./homework-thread";
@@ -57,19 +59,23 @@ export default async function LessonPage({ params, searchParams }: Props) {
     where: { productId_slug: { productId: product.id, slug: lessonSlug } },
     include: {
       attachments: true,
-      marathonEvents: {
-        where: { published: true },
-        select: {
-          id: true,
-          dayOffset: true,
-          title: true,
+      marathonEventLessons: {
+        where: { marathonEvent: { published: true } },
+        include: {
+          marathonEvent: {
+            select: {
+              id: true,
+              dayOffset: true,
+              title: true,
+              position: true,
+            },
+          },
         },
-        orderBy: [{ dayOffset: "asc" }, { position: "asc" }],
       },
     },
   });
 
-  if (!lesson || !lesson.published) notFound();
+  if (!lesson) notFound();
 
   if (product.type === "MARATHON" && eventQuery) {
     const scopedEvent = await prisma.marathonEvent.findFirst({
@@ -77,23 +83,34 @@ export default async function LessonPage({ params, searchParams }: Props) {
         id: eventQuery,
         productId: product.id,
         published: true,
-        lessonId: lesson.id,
+        eventLessons: { some: { lessonId: lesson.id } },
       },
       select: { id: true },
     });
     if (!scopedEvent) {
       redirect(`/learn/${courseSlug}`);
     }
+  } else if (!lesson.published) {
+    // Черновик открыть можно только из события марафона (?event=… прошёл проверку выше)
+    notFound();
   }
 
-  if (product.type === "MARATHON" && product.startDate && lesson.marathonEvents.length > 0) {
+  const linkedMarathonEvents = [...lesson.marathonEventLessons]
+    .sort(
+      (a, b) =>
+        a.marathonEvent.dayOffset - b.marathonEvent.dayOffset ||
+        a.marathonEvent.position - b.marathonEvent.position
+    )
+    .map((row) => row.marathonEvent);
+
+  if (product.type === "MARATHON" && product.startDate && linkedMarathonEvents.length > 0) {
     const startDate = new Date(product.startDate);
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
 
     const firstEventDate = new Date(startDate);
     firstEventDate.setHours(0, 0, 0, 0);
-    firstEventDate.setDate(firstEventDate.getDate() + lesson.marathonEvents[0].dayOffset);
+    firstEventDate.setDate(firstEventDate.getDate() + linkedMarathonEvents[0].dayOffset);
 
     if (startOfToday < firstEventDate) {
       redirect(`/learn/${courseSlug}`);
@@ -119,8 +136,23 @@ export default async function LessonPage({ params, searchParams }: Props) {
   const hasBlocks = blocks.length > 0;
   const hwQuestions = (lesson.homeworkQuestions as string[] | null) ?? [];
 
+  const eventBackHref =
+    product.type === "MARATHON" && eventQuery
+      ? `/learn/${courseSlug}/event/${eventQuery}`
+      : null;
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
+      {eventBackHref && (
+        <div className="md:hidden">
+          <Button variant="outline" size="sm" className="w-full justify-center" asChild>
+            <Link href={eventBackHref} aria-label="Назад к событию марафона">
+              <ArrowLeft className="mr-2 h-4 w-4 shrink-0" />
+              К событию
+            </Link>
+          </Button>
+        </div>
+      )}
       <div>
         <h1 className={tokens.typography.h2}>{lesson.title}</h1>
         <p className="text-sm text-muted-foreground">
@@ -296,6 +328,17 @@ export default async function LessonPage({ params, searchParams }: Props) {
             )}
           </CardContent>
         </Card>
+      )}
+
+      {eventBackHref && (
+        <div className="md:hidden pt-2">
+          <Button variant="outline" size="sm" className="w-full justify-center" asChild>
+            <Link href={eventBackHref} aria-label="Назад к событию марафона">
+              <ArrowLeft className="mr-2 h-4 w-4 shrink-0" />
+              К событию
+            </Link>
+          </Button>
+        </div>
       )}
     </div>
   );

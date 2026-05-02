@@ -69,17 +69,22 @@ export default async function MarathonEventPage({ params }: Props) {
       published: true,
     },
     include: {
-      lesson: {
-        select: {
-          id: true,
-          slug: true,
-          title: true,
-          published: true,
-          homeworkEnabled: true,
-          submissions: {
-            where: { userId: session.user.id },
-            select: { status: true },
-            take: 1,
+      eventLessons: {
+        orderBy: { position: "asc" },
+        include: {
+          lesson: {
+            select: {
+              id: true,
+              slug: true,
+              title: true,
+              published: true,
+              homeworkEnabled: true,
+              submissions: {
+                where: { userId: session.user.id },
+                select: { status: true },
+                take: 1,
+              },
+            },
           },
         },
       },
@@ -102,7 +107,9 @@ export default async function MarathonEventPage({ params }: Props) {
   }
 
   const completedFromMark = enrollment.eventCompletions.length > 0;
-  const completedFromHomework = event.lesson?.submissions.some((submission) => submission.status === "APPROVED") ?? false;
+  const completedFromHomework = event.eventLessons.some((row) =>
+    row.lesson.submissions.some((submission) => submission.status === "APPROVED")
+  );
   const isCompleted = completedFromMark || completedFromHomework;
   const blocks = (event.blocks as ContentBlock[] | null) ?? [];
 
@@ -159,27 +166,30 @@ export default async function MarathonEventPage({ params }: Props) {
         </CardContent>
       </Card>
 
-      {event.lesson?.published ? (
-        // Прикреплён опубликованный урок — показываем карточку материала
+      {event.eventLessons.length > 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Материал события</CardTitle>
+            <CardTitle className="text-base">Материалы события</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="rounded-lg border p-4">
-              <div className="font-medium">{event.lesson.title}</div>
-              <div className="mt-1 text-sm text-muted-foreground">
-                {event.lesson.homeworkEnabled
-                  ? "У этого материала есть домашнее задание."
-                  : "Обычный материал без домашнего задания."}
+          <CardContent className="space-y-4">
+            {event.eventLessons.map((row) => (
+              <div key={row.id} className="space-y-3 rounded-lg border p-4">
+                <div>
+                  <div className="font-medium">{row.lesson.title}</div>
+                  <div className="mt-1 text-sm text-muted-foreground">
+                    {row.lesson.homeworkEnabled
+                      ? "У этого материала есть домашнее задание."
+                      : "Обычный материал без домашнего задания."}
+                  </div>
+                </div>
+                <Button asChild>
+                  <Link href={`/learn/${courseSlug}/${row.lesson.slug}?event=${event.id}`}>
+                    <PlayCircle className="h-4 w-4 mr-1" />
+                    Открыть материал
+                  </Link>
+                </Button>
               </div>
-            </div>
-            <Button asChild>
-              <Link href={`/learn/${courseSlug}/${event.lesson.slug}?event=${event.id}`}>
-                <PlayCircle className="h-4 w-4 mr-1" />
-                Открыть материал
-              </Link>
-            </Button>
+            ))}
           </CardContent>
         </Card>
       ) : blocks.length > 0 ? (

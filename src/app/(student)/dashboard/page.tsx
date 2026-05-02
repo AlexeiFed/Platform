@@ -28,12 +28,16 @@ export default async function DashboardPage() {
             where: { published: true },
             select: {
               id: true,
-              lesson: {
+              eventLessons: {
                 select: {
-                  submissions: {
-                    where: { userId: session.user.id },
-                    select: { status: true },
-                    take: 1,
+                  lesson: {
+                    select: {
+                      submissions: {
+                        where: { userId: session.user.id },
+                        select: { status: true },
+                        take: 1,
+                      },
+                    },
                   },
                 },
               },
@@ -80,7 +84,11 @@ export default async function DashboardPage() {
           {enrollments.map((enrollment) => {
             const progressValue = enrollment.product.type === "MARATHON"
               ? calculateMarathonProgress({
-                  events: enrollment.product.marathonEvents,
+                  events: enrollment.product.marathonEvents.map((e) => ({
+                    id: e.id,
+                    lessons: e.eventLessons.map((el) => el.lesson),
+                    completions: e.completions,
+                  })),
                   procedures: enrollment.procedures,
                 }).value
               : enrollment.progress;

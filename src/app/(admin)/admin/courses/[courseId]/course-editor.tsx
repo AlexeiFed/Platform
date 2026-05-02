@@ -117,7 +117,7 @@ type SerializedMarathonEvent = {
   dayOffset: number;
   weekNumber: number | null;
   position: number;
-  lessonId: string | null;
+  lessonIds: string[];
   blocks: unknown;
   published: boolean;
   createdAt: string;
@@ -142,7 +142,7 @@ type MarathonEventForm = {
   track: MarathonTrack;
   dayOffset: string;
   weekNumber: string;
-  lessonId: string;
+  lessonIds: string[];
   published: boolean;
 };
 
@@ -170,7 +170,7 @@ function getEmptyMarathonEventForm(): MarathonEventForm {
     track: "ALL",
     dayOffset: "0",
     weekNumber: "",
-    lessonId: "",
+    lessonIds: [],
     published: false,
   };
 }
@@ -222,7 +222,7 @@ function MarathonEventFields({
         />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-3">
         <div className="space-y-2">
           <label className={tokens.typography.label}>День марафона</label>
           <Input
@@ -257,21 +257,39 @@ function MarathonEventFields({
             ))}
           </select>
         </div>
-        <div className="space-y-2">
-          <label className={tokens.typography.label}>Урок</label>
-          <select
-            value={form.lessonId}
-            onChange={(e) => onPatch({ lessonId: e.target.value })}
-            className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
-          >
-            <option value="">Без урока</option>
-            {lessons.map((lesson) => (
-              <option key={lesson.id} value={lesson.id}>
-                {lesson.order}. {lesson.title}
-              </option>
-            ))}
-          </select>
+      </div>
+
+      <div className="space-y-2">
+        <label className={tokens.typography.label}>Уроки (материалы события)</label>
+        <div className="max-h-48 overflow-y-auto rounded-lg border border-input bg-background p-3 space-y-2">
+          {lessons.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Сначала добавьте уроки в программе марафона.</p>
+          ) : (
+            lessons.map((lesson) => {
+              const checked = form.lessonIds.includes(lesson.id);
+              return (
+                <label key={lesson.id} className="flex cursor-pointer items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 shrink-0 rounded border-input"
+                    checked={checked}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        onPatch({ lessonIds: [...form.lessonIds, lesson.id] });
+                      } else {
+                        onPatch({ lessonIds: form.lessonIds.filter((id) => id !== lesson.id) });
+                      }
+                    }}
+                  />
+                  <span>
+                    {lesson.order}. {lesson.title}
+                  </span>
+                </label>
+              );
+            })
+          )}
         </div>
+        <p className="text-xs text-muted-foreground">Порядок на странице события — как в программе (по номеру урока).</p>
       </div>
 
       <label className="flex items-center gap-2 text-sm">
@@ -925,7 +943,7 @@ export function CourseEditor({
         dayOffset: Number(marathonEventForm.dayOffset),
         weekNumber:
           marathonEventForm.weekNumber.trim() === "" ? undefined : Number(marathonEventForm.weekNumber),
-        lessonId: marathonEventForm.lessonId || undefined,
+        lessonIds: marathonEventForm.lessonIds,
         published: marathonEventForm.published,
       };
       const result = await createMarathonEvent(product.id, payload);
@@ -956,7 +974,7 @@ export function CourseEditor({
       track: event.track,
       dayOffset: String(event.dayOffset),
       weekNumber: event.weekNumber != null ? String(event.weekNumber) : "",
-      lessonId: event.lessonId ?? "",
+      lessonIds: [...event.lessonIds],
       published: event.published,
     });
     setMarathonEditOpen(true);
@@ -985,7 +1003,7 @@ export function CourseEditor({
         dayOffset: Number(marathonEditForm.dayOffset),
         weekNumber:
           marathonEditForm.weekNumber.trim() === "" ? undefined : Number(marathonEditForm.weekNumber),
-        lessonId: marathonEditForm.lessonId || undefined,
+        lessonIds: marathonEditForm.lessonIds,
         published: marathonEditForm.published,
       };
       const result = await updateMarathonEvent(marathonEditEventId, payload);
@@ -1627,7 +1645,9 @@ export function CourseEditor({
 
                     <div className="space-y-2">
                       {marathonEventsByDay[day]?.map((event, eventIndex) => {
-                        const lesson = lessons.find((item) => item.id === event.lessonId);
+                        const linkedLessons = event.lessonIds
+                          .map((id) => lessons.find((item) => item.id === id))
+                          .filter((l): l is SerializedLesson => Boolean(l));
                         const dayEvents = marathonEventsByDay[day] ?? [];
 
                         return (
@@ -1652,10 +1672,14 @@ export function CourseEditor({
                               {event.description && (
                                 <p className="text-sm text-muted-foreground">{event.description}</p>
                               )}
-                              {lesson && (
-                                <p className="text-xs text-muted-foreground">
-                                  Привязан урок: {lesson.order}. {lesson.title}
-                                </p>
+                              {linkedLessons.length > 0 && (
+                                <ul className="list-inside list-disc text-xs text-muted-foreground">
+                                  {linkedLessons.map((l) => (
+                                    <li key={l.id}>
+                                      Урок {l.order}. {l.title}
+                                    </li>
+                                  ))}
+                                </ul>
                               )}
                             </div>
 

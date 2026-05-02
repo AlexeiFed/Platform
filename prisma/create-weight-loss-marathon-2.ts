@@ -555,7 +555,7 @@ async function main() {
     lessonMap.set(lesson.key, createdLesson);
   }
 
-  const createdEvents: Array<{ id: string; lessonId: string | null }> = [];
+  const createdEvents: Array<{ id: string; hasLesson: boolean }> = [];
 
   for (let index = 0; index < events.length; index += 1) {
     const event = events[index];
@@ -571,17 +571,25 @@ async function main() {
         dayOffset: event.dayOffset,
         weekNumber: event.weekNumber ?? null,
         position: index,
-        lessonId: linkedLesson?.id ?? null,
         blocks: event.blocks ?? undefined,
         published: true,
       },
       select: {
         id: true,
-        lessonId: true,
       },
     });
 
-    createdEvents.push(createdEvent);
+    if (linkedLesson) {
+      await prisma.marathonEventLesson.create({
+        data: {
+          marathonEventId: createdEvent.id,
+          lessonId: linkedLesson.id,
+          position: 0,
+        },
+      });
+    }
+
+    createdEvents.push({ id: createdEvent.id, hasLesson: Boolean(linkedLesson) });
   }
 
   const procedureTypes = await Promise.all(
@@ -630,8 +638,10 @@ async function main() {
   const progress = calculateMarathonProgress({
     events: createdEvents.map((event, index) => ({
       id: event.id,
-      lesson: event.lessonId ? { submissions: index < 8 ? [{ status: "APPROVED" as const }] : [] } : null,
-      completions: completionTargets.some((completion) => completion.id === event.id) ? [{ id: event.id }] : [],
+      lessons: event.hasLesson
+        ? [{ submissions: index < 8 ? [{ status: "APPROVED" as const }] : [] }]
+        : [],
+      completions: completionTargets.some((t) => t.id === event.id) ? [{ id: event.id }] : [],
     })),
     procedures: procedureSlots.map((slot) => ({
       completedAt: slot.completedAt,

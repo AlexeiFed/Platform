@@ -100,15 +100,20 @@ export default async function CoursePage({ params }: Props) {
         where: { published: true },
         orderBy: [{ dayOffset: "asc" }, { position: "asc" }],
         include: {
-          lesson: {
-            select: {
-              id: true,
-              slug: true,
-              title: true,
-              submissions: {
-                where: { userId: session.user.id },
-                select: { status: true },
-                take: 1,
+          eventLessons: {
+            orderBy: { position: "asc" },
+            include: {
+              lesson: {
+                select: {
+                  id: true,
+                  slug: true,
+                  title: true,
+                  submissions: {
+                    where: { userId: session.user.id },
+                    select: { status: true },
+                    take: 1,
+                  },
+                },
               },
             },
           },
@@ -160,7 +165,11 @@ export default async function CoursePage({ params }: Props) {
   const marathonProgress =
     product.type === "MARATHON"
       ? calculateMarathonProgress({
-          events: product.marathonEvents,
+          events: product.marathonEvents.map((e) => ({
+            id: e.id,
+            lessons: e.eventLessons.map((el) => el.lesson),
+            completions: e.completions,
+          })),
           procedures: enrollment.procedures,
         })
       : null;
@@ -187,7 +196,7 @@ export default async function CoursePage({ params }: Props) {
           const date = getMarathonEventDate(product.startDate!, e.dayOffset);
           const done =
             e.completions.length > 0 ||
-            (e.lesson?.submissions.some((s) => s.status === "APPROVED") ?? false);
+            e.eventLessons.some((el) => el.lesson.submissions.some((s) => s.status === "APPROVED"));
           return !done && date <= now;
         }) ??
         product.marathonEvents.find((e) => {

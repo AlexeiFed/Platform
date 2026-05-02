@@ -18,6 +18,9 @@ export default async function CourseEditorPage({ params }: Props) {
     include: {
       marathonEvents: {
         orderBy: [{ dayOffset: "asc" }, { position: "asc" }, { createdAt: "asc" }],
+        include: {
+          eventLessons: { orderBy: { position: "asc" } },
+        },
       },
       lessons: {
         orderBy: { order: "asc" },
@@ -68,12 +71,15 @@ export default async function CourseEditorPage({ params }: Props) {
     criteria: t.criteria,
   }));
 
-  const serializedMarathonEvents = product.marathonEvents.map((event) => ({
-    ...event,
-    blocks: event.blocks,
-    createdAt: event.createdAt.toISOString(),
-    updatedAt: event.updatedAt.toISOString(),
-  }));
+  const serializedMarathonEvents = product.marathonEvents.map(
+    ({ eventLessons, createdAt, updatedAt, ...event }) => ({
+      ...event,
+      lessonIds: eventLessons.map((el) => el.lessonId),
+      blocks: event.blocks,
+      createdAt: createdAt.toISOString(),
+      updatedAt: updatedAt.toISOString(),
+    })
+  );
 
   const serializedLessons = product.lessons.map((l) => ({
     ...l,

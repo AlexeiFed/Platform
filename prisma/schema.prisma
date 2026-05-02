@@ -368,9 +368,9 @@ model Lesson {
 
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
-  attachments    LessonAttachment[]
-  marathonEvents MarathonEvent[]
-  submissions    HomeworkSubmission[]
+  attachments           LessonAttachment[]
+  marathonEventLessons  MarathonEventLesson[]
+  submissions           HomeworkSubmission[]
 
   @@unique([productId, slug])
   @@index([productId])
@@ -429,20 +429,35 @@ model MarathonEvent {
   dayOffset   Int
   weekNumber  Int?
   position    Int               @default(0)
-  lessonId    String?
   blocks      Json?
   published   Boolean           @default(false)
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
 
-  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  lesson  Lesson? @relation(fields: [lessonId], references: [id], onDelete: SetNull)
-  completions MarathonEventCompletion[]
+  product      Product                 @relation(fields: [productId], references: [id], onDelete: Cascade)
+  eventLessons MarathonEventLesson[]
+  completions  MarathonEventCompletion[]
 
   @@index([productId, dayOffset, position])
   @@index([productId, type])
-  @@index([lessonId])
   @@map("marathon_events")
+}
+
+/// Прикреплённые к событию уроки (порядок — поле position).
+model MarathonEventLesson {
+  id              String   @id @default(uuid())
+  marathonEventId String
+  lessonId        String
+  position        Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  marathonEvent MarathonEvent @relation(fields: [marathonEventId], references: [id], onDelete: Cascade)
+  lesson        Lesson        @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([marathonEventId, lessonId])
+  @@index([marathonEventId])
+  @@index([lessonId])
+  @@map("marathon_event_lessons")
 }
 
 model MarathonEventCompletion {
