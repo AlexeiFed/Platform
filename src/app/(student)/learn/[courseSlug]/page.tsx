@@ -250,7 +250,7 @@ export default async function CoursePage({ params }: Props) {
                     href={
                       nextLesson
                         ? `/learn/${courseSlug}/${nextLesson.slug}`
-                        : `/learn/${courseSlug}/event/${nextEvent.id}`
+                        : `/learn/${courseSlug}/event/${nextEvent!.id}`
                     }
                   >
                     <PlayCircle className="h-4 w-4" />
@@ -340,7 +340,7 @@ export default async function CoursePage({ params }: Props) {
             href={
               nextLesson
                 ? `/learn/${courseSlug}/${nextLesson.slug}`
-                : `/learn/${courseSlug}/event/${nextEvent.id}`
+                : `/learn/${courseSlug}/event/${nextEvent!.id}`
             }
             className={`group flex items-center gap-4 rounded-xl border bg-card p-4 ${tokens.animation.fast} hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md`}
           >
@@ -349,10 +349,10 @@ export default async function CoursePage({ params }: Props) {
             </div>
             <div className="min-w-0 flex-1">
               <div className="text-[11px] font-semibold uppercase tracking-wide text-primary">
-                {nextLesson ? "Следующий урок" : `Событие · ${nextEvent.type}`}
+                {nextLesson ? "Следующий урок" : `Событие · ${nextEvent!.type}`}
               </div>
               <div className="truncate text-[15px] font-semibold text-foreground">
-                {nextLesson ? nextLesson.title : nextEvent.title}
+                {nextLesson ? nextLesson.title : nextEvent!.title}
               </div>
               {nextEvent && product.startDate && (
                 <div className="text-xs text-muted-foreground">
