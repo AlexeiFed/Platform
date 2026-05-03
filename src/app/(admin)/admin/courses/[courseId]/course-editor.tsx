@@ -50,6 +50,7 @@ import {
 import { AssetManager } from "../../assets/asset-manager";
 import { LandingEditor } from "./landing-editor";
 import { RichTextEditor } from "@/components/shared/rich-text-editor";
+import { MarathonEventLessonPicker } from "./marathon-event-lesson-picker";
 import { loadPdfJs } from "@/components/shared/pdfjs-loader";
 import type { LandingBlock } from "@/types/landing";
 import type { MarathonEventType, MarathonTrack, ProductCriterion, ProductType, UnlockRule } from "@prisma/client";
@@ -259,38 +260,11 @@ function MarathonEventFields({
         </div>
       </div>
 
-      <div className="space-y-2">
-        <label className={tokens.typography.label}>Уроки (материалы события)</label>
-        <div className="max-h-48 overflow-y-auto rounded-lg border border-input bg-background p-3 space-y-2">
-          {lessons.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Сначала добавьте уроки в программе марафона.</p>
-          ) : (
-            lessons.map((lesson) => {
-              const checked = form.lessonIds.includes(lesson.id);
-              return (
-                <label key={lesson.id} className="flex cursor-pointer items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 shrink-0 rounded border-input"
-                    checked={checked}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        onPatch({ lessonIds: [...form.lessonIds, lesson.id] });
-                      } else {
-                        onPatch({ lessonIds: form.lessonIds.filter((id) => id !== lesson.id) });
-                      }
-                    }}
-                  />
-                  <span>
-                    {lesson.order}. {lesson.title}
-                  </span>
-                </label>
-              );
-            })
-          )}
-        </div>
-        <p className="text-xs text-muted-foreground">Порядок на странице события — как в программе (по номеру урока).</p>
-      </div>
+      <MarathonEventLessonPicker
+        lessons={lessons.map((l) => ({ id: l.id, order: l.order, title: l.title }))}
+        selectedIds={form.lessonIds}
+        onChange={(lessonIds) => onPatch({ lessonIds })}
+      />
 
       <label className="flex items-center gap-2 text-sm">
         <input
