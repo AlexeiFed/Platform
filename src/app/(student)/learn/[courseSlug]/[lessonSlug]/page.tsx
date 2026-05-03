@@ -153,6 +153,7 @@ export default async function LessonPage({ params, searchParams }: Props) {
       : null;
   const mobileBackHref = eventBackHref ?? `/learn/${courseSlug}`;
   const mobileBackLabel = eventBackHref ? "К событию" : "К обзору";
+  const showLessonCounter = product.type !== "MARATHON";
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -176,9 +177,11 @@ export default async function LessonPage({ params, searchParams }: Props) {
       )}
       <div>
         <h1 className={tokens.typography.h2}>{lesson.title}</h1>
-        <p className="text-sm text-muted-foreground">
-          Урок {currentIndex + 1} из {product.lessons.length}
-        </p>
+        {showLessonCounter && (
+          <p className="text-sm text-muted-foreground">
+            Урок {currentIndex + 1} из {product.lessons.length}
+          </p>
+        )}
       </div>
 
       {/* === BLOCK-BASED CONTENT === */}
