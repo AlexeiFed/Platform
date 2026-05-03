@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import {
   buildHomeworkConversation,
@@ -10,6 +11,11 @@ import {
   type HomeworkThreadSubmission,
 } from "@/lib/homework";
 import { cn } from "@/lib/utils";
+
+const isVideoAttachmentUrl = (url: string) => {
+  const normalized = url.split("?")[0]?.toLowerCase() ?? "";
+  return /\.(mp4|webm|mov|m4v|avi|mkv|ogv|ogg)$/.test(normalized);
+};
 
 type Props = {
   submission: HomeworkThreadSubmission;
@@ -120,11 +126,23 @@ export function HomeworkMessages({
                   >
                     {message.fileUrls.map((fileUrl, index) => (
                       <a key={`${message.id}-${index}`} href={fileUrl} target="_blank" rel="noopener noreferrer">
-                        <img
-                          src={fileUrl}
-                          alt={`Прикрепленное фото ${index + 1}`}
-                          className="h-40 w-full rounded-xl border object-cover"
-                        />
+                        {isVideoAttachmentUrl(fileUrl) ? (
+                          <video
+                            src={fileUrl}
+                            controls
+                            preload="metadata"
+                            className="h-40 w-full rounded-xl border bg-black object-cover"
+                          />
+                        ) : (
+                          <Image
+                            src={fileUrl}
+                            alt={`Прикрепленное фото ${index + 1}`}
+                            width={640}
+                            height={320}
+                            className="h-40 w-full rounded-xl border object-cover"
+                            unoptimized
+                          />
+                        )}
                       </a>
                     ))}
                   </div>

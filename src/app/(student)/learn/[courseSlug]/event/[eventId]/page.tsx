@@ -3,11 +3,12 @@ import { prisma } from "@/lib/prisma";
 import { getMarathonEventDate } from "@/lib/marathon-progress";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { tokens } from "@/lib/design-tokens";
-import { CheckCircle2, Clock3, PlayCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Clock3, PlayCircle } from "lucide-react";
 import { PdfPages } from "@/components/shared/pdf-pages";
 import { MarathonEventCompletionToggle } from "./completion-toggle";
 import { criterionForMarathonEventType } from "@/lib/product-criteria";
@@ -100,7 +101,7 @@ export default async function MarathonEventPage({ params }: Props) {
   );
 
   const eventDate = product.startDate ? getMarathonEventDate(product.startDate, event.dayOffset) : null;
-  const accessible = eventDate ? new Date() >= eventDate : true;
+  const accessible = event.dayOffset === 0 ? true : eventDate ? new Date() >= eventDate : true;
 
   if (!accessible) {
     redirect(`/learn/${courseSlug}`);
@@ -115,6 +116,14 @@ export default async function MarathonEventPage({ params }: Props) {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
+      <div className="md:hidden">
+        <Button variant="outline" size="sm" className="w-full justify-center" asChild>
+          <Link href={`/learn/${courseSlug}`} aria-label="Назад к обзору марафона">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            К обзору
+          </Link>
+        </Button>
+      </div>
       <div className="space-y-3">
         {/* Только статус выполнения — технические мета-поля скрыты от студента */}
         <div className="flex flex-wrap items-center gap-2">
@@ -217,7 +226,15 @@ export default async function MarathonEventPage({ params }: Props) {
                   "w-full";
                 return (
                   <div key={block.id} className={`${sizeClass} overflow-hidden rounded-xl border bg-muted`}>
-                    <img src={block.content} alt="" className="h-auto w-full" loading="lazy" />
+                    <Image
+                      src={block.content}
+                      alt="Изображение блока события"
+                      width={1600}
+                      height={900}
+                      className="h-auto w-full"
+                      loading="lazy"
+                      unoptimized
+                    />
                   </div>
                 );
               }
@@ -231,13 +248,15 @@ export default async function MarathonEventPage({ params }: Props) {
                           <div className="space-y-3">
                             {block.pages.map((p, idx) => (
                               <div key={p} className="overflow-hidden rounded-lg border bg-background">
-                                <img
+                                <Image
                                   src={p}
-                                  alt=""
+                                  alt={`Страница PDF ${idx + 1}`}
+                                  width={1600}
+                                  height={2200}
                                   className="block h-auto w-full"
                                   loading={idx < 2 ? "eager" : "lazy"}
                                   fetchPriority={idx === 0 ? "high" : "auto"}
-                                  decoding="async"
+                                  unoptimized
                                 />
                               </div>
                             ))}

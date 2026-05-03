@@ -1,33 +1,55 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Menu, LogOut, User } from "lucide-react";
+import { ArrowLeft, Menu, LogOut, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { getInitials } from "@/lib/utils";
 import { layout } from "@/lib/design-tokens";
 import { useHeaderSlot } from "@/lib/header-slot";
-import { useState, useEffect } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { SignOutConfirmDialog } from "@/components/shared/sign-out-confirm-dialog";
+
+const subscribeNoop = () => () => {};
+
+function resolveMobileBackHref(pathname: string): string | null {
+  if (/^\/admin\/courses\/(new|[^/]+)$/.test(pathname)) {
+    return "/admin/courses";
+  }
+
+  const learnMatch = pathname.match(/^\/learn\/([^/]+)\/(.+)$/);
+  if (learnMatch) {
+    return `/learn/${learnMatch[1]}`;
+  }
+
+  return null;
+}
 
 export function Header({ onMenuToggle }: { onMenuToggle?: () => void }) {
   const { data: session } = useSession();
+  const pathname = usePathname();
   const [showMenu, setShowMenu] = useState(false);
   const [signOutOpen, setSignOutOpen] = useState(false);
   const { slot } = useHeaderSlot();
-  /** Не ветвить по `useSession().status`: на SSR часто уже `unauthenticated`, на клиенте первый кадр — `loading` → hydration mismatch */
-  const [authUiReady, setAuthUiReady] = useState(false);
-  useEffect(() => {
-    setAuthUiReady(true);
-  }, []);
+  const isClient = useSyncExternalStore(subscribeNoop, () => true, () => false);
+  const mobileBackHref = resolveMobileBackHref(pathname);
 
   return (
     <header className={`${layout.header.height} border-b bg-card/80 backdrop-blur-sm sticky top-0 z-40 flex items-center gap-2 px-4 sm:px-6`}>
-      <Button variant="ghost" size="icon" className="shrink-0 md:hidden" onClick={onMenuToggle} aria-label="Меню">
-        <Menu className="h-5 w-5" />
-      </Button>
+      {mobileBackHref ? (
+        <Button variant="ghost" size="icon" className="shrink-0 md:hidden" asChild>
+          <Link href={mobileBackHref} aria-label="Назад">
+            <ArrowLeft className="h-5 w-5" />
+          </Link>
+        </Button>
+      ) : (
+        <Button variant="ghost" size="icon" className="shrink-0 md:hidden" onClick={onMenuToggle} aria-label="Меню">
+          <Menu className="h-5 w-5" />
+        </Button>
+      )}
 
       {/* Слот для страниц — например, табы редактора курса */}
       {slot ? (
@@ -42,7 +64,7 @@ export function Header({ onMenuToggle }: { onMenuToggle?: () => void }) {
       )}
 
       <div className="ml-auto flex shrink-0 items-center gap-2">
-        {!authUiReady ? (
+        {!isClient ? (
           <>
             <div className="h-9 w-[4.5rem] shrink-0 rounded-md bg-muted/60 md:hidden" aria-hidden />
             <div className="hidden items-center gap-2 md:flex">

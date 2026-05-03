@@ -2,9 +2,11 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect, notFound } from "next/navigation";
 import { tokens } from "@/lib/design-tokens";
+import { getMarathonEventDate } from "@/lib/marathon-progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import Link from "next/link";
+import Image from "next/image";
 import { ArrowLeft, FileText, Paperclip, ClipboardList } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PdfPages } from "@/components/shared/pdf-pages";
@@ -104,15 +106,13 @@ export default async function LessonPage({ params, searchParams }: Props) {
     .map((row) => row.marathonEvent);
 
   if (product.type === "MARATHON" && product.startDate && linkedMarathonEvents.length > 0) {
-    const startDate = new Date(product.startDate);
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
 
-    const firstEventDate = new Date(startDate);
-    firstEventDate.setHours(0, 0, 0, 0);
-    firstEventDate.setDate(firstEventDate.getDate() + linkedMarathonEvents[0].dayOffset);
+    const firstEventOffset = linkedMarathonEvents[0].dayOffset;
+    const firstEventDate = getMarathonEventDate(product.startDate, firstEventOffset);
 
-    if (startOfToday < firstEventDate) {
+    if (firstEventOffset > 0 && startOfToday < firstEventDate) {
       redirect(`/learn/${courseSlug}`);
     }
   }
@@ -140,11 +140,21 @@ export default async function LessonPage({ params, searchParams }: Props) {
     product.type === "MARATHON" && eventQuery
       ? `/learn/${courseSlug}/event/${eventQuery}`
       : null;
+  const mobileBackHref = eventBackHref ?? `/learn/${courseSlug}`;
+  const mobileBackLabel = eventBackHref ? "К событию" : "К обзору";
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
+      <div className="md:hidden">
+        <Button variant="outline" size="sm" className="w-full justify-center" asChild>
+          <Link href={mobileBackHref} aria-label="Назад к предыдущему разделу">
+            <ArrowLeft className="mr-2 h-4 w-4 shrink-0" />
+            {mobileBackLabel}
+          </Link>
+        </Button>
+      </div>
       {eventBackHref && (
-        <div className="md:hidden">
+        <div className="hidden md:block">
           <Button variant="outline" size="sm" className="w-full justify-center" asChild>
             <Link href={eventBackHref} aria-label="Назад к событию марафона">
               <ArrowLeft className="mr-2 h-4 w-4 shrink-0" />
@@ -180,7 +190,15 @@ export default async function LessonPage({ params, searchParams }: Props) {
                 "w-full";
               return (
                 <div key={block.id} className={`${sizeClass} rounded-xl overflow-hidden border bg-muted`}>
-                  <img src={block.content} alt="" className="w-full h-auto" loading="lazy" />
+                  <Image
+                    src={block.content}
+                    alt="Изображение блока урока"
+                    width={1600}
+                    height={900}
+                    className="h-auto w-full"
+                    loading="lazy"
+                    unoptimized
+                  />
                 </div>
               );
             }
@@ -193,13 +211,15 @@ export default async function LessonPage({ params, searchParams }: Props) {
                         <div className="space-y-3">
                           {block.pages.map((p, idx) => (
                             <div key={p} className="overflow-hidden rounded-lg border bg-background">
-                              <img
+                              <Image
                                 src={p}
-                                alt=""
+                                alt={`Страница PDF ${idx + 1}`}
+                                width={1600}
+                                height={2200}
                                 className="block h-auto w-full"
                                 loading={idx < 2 ? "eager" : "lazy"}
                                 fetchPriority={idx === 0 ? "high" : "auto"}
-                                decoding="async"
+                                unoptimized
                               />
                             </div>
                           ))}
@@ -330,16 +350,6 @@ export default async function LessonPage({ params, searchParams }: Props) {
         </Card>
       )}
 
-      {eventBackHref && (
-        <div className="md:hidden pt-2">
-          <Button variant="outline" size="sm" className="w-full justify-center" asChild>
-            <Link href={eventBackHref} aria-label="Назад к событию марафона">
-              <ArrowLeft className="mr-2 h-4 w-4 shrink-0" />
-              К событию
-            </Link>
-          </Button>
-        </div>
-      )}
     </div>
   );
 }

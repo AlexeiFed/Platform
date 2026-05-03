@@ -156,7 +156,6 @@ export function CourseEditorShell({ product, lessons, marathonEvents, tariffs }:
         lessons={lessons}
         marathonEvents={marathonEvents}
         activeTab={activeTab}
-        onRequestTab={(tab) => handleSetTab(tab as TabId)}
       />
     </div>
   );

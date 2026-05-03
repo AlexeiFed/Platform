@@ -1,10 +1,13 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect, notFound } from "next/navigation";
+import Link from "next/link";
 import { tokens } from "@/lib/design-tokens";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { enrollmentHasCriterion, loadEnrollmentForCriteria } from "@/lib/enrollment-criteria";
 import { FeedbackLive } from "./feedback-live";
+import { ArrowLeft } from "lucide-react";
 
 type Props = { params: Promise<{ courseSlug: string }> };
 
@@ -39,6 +42,14 @@ export default async function CuratorFeedbackPage({ params }: Props) {
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
+      <div className="md:hidden">
+        <Button variant="outline" size="sm" className="w-full justify-center" asChild>
+          <Link href={`/learn/${courseSlug}`} aria-label="Назад к обзору курса">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            К обзору
+          </Link>
+        </Button>
+      </div>
       <div>
         <h1 className={tokens.typography.h2}>Обратная связь</h1>
         <p className={`${tokens.typography.body} mt-2`}>{product.title}</p>

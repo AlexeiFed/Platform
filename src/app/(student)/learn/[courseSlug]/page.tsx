@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { LessonCard, type LessonCardStatus } from "@/components/shared/lesson-card";
 import {
+  ArrowLeft,
   ArrowUpRight,
   Calendar,
   CheckCircle2,
@@ -213,6 +214,14 @@ export default async function CoursePage({ params }: Props) {
 
   return (
     <div className="mx-auto max-w-5xl space-y-8">
+      <div className="md:hidden">
+        <Button variant="outline" size="sm" className="w-full justify-center" asChild>
+          <Link href="/dashboard" aria-label="Назад в дашборд">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            К дашборду
+          </Link>
+        </Button>
+      </div>
       {/* HERO */}
       <section className="relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/15 via-primary/5 to-background shadow-sm">
         <div className="relative z-10 flex flex-col gap-6 p-6 sm:p-8 md:flex-row md:items-center">

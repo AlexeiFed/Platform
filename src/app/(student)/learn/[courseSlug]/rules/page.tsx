@@ -9,9 +9,11 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect, notFound } from "next/navigation";
 import { tokens } from "@/lib/design-tokens";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { ScrollText } from "lucide-react";
+import { ArrowLeft, ScrollText } from "lucide-react";
 
 // Всегда динамический рендер — отображает свежие данные после сохранения админом
 export const dynamic = "force-dynamic";
@@ -48,6 +50,14 @@ export default async function CourseRulesPage({ params }: Props) {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
+      <div className="md:hidden">
+        <Button variant="outline" size="sm" className="w-full justify-center" asChild>
+          <Link href={`/learn/${courseSlug}`} aria-label="Назад к обзору курса">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            К обзору
+          </Link>
+        </Button>
+      </div>
       {/* Eyebrow + title — минималистично, с иконкой-маркером раздела */}
       <header className="space-y-2">
         <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-primary">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { ImagePlus, X, Loader2 } from "lucide-react";
 import { submitHomework } from "./actions";
@@ -8,6 +9,14 @@ import { submitHomework } from "./actions";
 const S3_BUCKET = process.env.NEXT_PUBLIC_S3_BUCKET;
 const clientPublicUrl = (key: string) =>
   `https://${S3_BUCKET}.storage.yandexcloud.net/${key}`;
+
+const isSupportedHomeworkMedia = (file: File) =>
+  file.type.startsWith("image/") || file.type.startsWith("video/");
+
+const isVideoAttachmentUrl = (url: string) => {
+  const normalized = url.split("?")[0]?.toLowerCase() ?? "";
+  return /\.(mp4|webm|mov|m4v|avi|mkv|ogv|ogg)$/.test(normalized);
+};
 
 export function HomeworkForm({
   lessonId,
@@ -20,7 +29,7 @@ export function HomeworkForm({
   const [answers, setAnswers] = useState<string[]>(hasQuestions ? questions.map(() => "") : [""]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [photoUrls, setPhotoUrls] = useState<string[]>([]);
+  const [mediaUrls, setMediaUrls] = useState<string[]>([]);
   const [result, setResult] = useState<{ success?: boolean; error?: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -28,8 +37,8 @@ export function HomeworkForm({
     setAnswers((prev) => prev.map((a, i) => (i === idx ? val : a)));
   }
 
-  async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? []).filter((file) => file.type.startsWith("image/"));
+  async function handleMediaUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []).filter(isSupportedHomeworkMedia);
     if (files.length === 0) return;
 
     setUploading(true);
@@ -56,7 +65,7 @@ export function HomeworkForm({
       }
 
       if (uploadedUrls.length > 0) {
-        setPhotoUrls((prev) => [...prev, ...uploadedUrls]);
+        setMediaUrls((prev) => [...prev, ...uploadedUrls]);
       }
     } catch {
       /* silent */
@@ -76,8 +85,8 @@ export function HomeworkForm({
     const res = await submitHomework({
       lessonId,
       content,
-      fileUrl: photoUrls[0] ?? undefined,
-      fileUrls: photoUrls,
+      fileUrl: mediaUrls[0] ?? undefined,
+      fileUrls: mediaUrls,
     });
     setResult(res);
     setLoading(false);
@@ -116,29 +125,41 @@ export function HomeworkForm({
         />
       )}
 
-      {/* Photo attachment */}
+      {/* Media attachment (photo/video) */}
       <div className="space-y-2">
         <input
           ref={fileRef}
           type="file"
-          accept="image/*"
+          accept="image/*,video/*"
           multiple
           className="hidden"
-          onChange={handlePhotoUpload}
+          onChange={handleMediaUpload}
         />
 
-        {photoUrls.length > 0 && (
-          <div className={`grid gap-2 ${photoUrls.length === 1 ? "grid-cols-1 max-w-xs" : photoUrls.length === 2 ? "grid-cols-2" : "grid-cols-2 md:grid-cols-3"}`}>
-            {photoUrls.map((photoUrl, index) => (
-              <div key={`${photoUrl}-${index}`} className="relative">
-                <img
-                  src={photoUrl}
-                  alt={`Прикреплённое фото ${index + 1}`}
-                  className="h-32 w-full rounded-lg border object-cover"
-                />
+        {mediaUrls.length > 0 && (
+          <div className={`grid gap-2 ${mediaUrls.length === 1 ? "grid-cols-1 max-w-xs" : mediaUrls.length === 2 ? "grid-cols-2" : "grid-cols-2 md:grid-cols-3"}`}>
+            {mediaUrls.map((mediaUrl, index) => (
+              <div key={`${mediaUrl}-${index}`} className="relative">
+                {isVideoAttachmentUrl(mediaUrl) ? (
+                  <video
+                    src={mediaUrl}
+                    className="h-32 w-full rounded-lg border bg-black object-cover"
+                    controls
+                    preload="metadata"
+                  />
+                ) : (
+                  <Image
+                    src={mediaUrl}
+                    alt={`Прикреплённое фото ${index + 1}`}
+                    width={320}
+                    height={128}
+                    className="h-32 w-full rounded-lg border object-cover"
+                    unoptimized
+                  />
+                )}
                 <button
                   type="button"
-                  onClick={() => setPhotoUrls((prev) => prev.filter((_, currentIndex) => currentIndex !== index))}
+                  onClick={() => setMediaUrls((prev) => prev.filter((_, currentIndex) => currentIndex !== index))}
                   className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-sm"
                 >
                   <X className="h-3.5 w-3.5" />
@@ -158,7 +179,7 @@ export function HomeworkForm({
           {uploading ? (
             <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Загрузка...</>
           ) : (
-            <><ImagePlus className="mr-1.5 h-4 w-4" /> {photoUrls.length > 0 ? "Добавить ещё фото" : "Прикрепить фото"}</>
+            <><ImagePlus className="mr-1.5 h-4 w-4" /> {mediaUrls.length > 0 ? "Добавить ещё файл" : "Прикрепить фото/видео"}</>
           )}
         </Button>
       </div>

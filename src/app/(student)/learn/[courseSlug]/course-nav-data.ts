@@ -90,7 +90,7 @@ function buildMarathonWeeks(
           const eventDate = product.startDate
             ? getMarathonEventDate(product.startDate, event.dayOffset)
             : null;
-          const accessible = eventDate ? new Date() >= eventDate : true;
+          const accessible = event.dayOffset === 0 ? true : eventDate ? new Date() >= eventDate : true;
           const lessonCompleted = event.eventLessons.some((el) =>
             el.lesson.submissions.some((s) => s.status === "APPROVED")
           );

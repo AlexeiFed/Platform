@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { tokens } from "@/lib/design-tokens";
 import { createProduct } from "../actions";
+import { ArrowLeft } from "lucide-react";
 
 export default function NewCoursePage() {
   const router = useRouter();
@@ -41,6 +43,14 @@ export default function NewCoursePage() {
 
   return (
     <div className="max-w-2xl mx-auto">
+      <div className="mb-4 md:hidden">
+        <Button variant="outline" size="sm" className="w-full justify-center" asChild>
+          <Link href="/admin/courses" aria-label="Назад к списку курсов">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            К списку курсов
+          </Link>
+        </Button>
+      </div>
       <h1 className={`${tokens.typography.h2} mb-6`}>Новый продукт</h1>
       <p className={`${tokens.typography.small} mb-4`}>
         Продукт создаётся скрытым. Чтобы курс или марафон увидели все в каталоге, в редакторе нажмите «Опубликовать».

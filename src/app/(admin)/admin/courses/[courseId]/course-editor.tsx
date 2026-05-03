@@ -27,7 +27,7 @@ import { confirmDeletion } from "@/lib/confirm-deletion";
 import {
   Plus, GripVertical, FileText, Film, X, Pencil, Trash2,
   Eye, EyeOff, Image as ImageIcon, Upload, Loader2,
-  ClipboardList, CalendarDays, ArrowUp, ArrowDown,
+  ClipboardList, CalendarDays, ArrowUp, ArrowDown, ArrowLeft,
 } from "lucide-react";
 import {
   Dialog,
@@ -38,6 +38,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import {
   createLesson, updateLesson, deleteLesson, reorderLessons, updateProduct,
 } from "../actions";
@@ -416,7 +417,7 @@ function MediaBlockEditor({
     try {
       const pdfjs = await loadPdfJs();
       const proxiedUrl = `/api/pdf?src=${encodeURIComponent(pdfUrl)}`;
-      const doc = await pdfjs.getDocument({ url: proxiedUrl, withCredentials: true } as any).promise;
+      const doc = await pdfjs.getDocument({ url: proxiedUrl, withCredentials: true }).promise;
 
       const total = doc.numPages;
       setPagesProgress({ done: 0, total });
@@ -533,7 +534,14 @@ function MediaBlockEditor({
           {block.type === "image" && (
             <div className="space-y-2">
               <div className="rounded-lg overflow-hidden border bg-muted max-h-48">
-                <img src={block.content} alt="" className="w-full h-auto max-h-48 object-contain" />
+                <Image
+                  src={block.content}
+                  alt="Превью изображения"
+                  width={960}
+                  height={540}
+                  className="h-auto max-h-48 w-full object-contain"
+                  unoptimized
+                />
               </div>
               {/* Выбор размера отображения у студента */}
               <div className="min-w-0 space-y-1.5">
@@ -615,7 +623,15 @@ function MediaBlockEditor({
                 <div className="space-y-3">
                   {block.pages.map((p, idx) => (
                     <div key={p} className="overflow-hidden rounded-lg border bg-background">
-                      <img src={p} alt={`PDF page ${idx + 1}`} className="block w-full h-auto" loading="lazy" />
+                      <Image
+                        src={p}
+                        alt={`PDF page ${idx + 1}`}
+                        width={1200}
+                        height={1700}
+                        className="block h-auto w-full"
+                        loading="lazy"
+                        unoptimized
+                      />
                     </div>
                   ))}
                 </div>
@@ -738,13 +754,11 @@ export function CourseEditor({
   lessons: initialLessons,
   marathonEvents: initialMarathonEvents,
   activeTab,
-  onRequestTab,
 }: {
   product: SerializedProduct;
   lessons: SerializedLesson[];
   marathonEvents: SerializedMarathonEvent[];
   activeTab: string;
-  onRequestTab?: (tab: string) => void;
 }) {
   // landingBlocks передаётся через product
   const router = useRouter();
@@ -1256,6 +1270,12 @@ export function CourseEditor({
     setShowNewLesson(true);
   }
 
+  function scrollToMarathonEventsList() {
+    const container = document.getElementById("marathon-events-list");
+    if (!container) return;
+    container.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   const marathonEventsByDay = marathonEvents.reduce<Record<number, SerializedMarathonEvent[]>>((acc, event) => {
     if (!acc[event.dayOffset]) {
       acc[event.dayOffset] = [];
@@ -1323,7 +1343,14 @@ export function CourseEditor({
                 {productForm.coverUrl ? (
                   <div className="space-y-2">
                     <div className="aspect-video w-full overflow-hidden rounded-lg border bg-muted">
-                      <img src={productForm.coverUrl} alt="" className="h-full w-full object-cover" />
+                      <Image
+                        src={productForm.coverUrl}
+                        alt="Обложка курса"
+                        width={1280}
+                        height={720}
+                        className="h-full w-full object-cover"
+                        unoptimized
+                      />
                     </div>
                     <div className="flex gap-2 flex-wrap">
                       <Button
@@ -1553,6 +1580,18 @@ export function CourseEditor({
           </CardHeader>
           <CardContent className="space-y-6">
             <form onSubmit={handleCreateMarathonEvent} className="space-y-4 rounded-lg border p-4">
+              <div className="md:hidden">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-center"
+                  onClick={scrollToMarathonEventsList}
+                >
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  К списку событий
+                </Button>
+              </div>
               <div>
                 <p className="font-medium text-sm">Новое событие</p>
                 <p className="text-xs text-muted-foreground">
@@ -1600,7 +1639,7 @@ export function CourseEditor({
               </DialogContent>
             </Dialog>
 
-            <div className="space-y-4">
+            <div id="marathon-events-list" className="space-y-4">
               {sortedMarathonDays.length === 0 ? (
                 <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
                   Пока нет событий марафона. Добавьте первый день или подготовительный этап.
@@ -1724,9 +1763,17 @@ export function CourseEditor({
       {(showNewLesson || editingLesson) && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">
-              {editingLesson ? `Редактирование: ${editingLesson.title}` : "Новый урок"}
-            </CardTitle>
+            <div className="space-y-2">
+              <div className="md:hidden">
+                <Button type="button" variant="outline" size="sm" className="w-full justify-center" onClick={resetForm}>
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  К списку уроков
+                </Button>
+              </div>
+              <CardTitle className="text-base">
+                {editingLesson ? `Редактирование: ${editingLesson.title}` : "Новый урок"}
+              </CardTitle>
+            </div>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSave} className="space-y-6">

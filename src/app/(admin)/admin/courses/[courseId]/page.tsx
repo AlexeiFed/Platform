@@ -2,6 +2,9 @@ import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import { tokens } from "@/lib/design-tokens";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { CourseEditorShell } from "./course-editor-shell";
 import type { ContentBlock } from "./course-editor";
 import type { LandingBlock } from "@/types/landing";
@@ -97,6 +100,14 @@ export default async function CourseEditorPage({ params }: Props) {
 
   return (
     <div className="space-y-6">
+      <div className="md:hidden">
+        <Button variant="outline" size="sm" className="w-full justify-center" asChild>
+          <Link href="/admin/courses" aria-label="Назад к списку курсов">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            К списку курсов
+          </Link>
+        </Button>
+      </div>
       <div className="flex items-center justify-between">
         <div>
           <h1 className={tokens.typography.h2}>{product.title}</h1>

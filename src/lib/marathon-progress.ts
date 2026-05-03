@@ -31,7 +31,9 @@ export const getStartOfDay = (value: Date | string) => {
 
 export const getMarathonEventDate = (startDate: Date | string, dayOffset: number) => {
   const result = getStartOfDay(startDate);
-  result.setDate(result.getDate() + dayOffset);
+  // День 1 = дата старта марафона. День 0 — подготовительный этап.
+  const normalizedOffset = dayOffset > 0 ? dayOffset - 1 : 0;
+  result.setDate(result.getDate() + normalizedOffset);
   return result;
 };
 
