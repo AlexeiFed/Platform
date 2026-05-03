@@ -80,6 +80,7 @@ export default async function MarathonEventPage({ params }: Props) {
               title: true,
               published: true,
               homeworkEnabled: true,
+              unlockRule: true,
               submissions: {
                 where: { userId: session.user.id },
                 select: { status: true },
@@ -112,6 +113,15 @@ export default async function MarathonEventPage({ params }: Props) {
     row.lesson.submissions.some((submission) => submission.status === "APPROVED")
   );
   const isCompleted = completedFromMark || completedFromHomework;
+  const hasHomeworkLessons = event.eventLessons.some((row) => row.lesson.homeworkEnabled);
+  const hasHomeworkApprovalGate = event.eventLessons.some(
+    (row) => row.lesson.homeworkEnabled && row.lesson.unlockRule === "AFTER_HOMEWORK_APPROVAL"
+  );
+  const completionHint = hasHomeworkApprovalGate
+    ? "Для уроков с домашкой событие закроется после принятия задания. Для остальных материалов можно использовать ручную отметку."
+    : hasHomeworkLessons
+      ? "В этом событии есть домашка, но продвижение не ждёт её проверки. После выполнения уроков нажмите «Отметить выполненным» вручную."
+      : "После выполнения материалов нажмите «Отметить выполненным» вручную.";
   const blocks = (event.blocks as ContentBlock[] | null) ?? [];
 
   return (
@@ -167,7 +177,7 @@ export default async function MarathonEventPage({ params }: Props) {
                 {isCompleted ? "Событие отмечено как выполненное" : "Событие ещё не завершено"}
               </div>
               <div className="text-sm text-muted-foreground">
-                Для материалов без домашки используй ручную отметку. Для материалов с домашкой событие закроется после принятия задания.
+                {completionHint}
               </div>
             </div>
           </div>

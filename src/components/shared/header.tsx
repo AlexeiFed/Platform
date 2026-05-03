@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { ArrowLeft, Menu, LogOut, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,14 +15,15 @@ import { SignOutConfirmDialog } from "@/components/shared/sign-out-confirm-dialo
 
 const subscribeNoop = () => () => {};
 
-function resolveMobileBackHref(pathname: string): string | null {
+function resolveMobileBackHref(pathname: string, eventId: string | null): string | null {
   if (/^\/admin\/courses\/(new|[^/]+)$/.test(pathname)) {
     return "/admin/courses";
   }
 
-  const learnMatch = pathname.match(/^\/learn\/([^/]+)\/(.+)$/);
-  if (learnMatch) {
-    return `/learn/${learnMatch[1]}`;
+  const lessonMatch = pathname.match(/^\/learn\/([^/]+)\/([^/]+)$/);
+  if (lessonMatch && eventId) {
+    const [, courseSlug] = lessonMatch;
+    return `/learn/${courseSlug}/event/${encodeURIComponent(eventId)}`;
   }
 
   return null;
@@ -31,11 +32,12 @@ function resolveMobileBackHref(pathname: string): string | null {
 export function Header({ onMenuToggle }: { onMenuToggle?: () => void }) {
   const { data: session } = useSession();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [showMenu, setShowMenu] = useState(false);
   const [signOutOpen, setSignOutOpen] = useState(false);
   const { slot } = useHeaderSlot();
   const isClient = useSyncExternalStore(subscribeNoop, () => true, () => false);
-  const mobileBackHref = resolveMobileBackHref(pathname);
+  const mobileBackHref = resolveMobileBackHref(pathname, searchParams.get("event"));
 
   return (
     <header className={`${layout.header.height} border-b bg-card/80 backdrop-blur-sm sticky top-0 z-40 flex items-center gap-2 px-4 sm:px-6`}>

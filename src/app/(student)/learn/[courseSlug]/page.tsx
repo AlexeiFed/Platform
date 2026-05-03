@@ -216,9 +216,9 @@ export default async function CoursePage({ params }: Props) {
     <div className="mx-auto max-w-5xl space-y-8">
       <div className="md:hidden">
         <Button variant="outline" size="sm" className="w-full justify-center" asChild>
-          <Link href="/dashboard" aria-label="Назад в дашборд">
+          <Link href="/catalog" aria-label="Назад в каталог">
             <ArrowLeft className="mr-2 h-4 w-4" />
-            К дашборду
+            К каталогу
           </Link>
         </Button>
       </div>

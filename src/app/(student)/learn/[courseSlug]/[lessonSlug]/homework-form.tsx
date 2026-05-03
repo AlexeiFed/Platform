@@ -3,7 +3,7 @@
 import { useState, useRef } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import { ImagePlus, X, Loader2 } from "lucide-react";
+import { ImagePlus, Video, X, Loader2 } from "lucide-react";
 import { submitHomework } from "./actions";
 
 const S3_BUCKET = process.env.NEXT_PUBLIC_S3_BUCKET;
@@ -31,7 +31,8 @@ export function HomeworkForm({
   const [uploading, setUploading] = useState(false);
   const [mediaUrls, setMediaUrls] = useState<string[]>([]);
   const [result, setResult] = useState<{ success?: boolean; error?: string } | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const imageFileRef = useRef<HTMLInputElement>(null);
+  const videoFileRef = useRef<HTMLInputElement>(null);
 
   function updateAnswer(idx: number, val: string) {
     setAnswers((prev) => prev.map((a, i) => (i === idx ? val : a)));
@@ -128,9 +129,17 @@ export function HomeworkForm({
       {/* Media attachment (photo/video) */}
       <div className="space-y-2">
         <input
-          ref={fileRef}
+          ref={imageFileRef}
           type="file"
-          accept="image/*,video/*"
+          accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif"
+          multiple
+          className="hidden"
+          onChange={handleMediaUpload}
+        />
+        <input
+          ref={videoFileRef}
+          type="file"
+          accept="video/*,.mp4,.mov,.m4v,.webm,.avi,.mkv,.ogv,.ogg"
           multiple
           className="hidden"
           onChange={handleMediaUpload}
@@ -169,19 +178,34 @@ export function HomeworkForm({
           </div>
         )}
 
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={uploading}
-          onClick={() => fileRef.current?.click()}
-        >
-          {uploading ? (
-            <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Загрузка...</>
-          ) : (
-            <><ImagePlus className="mr-1.5 h-4 w-4" /> {mediaUrls.length > 0 ? "Добавить ещё файл" : "Прикрепить фото/видео"}</>
-          )}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={uploading}
+            onClick={() => imageFileRef.current?.click()}
+          >
+            {uploading ? (
+              <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Загрузка...</>
+            ) : (
+              <><ImagePlus className="mr-1.5 h-4 w-4" /> {mediaUrls.length > 0 ? "Добавить фото" : "Прикрепить фото"}</>
+            )}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={uploading}
+            onClick={() => videoFileRef.current?.click()}
+          >
+            {uploading ? (
+              <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Загрузка...</>
+            ) : (
+              <><Video className="mr-1.5 h-4 w-4" /> {mediaUrls.length > 0 ? "Добавить видео" : "Прикрепить видео"}</>
+            )}
+          </Button>
+        </div>
       </div>
 
       {result?.error && (
