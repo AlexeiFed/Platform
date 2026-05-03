@@ -156,7 +156,9 @@ export default async function MarathonEventPage({ params }: Props) {
         <div>
           <h1 className={tokens.typography.h2}>{event.title}</h1>
           {event.description && (
-            <p className={`${tokens.typography.body} mt-2`}>{event.description}</p>
+            <div className="prose prose-neutral mt-2 max-w-none dark:prose-invert">
+              {renderTextBlock(event.description)}
+            </div>
           )}
         </div>
       </div>

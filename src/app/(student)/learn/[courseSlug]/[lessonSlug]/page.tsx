@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect, notFound } from "next/navigation";
 import { tokens } from "@/lib/design-tokens";
-import { getMarathonEventDate } from "@/lib/marathon-progress";
+import { isMarathonEventAccessible } from "@/lib/marathon-progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import Link from "next/link";
@@ -97,9 +97,15 @@ export default async function LessonPage({ params, searchParams }: Props) {
         published: true,
         eventLessons: { some: { lessonId: lesson.id } },
       },
-      select: { id: true },
+      select: { id: true, dayOffset: true },
     });
     if (!scopedEvent) {
+      redirect(`/learn/${courseSlug}`);
+    }
+    if (
+      product.startDate &&
+      !isMarathonEventAccessible({ startDate: product.startDate, dayOffset: scopedEvent.dayOffset })
+    ) {
       redirect(`/learn/${courseSlug}`);
     }
   } else if (!lesson.published) {
@@ -115,14 +121,9 @@ export default async function LessonPage({ params, searchParams }: Props) {
     )
     .map((row) => row.marathonEvent);
 
-  if (product.type === "MARATHON" && product.startDate && linkedMarathonEvents.length > 0) {
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
-
+  if (product.type === "MARATHON" && product.startDate && linkedMarathonEvents.length > 0 && !eventQuery) {
     const firstEventOffset = linkedMarathonEvents[0].dayOffset;
-    const firstEventDate = getMarathonEventDate(product.startDate, firstEventOffset);
-
-    if (firstEventOffset > 0 && startOfToday < firstEventDate) {
+    if (!isMarathonEventAccessible({ startDate: product.startDate, dayOffset: firstEventOffset })) {
       redirect(`/learn/${courseSlug}`);
     }
   }
