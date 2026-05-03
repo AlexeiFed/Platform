@@ -1,6 +1,6 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getMarathonEventDate } from "@/lib/marathon-progress";
+import { isMarathonEventAccessible } from "@/lib/marathon-progress";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -111,8 +111,9 @@ export default async function MarathonEventPage({ params }: Props) {
     requiredCrit && critRow && !enrollmentHasCriterion(critRow, requiredCrit)
   );
 
-  const eventDate = product.startDate ? getMarathonEventDate(product.startDate, event.dayOffset) : null;
-  const accessible = event.dayOffset === 0 ? true : eventDate ? new Date() >= eventDate : true;
+  const accessible = product.startDate
+    ? isMarathonEventAccessible({ startDate: product.startDate, dayOffset: event.dayOffset })
+    : true;
 
   if (!accessible) {
     redirect(`/learn/${courseSlug}`);

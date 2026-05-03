@@ -37,6 +37,39 @@ export const getMarathonEventDate = (startDate: Date | string, dayOffset: number
   return result;
 };
 
+const MARATHON_DEFAULT_TIME_ZONE = process.env.MARATHON_TIME_ZONE ?? "Europe/Moscow";
+
+const toDateKeyInTimeZone = (value: Date | string, timeZone: string): string => {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(value));
+
+  const year = parts.find((p) => p.type === "year")?.value ?? "0000";
+  const month = parts.find((p) => p.type === "month")?.value ?? "00";
+  const day = parts.find((p) => p.type === "day")?.value ?? "00";
+
+  return `${year}-${month}-${day}`;
+};
+
+export const isMarathonEventAccessible = ({
+  startDate,
+  dayOffset,
+  now = new Date(),
+  timeZone = MARATHON_DEFAULT_TIME_ZONE,
+}: {
+  startDate: Date | string;
+  dayOffset: number;
+  now?: Date;
+  timeZone?: string;
+}) => {
+  if (dayOffset <= 0) return true;
+  const unlockDate = getMarathonEventDate(startDate, dayOffset);
+  return toDateKeyInTimeZone(now, timeZone) >= toDateKeyInTimeZone(unlockDate, timeZone);
+};
+
 export const calculateMarathonProgress = ({
   events,
   procedures,

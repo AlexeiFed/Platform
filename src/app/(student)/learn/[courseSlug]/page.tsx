@@ -3,7 +3,7 @@
 // карточку «Продолжить с того же места» и грид уроков (для курсов).
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { calculateMarathonProgress, getMarathonEventDate } from "@/lib/marathon-progress";
+import { calculateMarathonProgress, getMarathonEventDate, isMarathonEventAccessible } from "@/lib/marathon-progress";
 import { redirect, notFound } from "next/navigation";
 import { tokens } from "@/lib/design-tokens";
 import Link from "next/link";
@@ -190,19 +190,17 @@ export default async function CoursePage({ params }: Props) {
       )
     : null;
 
-  const now = new Date();
+  const isMarathonEventDone = (event: (typeof product.marathonEvents)[number]) =>
+    event.completions.length > 0 ||
+    event.eventLessons.some((el) => el.lesson.submissions.some((s) => s.status === "APPROVED"));
+
   const nextEvent =
     !isCourse && product.startDate
       ? product.marathonEvents.find((e) => {
-          const date = getMarathonEventDate(product.startDate!, e.dayOffset);
-          const done =
-            e.completions.length > 0 ||
-            e.eventLessons.some((el) => el.lesson.submissions.some((s) => s.status === "APPROVED"));
-          return !done && date <= now;
-        }) ??
-        product.marathonEvents.find((e) => {
-          const date = getMarathonEventDate(product.startDate!, e.dayOffset);
-          return date > now;
+          return (
+            !isMarathonEventDone(e) &&
+            isMarathonEventAccessible({ startDate: product.startDate!, dayOffset: e.dayOffset })
+          );
         })
       : null;
 
@@ -252,7 +250,7 @@ export default async function CoursePage({ params }: Props) {
                     href={
                       nextLesson
                         ? `/learn/${courseSlug}/${nextLesson.slug}`
-                        : `/learn/${courseSlug}/event/${nextEvent!.id}`
+                        : `/learn/${courseSlug}/event/${nextEvent.id}`
                     }
                   >
                     <PlayCircle className="h-4 w-4" />
@@ -342,7 +340,7 @@ export default async function CoursePage({ params }: Props) {
             href={
               nextLesson
                 ? `/learn/${courseSlug}/${nextLesson.slug}`
-                : `/learn/${courseSlug}/event/${nextEvent!.id}`
+                : `/learn/${courseSlug}/event/${nextEvent.id}`
             }
             className={`group flex items-center gap-4 rounded-xl border bg-card p-4 ${tokens.animation.fast} hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md`}
           >
@@ -351,10 +349,10 @@ export default async function CoursePage({ params }: Props) {
             </div>
             <div className="min-w-0 flex-1">
               <div className="text-[11px] font-semibold uppercase tracking-wide text-primary">
-                {nextLesson ? "Следующий урок" : `Событие · ${nextEvent!.type}`}
+                {nextLesson ? "Следующий урок" : `Событие · ${nextEvent.type}`}
               </div>
               <div className="truncate text-[15px] font-semibold text-foreground">
-                {nextLesson ? nextLesson.title : nextEvent!.title}
+                {nextLesson ? nextLesson.title : nextEvent.title}
               </div>
               {nextEvent && product.startDate && (
                 <div className="text-xs text-muted-foreground">

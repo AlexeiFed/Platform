@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { getMarathonEventDate } from "@/lib/marathon-progress";
+import { isMarathonEventAccessible } from "@/lib/marathon-progress";
 import type { ProductCriterion } from "@prisma/client";
 import { criterionForMarathonEventType } from "@/lib/product-criteria";
 import { effectiveCriteriaSet, enrollmentHasCriterion } from "@/lib/enrollment-criteria";
@@ -87,10 +87,9 @@ function buildMarathonWeeks(
         .slice()
         .sort((a, b) => a.position - b.position)
         .map((event) => {
-          const eventDate = product.startDate
-            ? getMarathonEventDate(product.startDate, event.dayOffset)
-            : null;
-          const accessible = event.dayOffset === 0 ? true : eventDate ? new Date() >= eventDate : true;
+          const accessible = product.startDate
+            ? isMarathonEventAccessible({ startDate: product.startDate, dayOffset: event.dayOffset })
+            : true;
           const lessonCompleted = event.eventLessons.some((el) =>
             el.lesson.submissions.some((s) => s.status === "APPROVED")
           );
