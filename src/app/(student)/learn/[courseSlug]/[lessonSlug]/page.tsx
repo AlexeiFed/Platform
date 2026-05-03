@@ -29,6 +29,16 @@ type Props = {
   searchParams: Promise<{ event?: string }>;
 };
 
+const containsHtmlTags = (content: string) => /<\/?[a-z][\s\S]*>/i.test(content);
+
+function renderTextBlock(content: string) {
+  if (containsHtmlTags(content)) {
+    return <div dangerouslySetInnerHTML={{ __html: content }} />;
+  }
+
+  return <div className="whitespace-pre-line break-words">{content}</div>;
+}
+
 export default async function LessonPage({ params, searchParams }: Props) {
   const { courseSlug, lessonSlug } = await params;
   const { event: eventQuery } = await searchParams;
@@ -178,7 +188,7 @@ export default async function LessonPage({ params, searchParams }: Props) {
             if (block.type === "video" && block.content) {
               return (
                 <div key={block.id} className="w-full aspect-video rounded-xl overflow-hidden bg-black">
-                  <video src={block.content} controls className="h-full w-full" controlsList="nodownload" />
+                  <video src={block.content} controls preload="metadata" playsInline className="h-full w-full" controlsList="nodownload" />
                 </div>
               );
             }
@@ -237,7 +247,7 @@ export default async function LessonPage({ params, searchParams }: Props) {
                 <div key={block.id} className="w-full">
                   <Card>
                     <CardContent className="prose prose-neutral dark:prose-invert max-w-none p-6">
-                      <div dangerouslySetInnerHTML={{ __html: block.content }} />
+                      {renderTextBlock(block.content)}
                     </CardContent>
                   </Card>
                 </div>
@@ -251,13 +261,13 @@ export default async function LessonPage({ params, searchParams }: Props) {
           {/* Legacy rendering */}
           {lesson.videoUrl && (
             <div className="aspect-video w-full rounded-xl overflow-hidden bg-black">
-              <video src={lesson.videoUrl} controls className="h-full w-full" controlsList="nodownload" />
+              <video src={lesson.videoUrl} controls preload="metadata" playsInline className="h-full w-full" controlsList="nodownload" />
             </div>
           )}
           {lesson.content && (
             <Card>
               <CardContent className="prose prose-neutral dark:prose-invert max-w-none p-6">
-                <div dangerouslySetInnerHTML={{ __html: lesson.content }} />
+                {renderTextBlock(lesson.content)}
               </CardContent>
             </Card>
           )}

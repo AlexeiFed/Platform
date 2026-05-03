@@ -27,6 +27,16 @@ type Props = {
   params: Promise<{ courseSlug: string; eventId: string }>;
 };
 
+const containsHtmlTags = (content: string) => /<\/?[a-z][\s\S]*>/i.test(content);
+
+function renderTextBlock(content: string) {
+  if (containsHtmlTags(content)) {
+    return <div dangerouslySetInnerHTML={{ __html: content }} />;
+  }
+
+  return <div className="whitespace-pre-line break-words">{content}</div>;
+}
+
 export default async function MarathonEventPage({ params }: Props) {
   const { courseSlug, eventId } = await params;
   const session = await auth();
@@ -223,7 +233,7 @@ export default async function MarathonEventPage({ params }: Props) {
               if (block.type === "video" && block.content) {
                 return (
                   <div key={block.id} className="w-full aspect-video overflow-hidden rounded-xl bg-black">
-                    <video src={block.content} controls className="h-full w-full" controlsList="nodownload" />
+                    <video src={block.content} controls preload="metadata" playsInline className="h-full w-full" controlsList="nodownload" />
                   </div>
                 );
               }
@@ -285,7 +295,7 @@ export default async function MarathonEventPage({ params }: Props) {
                   <div key={block.id} className="w-full">
                     <Card>
                       <CardContent className="prose prose-neutral max-w-none p-6 dark:prose-invert">
-                        <div dangerouslySetInnerHTML={{ __html: block.content }} />
+                        {renderTextBlock(block.content)}
                       </CardContent>
                     </Card>
                   </div>

@@ -45,7 +45,7 @@ export function Header({ onMenuToggle }: { onMenuToggle?: () => void }) {
   const mobileBackHref = resolveMobileBackHref(pathname, eventId);
 
   return (
-    <header className={`${layout.header.height} border-b bg-card/80 backdrop-blur-sm sticky top-0 z-40 flex items-center gap-2 px-4 sm:px-6`}>
+    <header className={`${layout.header.height} border-b bg-card/95 md:bg-card/80 md:backdrop-blur-sm sticky top-0 z-40 flex items-center gap-2 px-4 sm:px-6`}>
       {mobileBackHref ? (
         <Button variant="ghost" size="icon" className="shrink-0 md:hidden" asChild>
           <Link href={mobileBackHref} aria-label="Назад">
