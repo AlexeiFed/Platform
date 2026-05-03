@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { ArrowLeft, Menu, LogOut, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,11 @@ import { useState, useSyncExternalStore } from "react";
 import { SignOutConfirmDialog } from "@/components/shared/sign-out-confirm-dialog";
 
 const subscribeNoop = () => () => {};
+
+function getEventIdFromLocation(): string | null {
+  if (typeof window === "undefined") return null;
+  return new URLSearchParams(window.location.search).get("event");
+}
 
 function resolveMobileBackHref(pathname: string, eventId: string | null): string | null {
   if (/^\/admin\/courses\/(new|[^/]+)$/.test(pathname)) {
@@ -32,12 +37,12 @@ function resolveMobileBackHref(pathname: string, eventId: string | null): string
 export function Header({ onMenuToggle }: { onMenuToggle?: () => void }) {
   const { data: session } = useSession();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const [showMenu, setShowMenu] = useState(false);
   const [signOutOpen, setSignOutOpen] = useState(false);
   const { slot } = useHeaderSlot();
   const isClient = useSyncExternalStore(subscribeNoop, () => true, () => false);
-  const mobileBackHref = resolveMobileBackHref(pathname, searchParams.get("event"));
+  const eventId = useSyncExternalStore(subscribeNoop, getEventIdFromLocation, () => null);
+  const mobileBackHref = resolveMobileBackHref(pathname, eventId);
 
   return (
     <header className={`${layout.header.height} border-b bg-card/80 backdrop-blur-sm sticky top-0 z-40 flex items-center gap-2 px-4 sm:px-6`}>
