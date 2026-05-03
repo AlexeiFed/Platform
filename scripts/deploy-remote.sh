@@ -99,9 +99,19 @@ systemctl restart platform-thebesteducation.service
 sleep 1
 systemctl is-active platform-thebesteducation.service
 
-if ! certbot certificates 2>/dev/null | grep -q "Certificate Name: $DOMAIN"; then
-  certbot --nginx -d "$DOMAIN" -d "www.$DOMAIN" --non-interactive --agree-tos --redirect || true
-  nginx -t && systemctl reload nginx
+echo "→ проверка/обновление TLS сертификата"
+if ! certbot --nginx \
+  --cert-name "$DOMAIN" \
+  -d "$DOMAIN" \
+  -d "www.$DOMAIN" \
+  --expand \
+  --keep-until-expiring \
+  --non-interactive \
+  --agree-tos \
+  --redirect; then
+  echo "⚠ certbot не смог обновить сертификат. Проверь DNS A/AAAA и certbot logs."
 fi
+
+nginx -t && systemctl reload nginx
 
 echo "→ сервис обновлён: https://$DOMAIN"
