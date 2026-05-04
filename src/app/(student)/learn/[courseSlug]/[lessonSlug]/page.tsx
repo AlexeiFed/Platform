@@ -13,7 +13,14 @@ import { PdfPages } from "@/components/shared/pdf-pages";
 import { LessonVideoPlayer } from "@/components/shared/lesson-video-player";
 import { HomeworkForm } from "./homework-form";
 import { HomeworkThread } from "./homework-thread";
-import { enrollmentHasCriterion, loadEnrollmentForCriteriaByUserProduct } from "@/lib/enrollment-criteria";
+import {
+  effectiveCriteriaSet,
+  enrollmentHasCriterion,
+  loadEnrollmentForCriteriaByUserProduct,
+} from "@/lib/enrollment-criteria";
+import { computeMarathonEventDayStepper } from "@/lib/marathon-event-day-nav";
+import { MarathonEventDayStepper } from "@/components/shared/marathon-event-day-stepper";
+import type { ProductCriterion } from "@prisma/client";
 
 type ContentBlock = {
   id: string;
@@ -129,6 +136,22 @@ export default async function LessonPage({ params, searchParams }: Props) {
     }
   }
 
+  let marathonLessonDayStepper: ReturnType<typeof computeMarathonEventDayStepper> | null = null;
+  if (product.type === "MARATHON" && eventQuery) {
+    const navEvents = await prisma.marathonEvent.findMany({
+      where: { productId: product.id, published: true },
+      select: { id: true, dayOffset: true, position: true, type: true },
+      orderBy: [{ dayOffset: "asc" }, { position: "asc" }],
+    });
+    const criteriaSet: Set<ProductCriterion> = crit ? effectiveCriteriaSet(crit) : new Set();
+    marathonLessonDayStepper = computeMarathonEventDayStepper(
+      navEvents,
+      { startDate: product.startDate },
+      criteriaSet,
+      eventQuery
+    );
+  }
+
   const currentIndex = product.lessons.findIndex((l) => l.slug === lessonSlug);
 
   const existingSubmission = lesson.homeworkEnabled
@@ -176,6 +199,17 @@ export default async function LessonPage({ params, searchParams }: Props) {
           </Button>
         </div>
       )}
+      {marathonLessonDayStepper?.dayLabel ? (
+        <MarathonEventDayStepper
+          courseSlug={courseSlug}
+          variant="top"
+          dayLabel={marathonLessonDayStepper.dayLabel}
+          prevId={marathonLessonDayStepper.prevId}
+          hasPreviousEvent={marathonLessonDayStepper.hasPreviousEvent}
+          nextId={marathonLessonDayStepper.nextId}
+          hasNextEvent={marathonLessonDayStepper.hasNextEvent}
+        />
+      ) : null}
       <div>
         <h1 className={tokens.typography.h2}>{lesson.title}</h1>
         {showLessonCounter && (
@@ -365,6 +399,17 @@ export default async function LessonPage({ params, searchParams }: Props) {
         </Card>
       )}
 
+      {marathonLessonDayStepper?.dayLabel ? (
+        <MarathonEventDayStepper
+          courseSlug={courseSlug}
+          variant="bottom"
+          dayLabel={marathonLessonDayStepper.dayLabel}
+          prevId={marathonLessonDayStepper.prevId}
+          hasPreviousEvent={marathonLessonDayStepper.hasPreviousEvent}
+          nextId={marathonLessonDayStepper.nextId}
+          hasNextEvent={marathonLessonDayStepper.hasNextEvent}
+        />
+      ) : null}
     </div>
   );
 }

@@ -3,7 +3,7 @@
 // и сворачиваемые блоки уроков/расписания/процедур.
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
@@ -26,24 +26,6 @@ import type {
   CourseNavPayload,
   CourseNavProcedure,
 } from "@/lib/course-nav-types";
-
-// Оставляем в расписании только указанное событие (контекст карточки события).
-function filterMarathonWeeksForEvent(
-  weeks: CourseNavMarathonWeek[],
-  eventId: string
-): CourseNavMarathonWeek[] {
-  return weeks
-    .map((week) => ({
-      ...week,
-      days: week.days
-        .map((day) => ({
-          ...day,
-          events: day.events.filter((e) => e.id === eventId),
-        }))
-        .filter((day) => day.events.length > 0),
-    }))
-    .filter((week) => week.days.length > 0);
-}
 
 // Нормализуем название курса: убираем кавычки-«ёлочки» и принудительный UPPERCASE.
 // Показываем в Title Case — читается ощутимо легче.
@@ -230,13 +212,36 @@ export function CourseNavSidebarSection({ onNavigate }: { onNavigate?: () => voi
   const searchParams = useSearchParams();
   const scopeEventId = searchParams.get("event");
 
-  const marathonWeeksDisplay = useMemo(() => {
-    if (!payload?.marathonWeeks || payload.productType !== "MARATHON" || !scopeEventId) {
-      return payload?.marathonWeeks ?? [];
+  const marathonWeeksDisplay = useMemo(
+    () => payload?.marathonWeeks ?? [],
+    [payload?.marathonWeeks]
+  );
+
+  const focusedEventId = useMemo(() => {
+    const fromQuery = scopeEventId;
+    const fromPath = pathname.match(/\/learn\/[^/]+\/event\/([^/]+)/)?.[1];
+    return fromQuery ?? fromPath ?? null;
+  }, [scopeEventId, pathname]);
+
+  const defaultExpandedWeekNumber = useMemo(() => {
+    const weeks = marathonWeeksDisplay;
+    const positive = weeks.filter((w) => w.weekNumber > 0).map((w) => w.weekNumber);
+    if (positive.length) return Math.min(...positive);
+    return weeks[0]?.weekNumber ?? 0;
+  }, [marathonWeeksDisplay]);
+
+  const weekIsInitiallyOpen = (week: CourseNavMarathonWeek) => {
+    if (focusedEventId) {
+      return week.days.some((d) => d.events.some((e) => e.id === focusedEventId));
     }
-    const filtered = filterMarathonWeeksForEvent(payload.marathonWeeks, scopeEventId);
-    return filtered.length > 0 ? filtered : payload.marathonWeeks;
-  }, [payload, scopeEventId]);
+    return week.weekNumber === defaultExpandedWeekNumber;
+  };
+
+  /** Ручной toggle недель + сброс при смене события/страницы (native details + TS без defaultOpen). */
+  const [weekOpenOverride, setWeekOpenOverride] = useState<Record<number, boolean | undefined>>({});
+  useEffect(() => {
+    setWeekOpenOverride({});
+  }, [focusedEventId]);
 
   const progress = useMemo(
     () => (payload ? computeNavProgress(payload) : null),
@@ -368,16 +373,25 @@ export function CourseNavSidebarSection({ onNavigate }: { onNavigate?: () => voi
 
             {marathonWeeksDisplay && marathonWeeksDisplay.length > 0 && (
               <>
-                <GroupLabel>{scopeEventId ? "Событие" : "Расписание"}</GroupLabel>
+                <GroupLabel>Расписание</GroupLabel>
                 <div className="space-y-0.5">
                   {marathonWeeksDisplay.map((week) => {
                     const allEvents = week.days.flatMap((d) => d.events);
                     const doneInWeek = allEvents.filter((e) => e.completed).length;
                     return (
                       <details
-                        key={week.weekNumber}
+                        key={`marathon-week-${week.weekNumber}-${focusedEventId ?? "default"}`}
                         className="group rounded-lg"
-                        open={week.weekNumber === 0}
+                        open={
+                          weekOpenOverride[week.weekNumber] ??
+                          weekIsInitiallyOpen(week)
+                        }
+                        onToggle={(e) => {
+                          setWeekOpenOverride((prev) => ({
+                            ...prev,
+                            [week.weekNumber]: e.currentTarget.open,
+                          }));
+                        }}
                       >
                         <summary
                           className={cn(

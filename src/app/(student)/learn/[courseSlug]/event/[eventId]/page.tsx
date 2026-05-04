@@ -13,7 +13,14 @@ import { PdfPages } from "@/components/shared/pdf-pages";
 import { LessonVideoPlayer } from "@/components/shared/lesson-video-player";
 import { MarathonEventCompletionToggle } from "./completion-toggle";
 import { criterionForMarathonEventType } from "@/lib/product-criteria";
-import { enrollmentHasCriterion, loadEnrollmentForCriteriaByUserProduct } from "@/lib/enrollment-criteria";
+import {
+  effectiveCriteriaSet,
+  enrollmentHasCriterion,
+  loadEnrollmentForCriteriaByUserProduct,
+} from "@/lib/enrollment-criteria";
+import { computeMarathonEventDayStepper } from "@/lib/marathon-event-day-nav";
+import { MarathonEventDayStepper } from "@/components/shared/marathon-event-day-stepper";
+import type { ProductCriterion } from "@prisma/client";
 
 type ContentBlock = {
   id: string;
@@ -107,9 +114,24 @@ export default async function MarathonEventPage({ params }: Props) {
   if (!event) notFound();
 
   const critRow = await loadEnrollmentForCriteriaByUserProduct(session.user.id, product.id);
+  const criteriaSet: Set<ProductCriterion> = critRow
+    ? effectiveCriteriaSet(critRow)
+    : new Set();
   const requiredCrit = criterionForMarathonEventType(event.type);
   const lockedByTariff = Boolean(
     requiredCrit && critRow && !enrollmentHasCriterion(critRow, requiredCrit)
+  );
+
+  const navEvents = await prisma.marathonEvent.findMany({
+    where: { productId: product.id, published: true },
+    select: { id: true, dayOffset: true, position: true, type: true },
+    orderBy: [{ dayOffset: "asc" }, { position: "asc" }],
+  });
+  const dayStepper = computeMarathonEventDayStepper(
+    navEvents,
+    { startDate: product.startDate },
+    criteriaSet,
+    event.id
   );
 
   const accessible = product.startDate
@@ -146,6 +168,17 @@ export default async function MarathonEventPage({ params }: Props) {
           </Link>
         </Button>
       </div>
+      {dayStepper.dayLabel ? (
+        <MarathonEventDayStepper
+          courseSlug={courseSlug}
+          variant="top"
+          dayLabel={dayStepper.dayLabel}
+          prevId={dayStepper.prevId}
+          hasPreviousEvent={dayStepper.hasPreviousEvent}
+          nextId={dayStepper.nextId}
+          hasNextEvent={dayStepper.hasNextEvent}
+        />
+      ) : null}
       <div className="space-y-3">
         {/* Только статус выполнения — технические мета-поля скрыты от студента */}
         <div className="flex flex-wrap items-center gap-2">
@@ -313,6 +346,17 @@ export default async function MarathonEventPage({ params }: Props) {
       ) : null /* Нет ни урока, ни блоков — карточку не показываем */}
         </>
       )}
+      {dayStepper.dayLabel ? (
+        <MarathonEventDayStepper
+          courseSlug={courseSlug}
+          variant="bottom"
+          dayLabel={dayStepper.dayLabel}
+          prevId={dayStepper.prevId}
+          hasPreviousEvent={dayStepper.hasPreviousEvent}
+          nextId={dayStepper.nextId}
+          hasNextEvent={dayStepper.hasNextEvent}
+        />
+      ) : null}
     </div>
   );
 }
