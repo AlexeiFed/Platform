@@ -55,15 +55,11 @@ export function MarathonEventLessonPicker({ lessons, selectedIds, onChange, disa
 
     const viewport = window.visualViewport;
     const handleViewportMove = () => setOpen(false);
-    document.addEventListener("scroll", handleViewportMove, { passive: true, capture: true });
-    window.addEventListener("resize", handleViewportMove);
-    viewport?.addEventListener("resize", handleViewportMove);
+    window.addEventListener("scroll", handleViewportMove, { passive: true });
     viewport?.addEventListener("scroll", handleViewportMove);
 
     return () => {
-      document.removeEventListener("scroll", handleViewportMove, true);
-      window.removeEventListener("resize", handleViewportMove);
-      viewport?.removeEventListener("resize", handleViewportMove);
+      window.removeEventListener("scroll", handleViewportMove);
       viewport?.removeEventListener("scroll", handleViewportMove);
     };
   }, [open]);
