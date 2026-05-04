@@ -133,7 +133,7 @@ export function Header({ onMenuToggle }: { onMenuToggle?: () => void }) {
           </>
         )}
       </div>
-      <SignOutConfirmDialog open={signOutOpen} onOpenChange={setSignOutOpen} />
+      {signOutOpen ? <SignOutConfirmDialog open={signOutOpen} onOpenChange={setSignOutOpen} /> : null}
     </header>
   );
 }

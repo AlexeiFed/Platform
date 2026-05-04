@@ -12,7 +12,7 @@ const manrope = Manrope({
   subsets: ["latin", "cyrillic"],
   variable: "--font-sans",
   display: "swap",
-  weight: ["400", "500", "600", "700", "800"],
+  weight: ["400", "600", "700"],
 });
 
 // Inter — для длинных текстовых блоков (правила, описания уроков, markdown).
@@ -20,6 +20,7 @@ const inter = Inter({
   subsets: ["latin", "cyrillic"],
   variable: "--font-prose",
   display: "swap",
+  preload: false,
 });
 
 export const metadata: Metadata = {
