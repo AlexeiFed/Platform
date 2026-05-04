@@ -10,6 +10,7 @@ import Image from "next/image";
 import { ArrowLeft, FileText, Paperclip, ClipboardList } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PdfPages } from "@/components/shared/pdf-pages";
+import { LessonVideoPlayer } from "@/components/shared/lesson-video-player";
 import { HomeworkForm } from "./homework-form";
 import { HomeworkThread } from "./homework-thread";
 import { enrollmentHasCriterion, loadEnrollmentForCriteriaByUserProduct } from "@/lib/enrollment-criteria";
@@ -191,8 +192,8 @@ export default async function LessonPage({ params, searchParams }: Props) {
           {blocks.map((block) => {
             if (block.type === "video" && block.content) {
               return (
-                <div key={block.id} className="w-full aspect-video rounded-xl overflow-hidden bg-black">
-                  <video src={block.content} controls preload="metadata" playsInline className="h-full w-full" controlsList="nodownload" />
+                <div key={block.id} className="w-full">
+                  <LessonVideoPlayer src={block.content} title="Видео из блока урока" />
                 </div>
               );
             }
@@ -264,8 +265,8 @@ export default async function LessonPage({ params, searchParams }: Props) {
         <>
           {/* Legacy rendering */}
           {lesson.videoUrl && (
-            <div className="aspect-video w-full rounded-xl overflow-hidden bg-black">
-              <video src={lesson.videoUrl} controls preload="metadata" playsInline className="h-full w-full" controlsList="nodownload" />
+            <div className="w-full">
+              <LessonVideoPlayer src={lesson.videoUrl} title="Основное видео урока" />
             </div>
           )}
           {lesson.content && (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Check, ChevronDown, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,6 +50,24 @@ export function MarathonEventLessonPicker({ lessons, selectedIds, onChange, disa
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
 
+  useEffect(() => {
+    if (!open) return;
+
+    const viewport = window.visualViewport;
+    const handleViewportMove = () => setOpen(false);
+    document.addEventListener("scroll", handleViewportMove, { passive: true, capture: true });
+    window.addEventListener("resize", handleViewportMove);
+    viewport?.addEventListener("resize", handleViewportMove);
+    viewport?.addEventListener("scroll", handleViewportMove);
+
+    return () => {
+      document.removeEventListener("scroll", handleViewportMove, true);
+      window.removeEventListener("resize", handleViewportMove);
+      viewport?.removeEventListener("resize", handleViewportMove);
+      viewport?.removeEventListener("scroll", handleViewportMove);
+    };
+  }, [open]);
+
   const { sortedLessons, positionById } = useSortedLessonsWithDisplayPosition(lessons);
 
   const filtered = useMemo(() => {
@@ -80,6 +98,7 @@ export function MarathonEventLessonPicker({ lessons, selectedIds, onChange, disa
     <div className="space-y-2">
       <label className={tokens.typography.label}>Уроки (материалы события)</label>
       <Popover
+        modal
         open={open}
         onOpenChange={(o) => {
           setOpen(o);

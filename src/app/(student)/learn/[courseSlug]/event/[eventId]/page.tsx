@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { tokens } from "@/lib/design-tokens";
 import { ArrowLeft, CheckCircle2, Clock3, PlayCircle } from "lucide-react";
 import { PdfPages } from "@/components/shared/pdf-pages";
+import { LessonVideoPlayer } from "@/components/shared/lesson-video-player";
 import { MarathonEventCompletionToggle } from "./completion-toggle";
 import { criterionForMarathonEventType } from "@/lib/product-criteria";
 import { enrollmentHasCriterion, loadEnrollmentForCriteriaByUserProduct } from "@/lib/enrollment-criteria";
@@ -235,8 +236,8 @@ export default async function MarathonEventPage({ params }: Props) {
             {blocks.map((block) => {
               if (block.type === "video" && block.content) {
                 return (
-                  <div key={block.id} className="w-full aspect-video overflow-hidden rounded-xl bg-black">
-                    <video src={block.content} controls preload="metadata" playsInline className="h-full w-full" controlsList="nodownload" />
+                  <div key={block.id} className="w-full">
+                    <LessonVideoPlayer src={block.content} title="Видео из блока события" />
                   </div>
                 );
               }
