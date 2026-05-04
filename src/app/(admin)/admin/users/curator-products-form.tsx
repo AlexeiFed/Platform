@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { confirmDeletion } from "@/lib/confirm-deletion";
+import { cn } from "@/lib/utils";
 import { toggleCuratorProduct } from "./actions";
 
 type Props = {
@@ -40,7 +41,12 @@ export function CuratorProductsForm({
       </Button>
 
       {open && (
-        <div className="absolute right-0 top-12 z-50 max-h-72 w-72 overflow-y-auto rounded-lg border bg-popover p-2 shadow-lg">
+        <div
+          className={cn(
+            "absolute left-0 top-12 z-50 max-h-72 w-72 max-w-[min(18rem,calc(100vw-2rem))] overflow-y-auto rounded-lg border bg-popover p-2 shadow-lg",
+            "lg:left-auto lg:right-0",
+          )}
+        >
           <div className="px-2 py-1 text-xs font-medium text-muted-foreground">
             Назначение курсов / марафонов
           </div>

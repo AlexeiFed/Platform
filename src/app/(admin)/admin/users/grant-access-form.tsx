@@ -93,7 +93,12 @@ export function GrantAccessForm({ userId, products }: Props) {
         <Plus className="h-4 w-4" />
       </Button>
       {open && (
-        <div className="absolute right-0 top-10 w-64 bg-popover border rounded-lg shadow-lg py-1 z-50 max-h-60 overflow-y-auto">
+        <div
+          className={cn(
+            "absolute left-0 top-10 z-50 max-h-60 w-64 max-w-[min(16rem,calc(100vw-2rem))] overflow-y-auto rounded-lg border bg-popover py-1 shadow-lg",
+            "lg:left-auto lg:right-0",
+          )}
+        >
           <p className="px-3 py-2 text-xs text-muted-foreground font-medium">Выдать доступ:</p>
           {products.map((p) => (
             <button

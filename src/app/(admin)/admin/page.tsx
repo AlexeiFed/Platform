@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { tokens } from "@/lib/design-tokens";
+import { cn } from "@/lib/utils";
 import { Users, BookOpen, ClipboardCheck, TrendingUp, MessageSquare, ArrowRight } from "lucide-react";
 
 export default async function AdminDashboardPage() {
@@ -17,11 +18,35 @@ export default async function AdminDashboardPage() {
     ]);
 
   const stats = [
-    { label: "Пользователей", value: usersCount, icon: Users, color: "text-blue-500" },
-    { label: "Курсов", value: productsCount, icon: BookOpen, color: "text-green-500" },
-    { label: "На проверке", value: pendingHomework, icon: ClipboardCheck, color: "text-orange-500" },
-    { label: "Зачислений", value: enrollmentsCount, icon: TrendingUp, color: "text-primary" },
-  ];
+    {
+      label: "Пользователей",
+      value: usersCount,
+      icon: Users,
+      color: "text-blue-500",
+      href: "/admin/users",
+    },
+    {
+      label: "Курсов",
+      value: productsCount,
+      icon: BookOpen,
+      color: "text-green-500",
+      href: "/admin/courses",
+    },
+    {
+      label: "На проверке",
+      value: pendingHomework,
+      icon: ClipboardCheck,
+      color: "text-orange-500",
+      href: "/admin/homework",
+    },
+    {
+      label: "Зачислений",
+      value: enrollmentsCount,
+      icon: TrendingUp,
+      color: "text-primary",
+      href: "/admin/payments",
+    },
+  ] as const;
 
   return (
     <div className="space-y-6">
@@ -29,15 +54,25 @@ export default async function AdminDashboardPage() {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
-          <Card key={stat.label}>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">{stat.label}</CardTitle>
-              <stat.icon className={`h-5 w-5 ${stat.color}`} />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{stat.value}</div>
-            </CardContent>
-          </Card>
+          <Link
+            key={stat.label}
+            href={stat.href}
+            className={cn(
+              tokens.animation.normal,
+              "block min-h-[44px] rounded-lg outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring",
+            )}
+            aria-label={`${stat.label}: перейти в раздел`}
+          >
+            <Card className="h-full transition-colors hover:border-primary/30 hover:bg-accent/40">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">{stat.label}</CardTitle>
+                <stat.icon className={`h-5 w-5 ${stat.color}`} />
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold">{stat.value}</div>
+              </CardContent>
+            </Card>
+          </Link>
         ))}
       </div>
 
