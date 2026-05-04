@@ -27,6 +27,20 @@ import type {
   CourseNavProcedure,
 } from "@/lib/course-nav-types";
 
+/** У `<details onToggle>` в мобильном Chrome `currentTarget` иногда уже null — не падаем на `.open`. */
+const readDetailsOpenFromToggle = (e: {
+  currentTarget: HTMLDetailsElement | null;
+  target: EventTarget | null;
+}): boolean | undefined => {
+  if (e.currentTarget) return e.currentTarget.open;
+  if (e.target instanceof HTMLDetailsElement) return e.target.open;
+  if (e.target instanceof Element) {
+    const d = e.target.closest("details");
+    if (d instanceof HTMLDetailsElement) return d.open;
+  }
+  return undefined;
+};
+
 // Нормализуем название курса: убираем кавычки-«ёлочки» и принудительный UPPERCASE.
 // Показываем в Title Case — читается ощутимо легче.
 function normalizeCourseTitle(raw: string): string {
@@ -155,7 +169,10 @@ function MarathonProcedureSidebarDetails({ procedures }: { procedures: CourseNav
     <details
       className="group rounded-lg"
       open={open}
-      onToggle={(e) => setOpen(e.currentTarget.open)}
+      onToggle={(e) => {
+        const next = readDetailsOpenFromToggle(e);
+        if (typeof next === "boolean") setOpen(next);
+      }}
     >
       <summary
         className={cn(
@@ -387,9 +404,11 @@ export function CourseNavSidebarSection({ onNavigate }: { onNavigate?: () => voi
                           weekIsInitiallyOpen(week)
                         }
                         onToggle={(e) => {
+                          const next = readDetailsOpenFromToggle(e);
+                          if (typeof next !== "boolean") return;
                           setWeekOpenOverride((prev) => ({
                             ...prev,
-                            [week.weekNumber]: e.currentTarget.open,
+                            [week.weekNumber]: next,
                           }));
                         }}
                       >
