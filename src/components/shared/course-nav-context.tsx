@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { CourseNavPayload } from "@/lib/course-nav-types";
 
 type CourseNavContextValue = {
@@ -35,17 +35,28 @@ export function useSetCourseNavPayload() {
 /** Синхронизирует данные боковой навигации курса с серверным layout (очистка при уходе со страницы). */
 export function CourseNavSync({ payload }: { payload: CourseNavPayload }) {
   const setPayload = useSetCourseNavPayload();
-  const stableSet = useCallback(
-    (next: CourseNavPayload | null) => {
-      setPayload(next);
-    },
-    [setPayload]
-  );
+  const lastJson = useRef<string | null>(null);
 
   useEffect(() => {
-    stableSet(payload);
-    return () => stableSet(null);
-  }, [payload, stableSet]);
+    let serialized: string;
+    try {
+      serialized = JSON.stringify(payload);
+    } catch {
+      serialized = "";
+    }
+    if (lastJson.current === serialized) {
+      return;
+    }
+    lastJson.current = serialized;
+    setPayload(payload);
+  }, [payload, setPayload]);
+
+  useEffect(() => {
+    return () => {
+      lastJson.current = null;
+      setPayload(null);
+    };
+  }, [setPayload]);
 
   return null;
 }

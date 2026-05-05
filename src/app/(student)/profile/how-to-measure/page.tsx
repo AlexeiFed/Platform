@@ -8,7 +8,7 @@ import { tokens } from "@/lib/design-tokens";
 import { cn } from "@/lib/utils";
 import { ArrowLeft } from "lucide-react";
 
-/** Латинский путь: `/_next/image` отдаёт 400 на URL с кириллицей */
+/** Локальные AVIF: Sharp на проде часто отдаёт 400 через `/_next/image` — грузим файл как есть */
 const IMAGES_BASE = "/measurement-guide";
 
 const MEASUREMENT_STEPS: { file: string; title: string }[] = [
@@ -74,6 +74,7 @@ export default async function HowToMeasurePage() {
                     className="object-cover"
                     sizes="(max-width: 640px) 200px, 200px"
                     priority={index === 0}
+                    unoptimized
                   />
                 </div>
               </CardContent>

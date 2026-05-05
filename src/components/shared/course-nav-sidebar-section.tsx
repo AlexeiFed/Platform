@@ -161,19 +161,11 @@ function CurrentCourseCard({
   );
 }
 
-// Сворачиваемый блок процедур марафона.
+// Сворачиваемый блок процедур марафона (без React-state для `open` — иначе конфликт с `<details>` и лишние ререндеры).
 function MarathonProcedureSidebarDetails({ procedures }: { procedures: CourseNavProcedure[] }) {
-  const [open, setOpen] = useState(true);
   const done = procedures.filter((p) => p.completed).length;
   return (
-    <details
-      className="group rounded-lg"
-      open={open}
-      onToggle={(e) => {
-        const next = readDetailsOpenFromToggle(e);
-        if (typeof next === "boolean") setOpen(next);
-      }}
-    >
+    <details className="group rounded-lg">
       <summary
         className={cn(
           "flex cursor-pointer list-none items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-foreground/80",
