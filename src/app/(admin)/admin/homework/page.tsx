@@ -175,7 +175,7 @@ export default async function AdminHomeworkPage({
             {selectedProductId && (
               <div className="space-y-2">
                 <div className="text-xs text-muted-foreground">Студент</div>
-                <div className="space-y-1 max-h-[360px] overflow-auto pr-1">
+                <div className="space-y-1 max-h-[min(38vh,360px)] overflow-auto pr-1 lg:max-h-[360px]">
                   {students.map((s) => {
                     const active = s.userId === selectedUserId;
                     const pending = userPending.get(s.userId) ?? 0;
@@ -206,7 +206,7 @@ export default async function AdminHomeworkPage({
           <CardHeader>
             <CardTitle className="text-base">Уроки</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-1 max-h-[520px] overflow-auto pr-1">
+          <CardContent className="space-y-1 max-h-[min(45vh,520px)] overflow-auto pr-1 lg:max-h-[520px]">
             {lessonThreads.map((t) => {
               const active = t.lesson.id === selectedLessonId;
               const pending = t.status === "PENDING" || t.status === "IN_REVIEW";

@@ -1270,6 +1270,166 @@ export function CourseEditor({
     setShowNewLesson(true);
   }
 
+  const lessonEditorCard = (
+    <Card>
+      <CardHeader>
+        <div className="space-y-2">
+          <div className="md:hidden">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full justify-center"
+              onClick={resetForm}
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              К списку уроков
+            </Button>
+          </div>
+          <CardTitle className="text-base">
+            {editingLesson ? `Редактирование: ${editingLesson.title}` : "Новый урок"}
+          </CardTitle>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSave} className="space-y-6">
+          <div className="space-y-2">
+            <label className={tokens.typography.label}>Название</label>
+            <Input
+              name="title"
+              placeholder="Название урока"
+              defaultValue={editingLesson?.title ?? ""}
+              required
+            />
+          </div>
+
+          <div className="space-y-3">
+            <label className={tokens.typography.label}>Контент урока</label>
+            <p className="text-xs text-muted-foreground">
+              Добавляйте блоки. Порядок блоков = порядок у студента.
+            </p>
+
+            {blocks.length > 0 && mounted && (
+              <DndContext
+                sensors={blockSensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleBlockDragEnd}
+              >
+                <SortableContext items={blocks.map((b) => b.id)} strategy={verticalListSortingStrategy}>
+                  <div className="space-y-2">
+                    {blocks.map((block) => (
+                      <SortableBlock
+                        key={block.id}
+                        block={block}
+                        onUpdate={(updates) => updateBlock(block.id, updates)}
+                        onRemove={() => removeBlock(block.id)}
+                      />
+                    ))}
+                  </div>
+                </SortableContext>
+              </DndContext>
+            )}
+
+            {blocks.length === 0 && (
+              <div className="border-2 border-dashed rounded-lg p-6 text-center text-muted-foreground">
+                <p className="text-sm">Нет блоков. Добавьте первый ↓</p>
+              </div>
+            )}
+
+            <div className="flex gap-2 flex-wrap">
+              <Button type="button" variant="outline" size="sm" onClick={() => addBlock("text")}>
+                <FileText className="h-3.5 w-3.5 mr-1.5 text-emerald-500" /> + Текст
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => addBlock("video")}>
+                <Film className="h-3.5 w-3.5 mr-1.5 text-primary" /> + Видео
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => addBlock("image")}>
+                <ImageIcon className="h-3.5 w-3.5 mr-1.5 text-blue-500" /> + Изображение
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => addBlock("pdf")}>
+                <FileText className="h-3.5 w-3.5 mr-1.5 text-orange-500" /> + PDF
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-3 border rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-2 font-medium text-sm cursor-pointer">
+                <ClipboardList className="h-4 w-4 text-orange-500" />
+                Домашнее задание
+              </label>
+              <Button
+                type="button"
+                variant={hwEnabled ? "default" : "outline"}
+                size="sm"
+                onClick={() => setHwEnabled(!hwEnabled)}
+              >
+                {hwEnabled ? "Включено" : "Выключено"}
+              </Button>
+            </div>
+
+            {hwEnabled && (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  Вопросы ДЗ (студент увидит их и должен ответить на каждый)
+                </p>
+                {hwQuestions.map((q, i) => (
+                  <div key={i} className="flex gap-2">
+                    <Input
+                      value={q}
+                      onChange={(e) =>
+                        setHwQuestions((prev) => prev.map((v, idx) => (idx === i ? e.target.value : v)))
+                      }
+                      placeholder={`Вопрос ${i + 1}`}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setHwQuestions((prev) => prev.filter((_, idx) => idx !== i))}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setHwQuestions((prev) => [...prev, ""])}
+                >
+                  <Plus className="h-3.5 w-3.5 mr-1" /> Добавить вопрос
+                </Button>
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <label className={tokens.typography.label}>Правило открытия</label>
+            <select
+              name="unlockRule"
+              defaultValue={editingLesson?.unlockRule ?? "IMMEDIATELY"}
+              className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+            >
+              <option value="IMMEDIATELY">Сразу</option>
+              <option value="AFTER_HOMEWORK_APPROVAL">После проверки ДЗ</option>
+              <option value="SPECIFIC_DATE">По дате</option>
+            </select>
+          </div>
+
+          <div className="flex gap-3">
+            <Button type="submit" disabled={saving}>
+              {saving ? "Сохраняем..." : editingLesson ? "Сохранить" : "Создать урок"}
+            </Button>
+            <Button type="button" variant="outline" onClick={resetForm}>
+              Отмена
+            </Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
+  );
+
   function scrollToMarathonEventsList() {
     const container = document.getElementById("marathon-events-list");
     if (!container) return;
@@ -1759,138 +1919,7 @@ export function CourseEditor({
       {/* === УРОКИ === */}
       <div className={activeTab !== "lessons" ? "hidden" : undefined}>
 
-      {/* Форма создания/редактирования урока */}
-      {(showNewLesson || editingLesson) && (
-        <Card>
-          <CardHeader>
-            <div className="space-y-2">
-              <div className="md:hidden">
-                <Button type="button" variant="outline" size="sm" className="w-full justify-center" onClick={resetForm}>
-                  <ArrowLeft className="mr-2 h-4 w-4" />
-                  К списку уроков
-                </Button>
-              </div>
-              <CardTitle className="text-base">
-                {editingLesson ? `Редактирование: ${editingLesson.title}` : "Новый урок"}
-              </CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSave} className="space-y-6">
-              <div className="space-y-2">
-                <label className={tokens.typography.label}>Название</label>
-                <Input name="title" placeholder="Название урока" defaultValue={editingLesson?.title ?? ""} required />
-              </div>
-
-              {/* === CONTENT BLOCKS === */}
-              <div className="space-y-3">
-                <label className={tokens.typography.label}>Контент урока</label>
-                <p className="text-xs text-muted-foreground">
-                  Добавляйте блоки. Порядок блоков = порядок у студента.
-                </p>
-
-                {blocks.length > 0 && mounted && (
-                  <DndContext sensors={blockSensors} collisionDetection={closestCenter} onDragEnd={handleBlockDragEnd}>
-                    <SortableContext items={blocks.map((b) => b.id)} strategy={verticalListSortingStrategy}>
-                      <div className="space-y-2">
-                        {blocks.map((block) => (
-                          <SortableBlock
-                            key={block.id}
-                            block={block}
-                            onUpdate={(updates) => updateBlock(block.id, updates)}
-                            onRemove={() => removeBlock(block.id)}
-                          />
-                        ))}
-                      </div>
-                    </SortableContext>
-                  </DndContext>
-                )}
-
-                {blocks.length === 0 && (
-                  <div className="border-2 border-dashed rounded-lg p-6 text-center text-muted-foreground">
-                    <p className="text-sm">Нет блоков. Добавьте первый ↓</p>
-                  </div>
-                )}
-
-                <div className="flex gap-2 flex-wrap">
-                  <Button type="button" variant="outline" size="sm" onClick={() => addBlock("text")}>
-                    <FileText className="h-3.5 w-3.5 mr-1.5 text-emerald-500" /> + Текст
-                  </Button>
-                  <Button type="button" variant="outline" size="sm" onClick={() => addBlock("video")}>
-                    <Film className="h-3.5 w-3.5 mr-1.5 text-primary" /> + Видео
-                  </Button>
-                  <Button type="button" variant="outline" size="sm" onClick={() => addBlock("image")}>
-                    <ImageIcon className="h-3.5 w-3.5 mr-1.5 text-blue-500" /> + Изображение
-                  </Button>
-                  <Button type="button" variant="outline" size="sm" onClick={() => addBlock("pdf")}>
-                    <FileText className="h-3.5 w-3.5 mr-1.5 text-orange-500" /> + PDF
-                  </Button>
-                </div>
-              </div>
-
-              {/* === HOMEWORK === */}
-              <div className="space-y-3 border rounded-lg p-4">
-                <div className="flex items-center justify-between">
-                  <label className="flex items-center gap-2 font-medium text-sm cursor-pointer">
-                    <ClipboardList className="h-4 w-4 text-orange-500" />
-                    Домашнее задание
-                  </label>
-                  <Button
-                    type="button"
-                    variant={hwEnabled ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setHwEnabled(!hwEnabled)}
-                  >
-                    {hwEnabled ? "Включено" : "Выключено"}
-                  </Button>
-                </div>
-
-                {hwEnabled && (
-                  <div className="space-y-2">
-                    <p className="text-xs text-muted-foreground">Вопросы ДЗ (студент увидит их и должен ответить на каждый)</p>
-                    {hwQuestions.map((q, i) => (
-                      <div key={i} className="flex gap-2">
-                        <Input
-                          value={q}
-                          onChange={(e) => setHwQuestions((prev) => prev.map((v, idx) => (idx === i ? e.target.value : v)))}
-                          placeholder={`Вопрос ${i + 1}`}
-                        />
-                        <Button type="button" variant="ghost" size="icon" onClick={() => setHwQuestions((prev) => prev.filter((_, idx) => idx !== i))}>
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
-                    <Button type="button" variant="outline" size="sm" onClick={() => setHwQuestions((prev) => [...prev, ""])}>
-                      <Plus className="h-3.5 w-3.5 mr-1" /> Добавить вопрос
-                    </Button>
-                  </div>
-                )}
-              </div>
-
-              {/* Unlock rule */}
-              <div className="space-y-2">
-                <label className={tokens.typography.label}>Правило открытия</label>
-                <select
-                  name="unlockRule"
-                  defaultValue={editingLesson?.unlockRule ?? "IMMEDIATELY"}
-                  className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
-                >
-                  <option value="IMMEDIATELY">Сразу</option>
-                  <option value="AFTER_HOMEWORK_APPROVAL">После проверки ДЗ</option>
-                  <option value="SPECIFIC_DATE">По дате</option>
-                </select>
-              </div>
-
-              <div className="flex gap-3">
-                <Button type="submit" disabled={saving}>
-                  {saving ? "Сохраняем..." : editingLesson ? "Сохранить" : "Создать урок"}
-                </Button>
-                <Button type="button" variant="outline" onClick={resetForm}>Отмена</Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      )}
+      {showNewLesson && !editingLesson ? <div className="mb-4">{lessonEditorCard}</div> : null}
 
       <div className="space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1903,14 +1932,20 @@ export function CourseEditor({
           <DndContext sensors={lessonSensors} collisionDetection={closestCenter} onDragEnd={handleLessonDragEnd}>
             <SortableContext items={lessons.map((l) => l.id)} strategy={verticalListSortingStrategy}>
               {lessons.map((lesson, idx) => (
-                <SortableLesson
-                  key={lesson.id}
-                  lesson={lesson}
-                  index={idx}
-                  onEdit={() => openEdit(lesson)}
-                  onTogglePublish={() => handleToggleLessonPublish(lesson)}
-                  onDelete={() => handleDeleteLesson(lesson.id, lesson.title)}
-                />
+                <div key={lesson.id} className="space-y-3">
+                  <SortableLesson
+                    lesson={lesson}
+                    index={idx}
+                    onEdit={() => openEdit(lesson)}
+                    onTogglePublish={() => handleToggleLessonPublish(lesson)}
+                    onDelete={() => handleDeleteLesson(lesson.id, lesson.title)}
+                  />
+                  {editingLesson?.id === lesson.id ? (
+                    <div className="pl-0 md:pl-7">
+                      {lessonEditorCard}
+                    </div>
+                  ) : null}
+                </div>
               ))}
             </SortableContext>
           </DndContext>
