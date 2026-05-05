@@ -85,6 +85,8 @@ model User {
   passwordHash String
   name         String?
   avatarUrl    String?
+  lastSignInAt DateTime?
+  lastActiveAt DateTime?
   /// Вес в кг (личные данные профиля студента)
   weight       Float?
   /// Рост в см

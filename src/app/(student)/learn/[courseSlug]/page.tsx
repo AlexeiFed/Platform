@@ -10,7 +10,9 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { LessonCard, type LessonCardStatus } from "@/components/shared/lesson-card";
+import { MarathonResumeCard } from "@/components/shared/marathon-resume";
 import {
+  AlertTriangle,
   ArrowLeft,
   ArrowUpRight,
   Calendar,
@@ -175,13 +177,43 @@ export default async function CoursePage({ params }: Props) {
         })
       : null;
 
+  const isCourse = product.type === "COURSE";
+  const typeLabel = isCourse ? "Курс" : "Марафон";
+
+  const isMarathonEventDone = (event: (typeof product.marathonEvents)[number]) =>
+    event.completions.length > 0 ||
+    event.eventLessons.some((el) => el.lesson.submissions.some((s) => s.status === "APPROVED"));
+
+  const accessibleMarathonEvents =
+    !isCourse && product.startDate
+      ? product.marathonEvents.filter((event) =>
+          isMarathonEventAccessible({ startDate: product.startDate!, dayOffset: event.dayOffset })
+        )
+      : !isCourse
+        ? product.marathonEvents
+        : [];
+
+  const latestOpenedDay = !isCourse
+    ? accessibleMarathonEvents.reduce((maxDay, event) => Math.max(maxDay, event.dayOffset), 0)
+    : 0;
+
+  const dayOneIncompleteCount = !isCourse
+    ? product.marathonEvents.filter((event) => event.dayOffset === 1 && !isMarathonEventDone(event)).length
+    : 0;
+
+  const showMarathonClosingReminder = !isCourse && latestOpenedDay >= 2 && dayOneIncompleteCount > 0;
+
+  const dayOneIncompleteLabel =
+    dayOneIncompleteCount === 1
+      ? "1 незавершённое событие"
+      : dayOneIncompleteCount < 5
+        ? `${dayOneIncompleteCount} незавершённых события`
+        : `${dayOneIncompleteCount} незавершённых событий`;
+
   const progressValue =
     product.type === "MARATHON"
       ? marathonProgress?.value ?? enrollment.progress
       : enrollment.progress;
-
-  const isCourse = product.type === "COURSE";
-  const typeLabel = isCourse ? "Курс" : "Марафон";
 
   // Следующий урок/событие для CTA «Продолжить».
   const nextLesson = isCourse
@@ -189,10 +221,6 @@ export default async function CoursePage({ params }: Props) {
         (l) => !l.submissions.some((s) => s.status === "APPROVED")
       )
     : null;
-
-  const isMarathonEventDone = (event: (typeof product.marathonEvents)[number]) =>
-    event.completions.length > 0 ||
-    event.eventLessons.some((el) => el.lesson.submissions.some((s) => s.status === "APPROVED"));
 
   const nextEvent =
     !isCourse && product.startDate
@@ -220,6 +248,18 @@ export default async function CoursePage({ params }: Props) {
           </Link>
         </Button>
       </div>
+      {showMarathonClosingReminder ? (
+        <section className="rounded-xl border border-amber-300/60 bg-amber-50 p-4">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" aria-hidden />
+            <p className={`${tokens.typography.small} text-amber-900`}>
+              Уже открыт день {latestOpenedDay}, но в первом дне осталось {dayOneIncompleteLabel}. Чтобы прогресс
+              рос, завершайте все события: после прохождения материалов нажимайте «Отметить выполненным» (или
+              дождитесь принятия домашнего задания, если оно есть).
+            </p>
+          </div>
+        </section>
+      ) : null}
       {/* HERO */}
       <section className="relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/15 via-primary/5 to-background shadow-sm">
         <div className="relative z-10 flex flex-col gap-6 p-6 sm:p-8 md:flex-row md:items-center">
@@ -330,11 +370,13 @@ export default async function CoursePage({ params }: Props) {
         </section>
       )}
 
+      {!isCourse ? <MarathonResumeCard courseSlug={courseSlug} /> : null}
+
       {/* CONTINUE */}
       {(nextLesson || nextEvent) && (
         <section>
           <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Продолжить с того же места
+            {isCourse ? "Продолжить с того же места" : "Следующее по плану"}
           </h2>
           <Link
             href={

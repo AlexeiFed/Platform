@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { prisma } from "@/lib/prisma";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { tokens } from "@/lib/design-tokens";
@@ -14,6 +14,19 @@ import { MarathonProceduresManager } from "./marathon-procedures-manager";
 
 type Props = {
   params: Promise<{ userId: string }>;
+};
+
+const formatKhabarovskDateTime = (value: Date | null) => {
+  if (!value) return "—";
+
+  return new Intl.DateTimeFormat("ru-RU", {
+    timeZone: "Asia/Vladivostok",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(value);
 };
 
 export default async function AdminUserDetailsPage({ params }: Props) {
@@ -175,6 +188,7 @@ export default async function AdminUserDetailsPage({ params }: Props) {
             <div className="text-sm text-muted-foreground">{user.email}</div>
             <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
               <span>Зарегистрирован: {formatDate(user.createdAt)}</span>
+              <span>Последняя активность: {formatKhabarovskDateTime(user.lastActiveAt ?? user.lastSignInAt)}</span>
               <span>Вес: {user.weight != null ? `${user.weight} кг` : "—"}</span>
               <span>Рост: {user.height != null ? `${user.height} см` : "—"}</span>
             </div>

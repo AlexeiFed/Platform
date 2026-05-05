@@ -38,6 +38,11 @@ type Product = {
 type Props = {
   userId: string;
   products: Product[];
+  existingAccesses: Array<{
+    productId: string;
+    tariffId: string;
+    tariffName: string;
+  }>;
 };
 
 // Формат цены с валютой (минимализм, без полифиллов)
@@ -53,13 +58,14 @@ function formatPrice(price: number, currency: string) {
   }
 }
 
-export function GrantAccessForm({ userId, products }: Props) {
+export function GrantAccessForm({ userId, products, existingAccesses }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Выбранный продукт для отображения модалки с тарифами
   const [pickingProduct, setPickingProduct] = useState<Product | null>(null);
+  const accessByProduct = new Map(existingAccesses.map((item) => [item.productId, item]));
 
   // Выдача доступа: если tariffId не указан — используем дефолтный на сервере
   async function doGrant(productId: string, tariffId?: string) {
@@ -100,17 +106,26 @@ export function GrantAccessForm({ userId, products }: Props) {
           )}
         >
           <p className="px-3 py-2 text-xs text-muted-foreground font-medium">Выдать доступ:</p>
-          {products.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => handlePickProduct(p)}
-              disabled={loading}
-              className="w-full text-left px-3 py-2 text-sm hover:bg-accent truncate"
-            >
-              {p.title}
-            </button>
-          ))}
+          {products.map((p) => {
+            const existing = accessByProduct.get(p.id);
+
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => handlePickProduct(p)}
+                disabled={loading}
+                className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-accent"
+              >
+                <span className="truncate">{p.title}</span>
+                {existing ? (
+                  <Badge variant="secondary" className="shrink-0 text-[10px]">
+                    Уже выдано: {existing.tariffName}
+                  </Badge>
+                ) : null}
+              </button>
+            );
+          })}
           {error && <p className="px-3 py-2 text-xs text-destructive">{error}</p>}
         </div>
       )}
@@ -132,35 +147,55 @@ export function GrantAccessForm({ userId, products }: Props) {
               Выберите тариф для «{pickingProduct?.title}». Тариф определяет уровень доступа
               студента; оплата не требуется.
             </DialogDescription>
+            {pickingProduct ? (
+              <div className="pt-2 text-xs text-muted-foreground">
+                {accessByProduct.has(pickingProduct.id)
+                  ? `Сейчас выдан тариф: ${accessByProduct.get(pickingProduct.id)!.tariffName}`
+                  : "Доступ к этому продукту ещё не выдавался."}
+              </div>
+            ) : null}
           </DialogHeader>
 
           <div className="space-y-2">
-            {pickingProduct?.tariffs.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                disabled={loading}
-                onClick={() => pickingProduct && doGrant(pickingProduct.id, t.id)}
-                className={cn(
-                  "flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors",
-                  "hover:bg-accent hover:border-primary/40",
-                  "disabled:opacity-60 disabled:cursor-not-allowed",
-                )}
-              >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate text-sm font-medium">{t.name}</span>
-                    <Badge variant={t.published ? "success" : "outline"} className="text-xs">
-                      {t.published ? "В продаже" : "Скрыт"}
-                    </Badge>
+            {pickingProduct?.tariffs.map((t) => {
+              const existing = accessByProduct.get(pickingProduct.id);
+              const isCurrentTariff = existing?.tariffId === t.id;
+
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  disabled={loading || isCurrentTariff}
+                  onClick={() => pickingProduct && doGrant(pickingProduct.id, t.id)}
+                  className={cn(
+                    "flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors",
+                    "hover:bg-accent hover:border-primary/40",
+                    "disabled:opacity-60 disabled:cursor-not-allowed",
+                    isCurrentTariff ? "border-primary/50 bg-primary/5" : "",
+                  )}
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-sm font-medium">{t.name}</span>
+                      <Badge variant={t.published ? "success" : "outline"} className="text-xs">
+                        {t.published ? "В продаже" : "Скрыт"}
+                      </Badge>
+                      {isCurrentTariff ? (
+                        <Badge variant="secondary" className="text-xs">
+                          Текущий
+                        </Badge>
+                      ) : null}
+                    </div>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {formatPrice(t.price, t.currency)}
+                    </p>
                   </div>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {formatPrice(t.price, t.currency)}
-                  </p>
-                </div>
-                <span className="text-xs text-primary shrink-0">Выдать</span>
-              </button>
-            ))}
+                  <span className="shrink-0 text-xs text-primary">
+                    {isCurrentTariff ? "Уже выдан" : "Выдать"}
+                  </span>
+                </button>
+              );
+            })}
             {error && <p className="text-xs text-destructive">{error}</p>}
           </div>
 

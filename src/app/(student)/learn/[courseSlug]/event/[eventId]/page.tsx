@@ -20,6 +20,7 @@ import {
 } from "@/lib/enrollment-criteria";
 import { computeMarathonEventDayStepper } from "@/lib/marathon-event-day-nav";
 import { MarathonEventDayStepper } from "@/components/shared/marathon-event-day-stepper";
+import { MarathonResumePointTracker } from "@/components/shared/marathon-resume";
 import type { ProductCriterion } from "@prisma/client";
 
 type ContentBlock = {
@@ -160,6 +161,20 @@ export default async function MarathonEventPage({ params }: Props) {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
+      {!lockedByTariff ? (
+        <MarathonResumePointTracker
+          courseSlug={courseSlug}
+          point={{
+            kind: "event",
+            eventId: event.id,
+            eventTitle: event.title,
+            eventType: event.type,
+            dayOffset: event.dayOffset,
+            lessonSlug: null,
+            lessonTitle: null,
+          }}
+        />
+      ) : null}
       <div className="md:hidden">
         <Button variant="outline" size="sm" className="w-full justify-center" asChild>
           <Link href={`/learn/${courseSlug}`} aria-label="Назад к обзору марафона">

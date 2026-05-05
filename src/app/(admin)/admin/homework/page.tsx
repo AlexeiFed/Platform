@@ -1,6 +1,5 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { enrollmentHasCriterion } from "@/lib/enrollment-criteria";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
@@ -33,26 +32,6 @@ export default async function AdminHomeworkPage({
     orderBy: { title: "asc" },
   });
 
-  const productIds = products.map((p) => p.id);
-
-  const enrollmentsByProducts = productIds.length
-    ? await prisma.enrollment.findMany({
-        where: { productId: { in: productIds } },
-        select: {
-          userId: true,
-          productId: true,
-          tariff: { select: { criteria: true } },
-          product: { select: { enabledCriteria: true } },
-        },
-      })
-    : [];
-
-  const reviewPairKeys = new Set(
-    enrollmentsByProducts
-      .filter((e) => enrollmentHasCriterion(e, "HOMEWORK_REVIEW"))
-      .map((e) => `${e.productId}:${e.userId}`)
-  );
-
   const lessonToProduct = await prisma.lesson.findMany({
     select: { id: true, productId: true },
   });
@@ -68,30 +47,15 @@ export default async function AdminHomeworkPage({
   for (const row of pendingByLessonUser) {
     const pid = lessonMap.get(row.lessonId);
     if (!pid) continue;
-    if (!reviewPairKeys.has(`${pid}:${row.userId}`)) continue;
     productPending.set(pid, (productPending.get(pid) ?? 0) + row._count._all);
   }
 
   const selectedProductId = productId ?? (products[0]?.id ?? null);
 
-  const homeworkReviewUserIds = new Set(
-    selectedProductId
-      ? enrollmentsByProducts
-          .filter(
-            (e) =>
-              e.productId === selectedProductId && enrollmentHasCriterion(e, "HOMEWORK_REVIEW")
-          )
-          .map((e) => e.userId)
-      : []
-  );
-
-  const reviewUserIdList = [...homeworkReviewUserIds];
-
   const studentsRaw = selectedProductId
     ? await prisma.homeworkSubmission.findMany({
         where: {
           lesson: { productId: selectedProductId },
-          ...(reviewUserIdList.length > 0 ? { userId: { in: reviewUserIdList } } : { userId: "00000000-0000-0000-0000-000000000000" }),
         },
         distinct: ["userId"],
         select: { user: { select: { id: true, name: true, email: true } }, userId: true },
@@ -106,7 +70,6 @@ export default async function AdminHomeworkPage({
         where: {
           lesson: { productId: selectedProductId },
           status: { in: ["PENDING", "IN_REVIEW"] },
-          ...(reviewUserIdList.length > 0 ? { userId: { in: reviewUserIdList } } : { userId: "00000000-0000-0000-0000-000000000000" }),
         },
         _count: { _all: true },
       })
@@ -115,7 +78,7 @@ export default async function AdminHomeworkPage({
 
   const selectedUserId = userId ?? (students[0]?.userId ?? null);
 
-  const allForStudent = selectedProductId && selectedUserId && homeworkReviewUserIds.has(selectedUserId)
+  const allForStudent = selectedProductId && selectedUserId
     ? await prisma.homeworkSubmission.findMany({
         where: { lesson: { productId: selectedProductId }, userId: selectedUserId },
         include: {
@@ -230,7 +193,7 @@ export default async function AdminHomeworkPage({
                   })}
                   {students.length === 0 && (
                     <div className="text-sm text-muted-foreground">
-                      Нет работ от студентов с проверкой ДЗ в тарифе (или отправок ещё не было).
+                      Нет работ от студентов (или отправок ещё не было).
                     </div>
                   )}
                 </div>

@@ -6,6 +6,8 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import type { Role } from "@prisma/client";
 
+const USER_ACTIVITY_UPDATE_INTERVAL_MS = 5 * 60 * 1000;
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma) as Adapter,
   session: { strategy: "jwt" },
@@ -36,6 +38,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         if (!isValid) return null;
 
+        // Фиксируем время последнего успешного входа.
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { lastSignInAt: new Date(), lastActiveAt: new Date() },
+        });
+
         return {
           id: user.id,
           email: user.email,
@@ -48,10 +56,31 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
   callbacks: {
     async jwt({ token, user }) {
+      const now = Date.now();
+
       if (user) {
         token.id = user.id;
         token.role = (user as { role: Role }).role;
+        token.lastActivitySyncAt = now;
+        return token;
       }
+
+      const userId = typeof token.id === "string" ? token.id : null;
+      if (!userId) return token;
+
+      const lastSync = typeof token.lastActivitySyncAt === "number" ? token.lastActivitySyncAt : 0;
+      if (now - lastSync < USER_ACTIVITY_UPDATE_INTERVAL_MS) return token;
+
+      try {
+        await prisma.user.update({
+          where: { id: userId },
+          data: { lastActiveAt: new Date(now) },
+        });
+        token.lastActivitySyncAt = now;
+      } catch (error) {
+        console.error("[auth.jwt.lastActiveAt]", error);
+      }
+
       return token;
     },
     async session({ session, token }) {

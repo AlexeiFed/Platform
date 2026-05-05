@@ -20,6 +20,7 @@ import {
 } from "@/lib/enrollment-criteria";
 import { computeMarathonEventDayStepper } from "@/lib/marathon-event-day-nav";
 import { MarathonEventDayStepper } from "@/components/shared/marathon-event-day-stepper";
+import { MarathonResumePointTracker } from "@/components/shared/marathon-resume";
 import type { ProductCriterion } from "@prisma/client";
 
 type ContentBlock = {
@@ -175,12 +176,32 @@ export default async function LessonPage({ params, searchParams }: Props) {
     product.type === "MARATHON" && eventQuery
       ? `/learn/${courseSlug}/event/${eventQuery}`
       : null;
+  const activeMarathonEvent =
+    product.type === "MARATHON"
+      ? (eventQuery
+          ? linkedMarathonEvents.find((event) => event.id === eventQuery)
+          : null) ?? linkedMarathonEvents[0] ?? null
+      : null;
   const mobileBackHref = eventBackHref ?? `/learn/${courseSlug}`;
   const mobileBackLabel = eventBackHref ? "К событию" : "К обзору";
   const showLessonCounter = product.type !== "MARATHON";
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
+      {product.type === "MARATHON" ? (
+        <MarathonResumePointTracker
+          courseSlug={courseSlug}
+          point={{
+            kind: "lesson",
+            eventId: activeMarathonEvent?.id ?? null,
+            eventTitle: activeMarathonEvent?.title ?? null,
+            eventType: null,
+            dayOffset: activeMarathonEvent?.dayOffset ?? null,
+            lessonSlug: lesson.slug,
+            lessonTitle: lesson.title,
+          }}
+        />
+      ) : null}
       <div className="md:hidden">
         <Button variant="outline" size="sm" className="w-full justify-center" asChild>
           <Link href={mobileBackHref} aria-label="Назад к предыдущему разделу">

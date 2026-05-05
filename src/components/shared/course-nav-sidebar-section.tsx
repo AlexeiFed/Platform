@@ -3,7 +3,7 @@
 // и сворачиваемые блоки уроков/расписания/процедур.
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
@@ -254,11 +254,15 @@ export function CourseNavSidebarSection({ onNavigate }: { onNavigate?: () => voi
     return week.weekNumber === defaultExpandedWeekNumber;
   };
 
-  /** Ручной toggle недель + сброс при смене события/страницы (native details + TS без defaultOpen). */
-  const [weekOpenOverride, setWeekOpenOverride] = useState<Record<number, boolean | undefined>>({});
-  useEffect(() => {
-    setWeekOpenOverride({});
-  }, [focusedEventId]);
+  /**
+   * Ручной toggle недель хранится в разрезе текущего контекста (eventId/overview),
+   * чтобы не делать setState в effect и не ловить cascading render lint.
+   */
+  const [weekOpenOverrideByScope, setWeekOpenOverrideByScope] = useState<
+    Record<string, Record<number, boolean | undefined>>
+  >({});
+  const weekScopeKey = focusedEventId ?? "overview";
+  const weekOpenOverride = weekOpenOverrideByScope[weekScopeKey] ?? {};
 
   const progress = useMemo(
     () => (payload ? computeNavProgress(payload) : null),
@@ -406,9 +410,12 @@ export function CourseNavSidebarSection({ onNavigate }: { onNavigate?: () => voi
                         onToggle={(e) => {
                           const next = readDetailsOpenFromToggle(e);
                           if (typeof next !== "boolean") return;
-                          setWeekOpenOverride((prev) => ({
+                          setWeekOpenOverrideByScope((prev) => ({
                             ...prev,
-                            [week.weekNumber]: next,
+                            [weekScopeKey]: {
+                              ...(prev[weekScopeKey] ?? {}),
+                              [week.weekNumber]: next,
+                            },
                           }));
                         }}
                       >
