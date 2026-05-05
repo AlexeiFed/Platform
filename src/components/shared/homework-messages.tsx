@@ -10,6 +10,7 @@ import {
   type HomeworkThreadMessage,
   type HomeworkThreadSubmission,
 } from "@/lib/homework";
+import { tokens } from "@/lib/design-tokens";
 import { cn } from "@/lib/utils";
 
 const isVideoAttachmentUrl = (url: string) => {
@@ -117,23 +118,44 @@ export function HomeworkMessages({
                   <div
                     className={cn(
                       "grid gap-2",
-                      message.fileUrls.length === 1
+                      message.fileUrls.some((u) => isVideoAttachmentUrl(u))
                         ? "grid-cols-1"
-                        : message.fileUrls.length === 2
-                          ? "grid-cols-2"
-                          : "grid-cols-2 md:grid-cols-3"
+                        : message.fileUrls.length === 1
+                          ? "grid-cols-1"
+                          : message.fileUrls.length === 2
+                            ? "grid-cols-2"
+                            : "grid-cols-2 md:grid-cols-3"
                     )}
                   >
-                    {message.fileUrls.map((fileUrl, index) => (
-                      <a key={`${message.id}-${index}`} href={fileUrl} target="_blank" rel="noopener noreferrer">
-                        {isVideoAttachmentUrl(fileUrl) ? (
-                          <video
-                            src={fileUrl}
-                            controls
-                            preload="metadata"
-                            className="h-40 w-full rounded-xl border bg-black object-cover"
-                          />
-                        ) : (
+                    {message.fileUrls.map((fileUrl, index) =>
+                      isVideoAttachmentUrl(fileUrl) ? (
+                        <div
+                          key={`${message.id}-${index}`}
+                          className="mx-auto w-full max-w-[min(100%,280px)]"
+                        >
+                          {/* Вертикальный формат (телефон); без <a> — иначе Safari/Chrome открывают новую вкладку */}
+                          <div
+                            className={cn(
+                              "relative aspect-[9/16] w-full overflow-hidden border bg-black",
+                              tokens.radius.lg
+                            )}
+                          >
+                            <video
+                              src={fileUrl}
+                              controls
+                              playsInline
+                              preload="metadata"
+                              className="absolute inset-0 h-full w-full object-contain"
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <a
+                          key={`${message.id}-${index}`}
+                          href={fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
                           <Image
                             src={fileUrl}
                             alt={`Прикрепленное фото ${index + 1}`}
@@ -142,9 +164,9 @@ export function HomeworkMessages({
                             className="h-40 w-full rounded-xl border object-cover"
                             unoptimized
                           />
-                        )}
-                      </a>
-                    ))}
+                        </a>
+                      )
+                    )}
                   </div>
                 )}
 
