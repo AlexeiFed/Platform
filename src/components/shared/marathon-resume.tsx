@@ -50,6 +50,25 @@ const parsePoint = (raw: string | null): MarathonResumePoint | null => {
   }
 };
 
+/** Стабильный снимок для useSyncExternalStore: один и тот же raw → та же ссылка (иначе React #185). */
+const resumeSnapshotCache = new Map<
+  string,
+  { raw: string | null; point: MarathonResumePoint | null }
+>();
+
+const getMarathonResumeSnapshot = (courseSlug: string): MarathonResumePoint | null => {
+  const raw =
+    typeof window === "undefined" ? null : window.localStorage.getItem(buildStorageKey(courseSlug));
+  const cached = resumeSnapshotCache.get(courseSlug);
+  if (cached && cached.raw === raw) {
+    return cached.point;
+  }
+  const parsed = parsePoint(raw);
+  const point = parsed?.courseSlug === courseSlug ? parsed : null;
+  resumeSnapshotCache.set(courseSlug, { raw, point });
+  return point;
+};
+
 export function MarathonResumePointTracker({
   courseSlug,
   point,
@@ -57,16 +76,19 @@ export function MarathonResumePointTracker({
   courseSlug: string;
   point: MarathonResumePointInput;
 }) {
+  const pointKey = JSON.stringify(point);
+
   useEffect(() => {
     // На каждое открытие урока/события перезаписываем точку продолжения для конкретного марафона.
     const payload: MarathonResumePoint = {
       courseSlug,
       updatedAt: new Date().toISOString(),
-      ...point,
+      ...JSON.parse(pointKey) as MarathonResumePointInput,
     };
     window.localStorage.setItem(buildStorageKey(courseSlug), JSON.stringify(payload));
+    resumeSnapshotCache.delete(courseSlug);
     window.dispatchEvent(new CustomEvent(MARATHON_RESUME_UPDATED_EVENT, { detail: courseSlug }));
-  }, [courseSlug, point]);
+  }, [courseSlug, pointKey]);
 
   return null;
 }
@@ -82,11 +104,7 @@ export function MarathonResumeCard({ courseSlug }: { courseSlug: string }) {
         window.removeEventListener(MARATHON_RESUME_UPDATED_EVENT, onStoreChange);
       };
     },
-    () => {
-      // Читаем точку продолжения только для текущего марафона.
-      const parsed = parsePoint(window.localStorage.getItem(buildStorageKey(courseSlug)));
-      return parsed?.courseSlug === courseSlug ? parsed : null;
-    },
+    () => getMarathonResumeSnapshot(courseSlug),
     () => null
   );
 
