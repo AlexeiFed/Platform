@@ -17,6 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { grantAccess } from "./actions";
@@ -60,7 +61,7 @@ function formatPrice(price: number, currency: string) {
 
 export function GrantAccessForm({ userId, products, existingAccesses }: Props) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Выбранный продукт для отображения модалки с тарифами
@@ -78,57 +79,66 @@ export function GrantAccessForm({ userId, products, existingAccesses }: Props) {
       return;
     }
     setPickingProduct(null);
-    setOpen(false);
+    setMenuOpen(false);
     router.refresh();
   }
 
-  // Клик по продукту в выпадающем списке
+  // Клик по продукту в выпадающем списке (Popover закрывается также по клику снаружи)
   function handlePickProduct(product: Product) {
+    setMenuOpen(false);
     if (product.tariffs.length > 0) {
-      // Есть тарифы — показываем выбор
       setPickingProduct(product);
       return;
     }
-    // Тарифов нет — пробуем выдать (сервер вернёт ошибку, если нет ни одного тарифа)
     void doGrant(product.id);
   }
 
   return (
-    <div className="relative">
-      <Button variant="ghost" size="icon" onClick={() => setOpen(!open)} aria-label="Выдать доступ">
-        <Plus className="h-4 w-4" />
-      </Button>
-      {open && (
-        <div
-          className={cn(
-            "absolute left-0 top-10 z-50 max-h-60 w-64 max-w-[min(16rem,calc(100vw-2rem))] overflow-y-auto rounded-lg border bg-popover py-1 shadow-lg",
-            "lg:left-auto lg:right-0",
-          )}
+    <>
+      <Popover
+        open={menuOpen}
+        onOpenChange={(next) => {
+          setMenuOpen(next);
+          if (!next) setError(null);
+        }}
+      >
+        <PopoverTrigger asChild>
+          <Button variant="ghost" size="icon" aria-label="Выдать доступ" aria-expanded={menuOpen}>
+            <Plus className="h-4 w-4" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent
+          align="end"
+          sideOffset={8}
+          className="w-64 max-w-[min(16rem,calc(100vw-2rem))] p-0"
+          onOpenAutoFocus={(e) => e.preventDefault()}
         >
-          <p className="px-3 py-2 text-xs text-muted-foreground font-medium">Выдать доступ:</p>
-          {products.map((p) => {
-            const existing = accessByProduct.get(p.id);
+          <div className="max-h-60 overflow-y-auto py-1">
+            <p className="px-3 py-2 text-xs font-medium text-muted-foreground">Выдать доступ:</p>
+            {products.map((p) => {
+              const existing = accessByProduct.get(p.id);
 
-            return (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => handlePickProduct(p)}
-                disabled={loading}
-                className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-accent"
-              >
-                <span className="truncate">{p.title}</span>
-                {existing ? (
-                  <Badge variant="secondary" className="shrink-0 text-[10px]">
-                    Уже выдано: {existing.tariffName}
-                  </Badge>
-                ) : null}
-              </button>
-            );
-          })}
-          {error && <p className="px-3 py-2 text-xs text-destructive">{error}</p>}
-        </div>
-      )}
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => handlePickProduct(p)}
+                  disabled={loading}
+                  className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-accent"
+                >
+                  <span className="truncate">{p.title}</span>
+                  {existing ? (
+                    <Badge variant="secondary" className="shrink-0 text-[10px]">
+                      Уже выдано: {existing.tariffName}
+                    </Badge>
+                  ) : null}
+                </button>
+              );
+            })}
+            {error && <p className="px-3 py-2 text-xs text-destructive">{error}</p>}
+          </div>
+        </PopoverContent>
+      </Popover>
 
       {/* Модалка выбора тарифа */}
       <Dialog
@@ -211,6 +221,6 @@ export function GrantAccessForm({ userId, products, existingAccesses }: Props) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 }

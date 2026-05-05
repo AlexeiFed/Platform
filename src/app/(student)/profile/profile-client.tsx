@@ -10,6 +10,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import Image from "next/image";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -450,6 +451,12 @@ function MeasurementsCard({ measurements }: { measurements: Measurement[] }) {
         </Button>
       </CardHeader>
       <CardContent className="space-y-4">
+        <p className="rounded-md border border-dashed border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+          <Link href="/profile/how-to-measure" className="font-medium text-primary hover:underline">
+            Как правильно делать замеры
+          </Link>
+          — пошаговая инструкция с фото.
+        </p>
         {open && (
           <form onSubmit={handleSubmit} className="space-y-3 rounded-lg border p-4">
             <div className="grid gap-3 sm:grid-cols-3">

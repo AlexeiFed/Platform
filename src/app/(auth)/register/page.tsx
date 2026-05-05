@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { tokens } from "@/lib/design-tokens";
+import { registerUserSchema } from "@/lib/validations/register-user";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -20,16 +21,26 @@ export default function RegisterPage() {
     setError("");
 
     const formData = new FormData(e.currentTarget);
-    const email = String(formData.get("email") ?? "");
-    const password = String(formData.get("password") ?? "");
+    const payload = {
+      firstName: String(formData.get("firstName") ?? ""),
+      lastName: String(formData.get("lastName") ?? ""),
+      email: String(formData.get("email") ?? ""),
+      password: String(formData.get("password") ?? ""),
+    };
+
+    const validated = registerUserSchema.safeParse(payload);
+    if (!validated.success) {
+      setError(validated.error.issues[0]?.message ?? "Проверьте заполнение полей");
+      setLoading(false);
+      return;
+    }
+
+    const { email, password } = validated.data;
+
     const res = await fetch("/api/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: formData.get("name"),
-        email,
-        password,
-      }),
+      body: JSON.stringify(validated.data),
     });
 
     if (!res.ok) {
@@ -66,16 +77,49 @@ export default function RegisterPage() {
             <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-lg">{error}</div>
           )}
           <div className="space-y-2">
-            <label htmlFor="name" className={tokens.typography.label}>Имя</label>
-            <Input id="name" name="name" placeholder="Ваше имя" required />
+            <label htmlFor="firstName" className={tokens.typography.label}>Имя</label>
+            <Input
+              id="firstName"
+              name="firstName"
+              placeholder="Ваше имя"
+              autoComplete="given-name"
+              required
+              minLength={1}
+            />
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="lastName" className={tokens.typography.label}>Фамилия</label>
+            <Input
+              id="lastName"
+              name="lastName"
+              placeholder="Ваша фамилия"
+              autoComplete="family-name"
+              required
+              minLength={1}
+            />
           </div>
           <div className="space-y-2">
             <label htmlFor="email" className={tokens.typography.label}>Email</label>
-            <Input id="email" name="email" type="email" placeholder="you@example.com" required />
+            <Input
+              id="email"
+              name="email"
+              type="email"
+              autoComplete="email"
+              placeholder="you@example.com"
+              required
+            />
           </div>
           <div className="space-y-2">
             <label htmlFor="password" className={tokens.typography.label}>Пароль</label>
-            <Input id="password" name="password" type="password" placeholder="Минимум 8 символов" minLength={8} required />
+            <Input
+              id="password"
+              name="password"
+              type="password"
+              autoComplete="new-password"
+              placeholder="Минимум 8 символов"
+              minLength={8}
+              required
+            />
           </div>
         </CardContent>
         <CardFooter className="flex flex-col gap-3">

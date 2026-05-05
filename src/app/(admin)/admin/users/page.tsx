@@ -9,10 +9,28 @@ import {
   type AdminUserListItem,
 } from "./users-list-with-filters";
 
-export default async function AdminUsersPage() {
+type Role = "ADMIN" | "USER" | "CURATOR";
+
+function parseRoleFromSearch(value: string | undefined): Role {
+  if (value === "ADMIN" || value === "CURATOR" || value === "USER") return value;
+  return "USER";
+}
+
+type Props = {
+  searchParams: Promise<{ role?: string; product?: string; q?: string }>;
+};
+
+export default async function AdminUsersPage({ searchParams }: Props) {
   const session = await auth();
   if (!session) redirect("/login");
   if (session.user.role !== "ADMIN") redirect("/admin");
+
+  const sp = await searchParams;
+  const initialRole = parseRoleFromSearch(
+    typeof sp.role === "string" ? sp.role : undefined,
+  );
+  const initialProductId = typeof sp.product === "string" ? sp.product : "";
+  const initialSearch = typeof sp.q === "string" ? sp.q : "";
 
   const users = await prisma.user.findMany({
     include: {
@@ -77,7 +95,13 @@ export default async function AdminUsersPage() {
 
       <CreateCuratorForm />
 
-      <UsersListWithFilters users={listUsers} products={products} />
+      <UsersListWithFilters
+        users={listUsers}
+        products={products}
+        initialRole={initialRole}
+        initialProductId={initialProductId}
+        initialSearch={initialSearch}
+      />
     </div>
   );
 }

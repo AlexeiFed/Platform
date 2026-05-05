@@ -1,7 +1,15 @@
 "use client";
 
-import { useDeferredValue, useMemo, useState } from "react";
+import {
+  useDeferredValue,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -64,6 +72,24 @@ const ROLE_FILTER_OPTIONS: { value: Role; label: string }[] = [
   { value: "ADMIN", label: "Админ" },
 ];
 
+const ADMIN_USERS_LIST_RESTORE_KEY = "admin-users-list-restore";
+
+type RestorePayload = {
+  role: Role;
+  product: string;
+  q: string;
+  scrollY: number;
+};
+
+function buildUsersListQuery(role: Role, productId: string, q: string) {
+  const params = new URLSearchParams();
+  if (role !== "USER") params.set("role", role);
+  if (productId) params.set("product", productId);
+  const t = q.trim();
+  if (t) params.set("q", t);
+  return params.toString();
+}
+
 function matchesProductFilter(user: AdminUserListItem, productId: string | null) {
   if (!productId) return true;
   if (user.role === "ADMIN") return true;
@@ -82,14 +108,108 @@ function matchesNameSearch(user: AdminUserListItem, normalizedQuery: string) {
 type Props = {
   users: AdminUserListItem[];
   products: ProductOption[];
+  initialRole: Role;
+  initialProductId: string;
+  initialSearch: string;
 };
 
-export const UsersListWithFilters = ({ users, products }: Props) => {
-  const [roleFilter, setRoleFilter] = useState<Role>("USER");
-  const [productId, setProductId] = useState<string>("");
-  const [search, setSearch] = useState("");
+export const UsersListWithFilters = ({
+  users,
+  products,
+  initialRole,
+  initialProductId,
+  initialSearch,
+}: Props) => {
+  const router = useRouter();
+  const [roleFilter, setRoleFilter] = useState<Role>(initialRole);
+  const [productId, setProductId] = useState<string>(initialProductId);
+  const [search, setSearch] = useState(initialSearch);
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
   const searchPending = deferredSearch !== search.trim().toLowerCase();
+
+  const firstRoleProductUrlEffect = useRef(true);
+  const firstSearchUrlEffect = useRef(true);
+  const filtersRef = useRef({ roleFilter, productId, search });
+  filtersRef.current = { roleFilter, productId, search };
+
+  useLayoutEffect(() => {
+    let raw: string | null = null;
+    try {
+      raw = sessionStorage.getItem(ADMIN_USERS_LIST_RESTORE_KEY);
+    } catch {
+      return;
+    }
+    if (!raw) return;
+
+    let parsed: RestorePayload;
+    try {
+      parsed = JSON.parse(raw) as RestorePayload;
+    } catch {
+      try {
+        sessionStorage.removeItem(ADMIN_USERS_LIST_RESTORE_KEY);
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+
+    const urlHasFilters =
+      initialSearch.trim() !== "" || initialProductId !== "" || initialRole !== "USER";
+
+    if (!urlHasFilters) {
+      setRoleFilter(parsed.role);
+      setProductId(parsed.product);
+      setSearch(parsed.q);
+      const qs = buildUsersListQuery(parsed.role, parsed.product, parsed.q);
+      router.replace(`/admin/users${qs ? `?${qs}` : ""}`, { scroll: false });
+    }
+
+    try {
+      sessionStorage.removeItem(ADMIN_USERS_LIST_RESTORE_KEY);
+    } catch {
+      /* ignore */
+    }
+
+    requestAnimationFrame(() => {
+      window.scrollTo(0, parsed.scrollY);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- один раз при монтировании: URL из сервера + snapshot sessionStorage
+  }, []);
+
+  useEffect(() => {
+    if (firstRoleProductUrlEffect.current) {
+      firstRoleProductUrlEffect.current = false;
+      return;
+    }
+    const { roleFilter: r, productId: p, search: s } = filtersRef.current;
+    const qs = buildUsersListQuery(r, p, s);
+    router.replace(`/admin/users${qs ? `?${qs}` : ""}`, { scroll: false });
+  }, [roleFilter, productId, router]);
+
+  useEffect(() => {
+    if (firstSearchUrlEffect.current) {
+      firstSearchUrlEffect.current = false;
+      return;
+    }
+    const id = window.setTimeout(() => {
+      const { roleFilter: r, productId: p, search: s } = filtersRef.current;
+      const qs = buildUsersListQuery(r, p, s);
+      router.replace(`/admin/users${qs ? `?${qs}` : ""}`, { scroll: false });
+    }, 300);
+    return () => clearTimeout(id);
+  }, [search, router]);
+
+  useEffect(() => {
+    const syncFromLocation = () => {
+      const params = new URLSearchParams(window.location.search);
+      const r = params.get("role");
+      setRoleFilter(r === "ADMIN" || r === "CURATOR" || r === "USER" ? r : "USER");
+      setProductId(params.get("product") ?? "");
+      setSearch(params.get("q") ?? "");
+    };
+    window.addEventListener("popstate", syncFromLocation);
+    return () => window.removeEventListener("popstate", syncFromLocation);
+  }, []);
 
   const filtered = useMemo(() => {
     return users.filter((user) => {
@@ -188,6 +308,19 @@ export const UsersListWithFilters = ({ users, products }: Props) => {
                 <Link
                   href={`/admin/users/${user.id}`}
                   className="flex min-w-0 flex-1 items-center gap-4 rounded-lg transition-colors hover:bg-accent/40"
+                  onClick={() => {
+                    const payload: RestorePayload = {
+                      role: roleFilter,
+                      product: productId,
+                      q: search,
+                      scrollY: window.scrollY,
+                    };
+                    try {
+                      sessionStorage.setItem(ADMIN_USERS_LIST_RESTORE_KEY, JSON.stringify(payload));
+                    } catch {
+                      /* ignore */
+                    }
+                  }}
                 >
                   <Avatar>
                     <AvatarImage src={user.avatarUrl ?? undefined} />
