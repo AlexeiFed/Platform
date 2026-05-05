@@ -36,7 +36,9 @@ export const viewport: Viewport = {
   ],
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
+  /** Без потолка масштаба pinch-zoom на мобильных заблокирован (`maximumScale: 1` давал zoom-lock). */
+  maximumScale: 5,
+  userScalable: true,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
