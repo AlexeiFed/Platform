@@ -137,8 +137,8 @@ export default async function AdminHomeworkPage({
     <div className="space-y-6">
       <h1 className={tokens.typography.h2}>Домашние задания</h1>
 
-      <div className="grid gap-4 lg:grid-cols-[340px_280px_1fr]">
-        <Card className="h-fit">
+      <div className="grid min-w-0 w-full gap-4 lg:grid-cols-[340px_280px_1fr]">
+        <Card className="h-fit min-w-0 w-full">
           <CardHeader>
             <CardTitle className="text-base">Фильтры</CardTitle>
           </CardHeader>
@@ -202,7 +202,7 @@ export default async function AdminHomeworkPage({
           </CardContent>
         </Card>
 
-        <Card className="h-fit">
+        <Card className="h-fit min-w-0 w-full">
           <CardHeader>
             <CardTitle className="text-base">Уроки</CardTitle>
           </CardHeader>
@@ -231,7 +231,7 @@ export default async function AdminHomeworkPage({
           </CardContent>
         </Card>
 
-        <div className="space-y-3">
+        <div className="min-w-0 space-y-3">
           {selectedProduct && (
             <div className="flex items-center gap-2">
               {selectedProduct.type === "COURSE" ? (
