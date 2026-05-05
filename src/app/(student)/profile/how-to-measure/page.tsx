@@ -8,7 +8,8 @@ import { tokens } from "@/lib/design-tokens";
 import { cn } from "@/lib/utils";
 import { ArrowLeft } from "lucide-react";
 
-const IMAGES_BASE = "/как делать замеры";
+/** Латинский путь: `/_next/image` отдаёт 400 на URL с кириллицей */
+const IMAGES_BASE = "/measurement-guide";
 
 const MEASUREMENT_STEPS: { file: string; title: string }[] = [
   { file: "1.avif", title: "Обхват плеч" },
