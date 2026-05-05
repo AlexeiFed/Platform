@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
-import { buildRegisteredFullName, registerUserSchema } from "@/lib/validations/register-user";
+import {
+  buildRegisteredFullName,
+  formatRegisterSchemaIssues,
+  registerUserSchema,
+} from "@/lib/validations/register-user";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const parsed = registerUserSchema.safeParse(body);
     if (!parsed.success) {
-      const msg = parsed.error.issues[0]?.message ?? "Некорректные данные";
+      const msg = formatRegisterSchemaIssues(parsed.error.issues);
       return NextResponse.json({ error: msg }, { status: 400 });
     }
 
@@ -18,7 +22,10 @@ export async function POST(req: NextRequest) {
     const exists = await prisma.user.findUnique({ where: { email } });
     if (exists) {
       return NextResponse.json(
-        { error: "Пользователь с таким email уже зарегистрирован" },
+        {
+          error:
+            "Этот email уже зарегистрирован. Нажмите «Войти» под формой и войдите в аккаунт — или укажите другую почту.",
+        },
         { status: 409 },
       );
     }
@@ -36,6 +43,12 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true }, { status: 201 });
   } catch {
-    return NextResponse.json({ error: "Внутренняя ошибка сервера" }, { status: 500 });
+    return NextResponse.json(
+      {
+        error:
+          "Сейчас регистрация не удалась на нашей стороне. Подождите минуту и попробуйте снова — или напишите нам в поддержку.",
+      },
+      { status: 500 },
+    );
   }
 }

@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { tokens } from "@/lib/design-tokens";
-import { registerUserSchema } from "@/lib/validations/register-user";
+import { formatRegisterSchemaIssues, registerUserSchema } from "@/lib/validations/register-user";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -30,7 +30,7 @@ export default function RegisterPage() {
 
     const validated = registerUserSchema.safeParse(payload);
     if (!validated.success) {
-      setError(validated.error.issues[0]?.message ?? "Проверьте заполнение полей");
+      setError(formatRegisterSchemaIssues(validated.error.issues));
       setLoading(false);
       return;
     }
@@ -44,8 +44,17 @@ export default function RegisterPage() {
     });
 
     if (!res.ok) {
-      const data = await res.json();
-      setError(data.error ?? "Ошибка регистрации");
+      let message =
+        "Не получилось создать аккаунт. Проверьте интернет и попробуйте ещё раз.";
+      try {
+        const data = (await res.json()) as { error?: string };
+        if (typeof data.error === "string" && data.error.trim()) {
+          message = data.error.trim();
+        }
+      } catch {
+        /* ответ не JSON */
+      }
+      setError(message);
       setLoading(false);
     } else {
       const loginResult = await signIn("credentials", {
@@ -55,7 +64,9 @@ export default function RegisterPage() {
       });
 
       if (loginResult?.error) {
-        setError("Аккаунт создан, но автоматический вход не сработал");
+        setError(
+          "Регистрация прошла, но автоматический вход не сработал. Зайдите вручную: откройте «Войти» и введите тот же email и пароль.",
+        );
         setLoading(false);
         return;
       }
