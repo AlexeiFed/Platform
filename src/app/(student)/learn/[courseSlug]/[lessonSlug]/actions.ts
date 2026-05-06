@@ -166,3 +166,67 @@ export async function getHomeworkThread(lessonId: string) {
     return { error: "Произошла ошибка" } as const;
   }
 }
+
+export async function markHomeworkCompleted(lessonId: string) {
+  const session = await auth();
+  if (!session) return { error: "Необходимо войти в аккаунт" } as const;
+
+  try {
+    const lesson = await prisma.lesson.findUnique({
+      where: { id: lessonId },
+      select: { id: true, homeworkEnabled: true, productId: true, slug: true, product: { select: { slug: true } } },
+    });
+    if (!lesson) return { error: "Урок не найден" } as const;
+    if (!lesson.homeworkEnabled) return { error: "У урока нет домашнего задания" } as const;
+
+    const enrollment = await prisma.enrollment.findUnique({
+      where: {
+        userId_productId: { userId: session.user.id, productId: lesson.productId },
+      },
+      select: { id: true },
+    });
+    if (!enrollment) return { error: "Нет доступа к курсу" } as const;
+
+    const enrollmentCrit = await loadEnrollmentForCriteriaByUserProduct(session.user.id, lesson.productId);
+    if (!enrollmentCrit || !enrollmentHasCriterion(enrollmentCrit, "TASKS")) {
+      return { error: "В вашем тарифе нет доступа к заданиям" } as const;
+    }
+    if (enrollmentHasCriterion(enrollmentCrit, "HOMEWORK_REVIEW")) {
+      return { error: "В вашем тарифе предусмотрена проверка ДЗ — отметка доступна только без проверки" } as const;
+    }
+
+    const latest = await prisma.homeworkSubmission.findFirst({
+      where: { lessonId: lesson.id, userId: session.user.id },
+      orderBy: { createdAt: "desc" },
+      select: { id: true },
+    });
+
+    const submissionId = latest?.id ?? null;
+    if (submissionId) {
+      await prisma.homeworkSubmission.update({
+        where: { id: submissionId },
+        data: { status: "APPROVED" },
+      });
+      emitHomeworkEvent({ submissionId, lessonId: lesson.id, userId: session.user.id });
+    } else {
+      const created = await prisma.homeworkSubmission.create({
+        data: {
+          lessonId: lesson.id,
+          userId: session.user.id,
+          content: null,
+          fileUrl: null,
+          fileUrls: [],
+          status: "APPROVED",
+        },
+        select: { id: true },
+      });
+      emitHomeworkEvent({ submissionId: created.id, lessonId: lesson.id, userId: session.user.id });
+    }
+
+    revalidatePath(`/learn/${lesson.product.slug}/${lesson.slug}`);
+    return { success: true } as const;
+  } catch (error) {
+    console.error("[markHomeworkCompleted]", error);
+    return { error: "Произошла ошибка" } as const;
+  }
+}

@@ -13,6 +13,7 @@ import { PdfPages } from "@/components/shared/pdf-pages";
 import { LessonVideoPlayer } from "@/components/shared/lesson-video-player";
 import { HomeworkForm } from "./homework-form";
 import { HomeworkThread } from "./homework-thread";
+import { MarkHomeworkCompleted } from "./mark-homework-completed";
 import {
   effectiveCriteriaSet,
   enrollmentHasCriterion,
@@ -75,6 +76,7 @@ export default async function LessonPage({ params, searchParams }: Props) {
 
   const crit = await loadEnrollmentForCriteriaByUserProduct(session.user.id, product.id);
   const canTasks = Boolean(crit && enrollmentHasCriterion(crit, "TASKS"));
+  const hasHomeworkReview = Boolean(crit && enrollmentHasCriterion(crit, "HOMEWORK_REVIEW"));
 
   const lesson = await prisma.lesson.findUnique({
     where: { productId_slug: { productId: product.id, slug: lessonSlug } },
@@ -382,6 +384,14 @@ export default async function LessonPage({ params, searchParams }: Props) {
             </CardTitle>
           </CardHeader>
           <CardContent>
+            {!hasHomeworkReview && (
+              <div className="mb-4 space-y-2 rounded-lg border bg-muted/40 p-3">
+                <div className={`${tokens.typography.small} text-muted-foreground`}>
+                  В вашем тарифе нет проверки ДЗ — можно просто отметить урок выполненным.
+                </div>
+                <MarkHomeworkCompleted lessonId={lesson.id} />
+              </div>
+            )}
             {existingSubmission ? (
               <HomeworkThread
                 lessonId={lesson.id}
