@@ -82,6 +82,7 @@ export function LiveRoomClient({ liveServerUrl, token, role }: Props) {
   const label = useMemo(() => (isHost ? "Ведущий" : "Участник"), [isHost]);
   const self = useMemo(() => decodeJwtPayload(token) as { userId?: string } | null, [token]);
   const selfUserId = self?.userId ? String(self.userId) : null;
+  const selfRoomId = (decodeJwtPayload(token) as any)?.roomId ? String((decodeJwtPayload(token) as any).roomId) : null;
   const hostPeer = useMemo(() => peers.find((p) => p.role === "HOST") ?? null, [peers]);
   const hostUserId = hostPeer?.userId ?? null;
   const hostVideo = useMemo(() => {
@@ -315,6 +316,7 @@ export function LiveRoomClient({ liveServerUrl, token, role }: Props) {
         </Badge>
         <Badge variant="outline">{label}</Badge>
         {isHost ? <Badge variant="secondary">HOST</Badge> : null}
+        {selfRoomId ? <span className="text-xs text-muted-foreground">room: {selfRoomId.slice(0, 8)}…</span> : null}
       </div>
 
       {error ? (

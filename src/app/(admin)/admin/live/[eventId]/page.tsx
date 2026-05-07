@@ -50,6 +50,7 @@ export default async function AdminLiveRoomPage({ params }: Props) {
   const data = (join as any).data as {
     token: string;
     room: { status: "SCHEDULED" | "LIVE" | "ENDED" };
+    productSlug?: string;
   };
 
   return (
@@ -68,6 +69,20 @@ export default async function AdminLiveRoomPage({ params }: Props) {
       </div>
 
       <LiveRoomClient liveServerUrl={liveServerUrl} token={data.token} role="HOST" />
+
+      {data.productSlug ? (
+        <div className="rounded-xl border bg-muted/20 p-3">
+          <div className={`${tokens.typography.small} text-muted-foreground`}>
+            Ссылка для студентов (должна совпадать с этим эфиром)
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/learn/${data.productSlug}/event/${eventId}/live`}>Открыть как студент</Link>
+            </Button>
+            <div className="text-xs text-muted-foreground">eventId: {eventId}</div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
