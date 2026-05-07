@@ -102,6 +102,8 @@ sudo -u appuser bash -lc "
     exit \"\$migrate_ec\"
   fi
   set -euo pipefail
+  # Важно: чистим артефакты сборки, иначе Next может пытаться загрузить несуществующие чанки.
+  rm -rf .next
   pnpm build
   test -f .next/standalone/server.js
   mkdir -p .next/standalone/.next
