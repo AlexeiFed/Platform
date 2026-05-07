@@ -29,7 +29,7 @@ echo "→ $SERVER:$REMOTE (git, branch $BRANCH)"
 REMOTE_EXPORTS="$(printf 'export DOMAIN=%q REMOTE=%q BRANCH=%q GIT_REPO=%q GIT_CLONE_HTTPS=%q SERVER_GIT_KEY=%q;' \
   "$DOMAIN" "$REMOTE" "$BRANCH" "$GIT_REPO" "$GIT_CLONE_HTTPS" "$SERVER_GIT_KEY")"
 
-ssh "$SERVER" "${REMOTE_EXPORTS} bash -s" <<'REMOTE'
+ssh -o ServerAliveInterval=15 -o ServerAliveCountMax=8 "$SERVER" "${REMOTE_EXPORTS} bash -s" <<'REMOTE'
 set -euo pipefail
 
 key_dir="$(dirname "$SERVER_GIT_KEY")"

@@ -67,7 +67,21 @@ sudo -u appuser bash -lc "
   cd '$ROOT'
   # Увеличиваем heap Node — next build + tsc падают по OOM на слабом VPS.
   export NODE_OPTIONS='--max-old-space-size=4096'
-  pnpm install --frozen-lockfile --prefer-offline
+  # Важно: mediasoup postinstall качает prebuilt worker с GitHub и часто подвисает/таймаутится.
+  # Поэтому ставим зависимости без скриптов, а mediasoup собираем отдельно с ретраями.
+  pnpm install --frozen-lockfile --prefer-offline --ignore-scripts --config.network-timeout=600000
+
+  for i in 1 2 3 4 5; do
+    echo \"→ mediasoup postinstall (attempt \$i/5)\"
+    if pnpm rebuild mediasoup --config.network-timeout=600000; then
+      break
+    fi
+    if [ \"\$i\" -eq 5 ]; then
+      echo \"✖ mediasoup postinstall failed after retries\"
+      exit 1
+    fi
+    sleep 5
+  done
   pnpm exec prisma generate
   set +e
   migrate_out=\$(pnpm exec prisma migrate deploy 2>&1)
