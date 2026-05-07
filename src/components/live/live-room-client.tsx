@@ -74,6 +74,7 @@ export function LiveRoomClient({ liveServerUrl, token, role }: Props) {
   const sendTransportRef = useRef<any>(null);
   const recvTransportRef = useRef<any>(null);
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
+  const selfThumbVideoRef = useRef<HTMLVideoElement | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const audioProducerRef = useRef<any>(null);
   const videoProducerRef = useRef<any>(null);
@@ -154,6 +155,10 @@ export function LiveRoomClient({ liveServerUrl, token, role }: Props) {
             localStreamRef.current = stream;
             if (localVideoRef.current) {
               localVideoRef.current.srcObject = stream;
+            }
+            if (selfThumbVideoRef.current) {
+              selfThumbVideoRef.current.srcObject = stream;
+              selfThumbVideoRef.current.play?.().catch(() => {});
             }
             const audioTrack = stream.getAudioTracks()[0];
             const videoTrack = stream.getVideoTracks()[0];
@@ -390,6 +395,20 @@ export function LiveRoomClient({ liveServerUrl, token, role }: Props) {
             )}
 
             <div className="absolute left-3 top-3 flex max-w-full gap-2 overflow-x-auto rounded-xl bg-black/35 p-2 backdrop-blur">
+              {/* self view */}
+              <div className="relative h-20 w-28 shrink-0 overflow-hidden rounded-lg border border-white/20 bg-black">
+                <video ref={selfThumbVideoRef} className="h-full w-full object-cover" autoPlay playsInline muted />
+                <div className="absolute inset-x-1 bottom-1 flex items-center justify-between gap-1">
+                  <div className="truncate rounded bg-black/55 px-1 py-0.5 text-[10px] text-white">
+                    {isHost ? "Вы" : "Вы"}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="rounded bg-black/55 p-1 text-white">{micOn ? <Mic className="h-3 w-3" /> : <MicOff className="h-3 w-3" />}</div>
+                    <div className="rounded bg-black/55 p-1 text-white">{camOn ? <Video className="h-3 w-3" /> : <VideoOff className="h-3 w-3" />}</div>
+                  </div>
+                </div>
+              </div>
+
               {peers
                 .filter((p) => (isHost ? p.userId !== selfUserId : p.userId !== hostUserId))
                 .map((p) => {

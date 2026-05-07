@@ -120,6 +120,9 @@ io.on("connection", async (socket) => {
   const roomId = live.roomId;
   const room = await getOrCreateRoom(roomId);
 
+  // eslint-disable-next-line no-console
+  console.log("[live-server] connect", { roomId, userId: live.userId, role: live.role, name: live.name ?? null });
+
   socket.join(roomId);
 
   const peerKey = socket.id;
@@ -242,6 +245,9 @@ io.on("connection", async (socket) => {
         kind: producer.kind,
       });
 
+      // eslint-disable-next-line no-console
+      console.log("[live-server] produce", { roomId, userId: peer.userId, kind: producer.kind, producerId: producer.id });
+
       cb({ ok: true, data: { id: producer.id } });
     } catch (e: any) {
       cb({ ok: false, error: e?.message ?? "produce error" });
@@ -363,6 +369,9 @@ io.on("connection", async (socket) => {
         data: { leftAt: new Date() },
       })
       .catch(() => {});
+
+    // eslint-disable-next-line no-console
+    console.log("[live-server] disconnect", { roomId, userId: live.userId });
   });
 });
 
