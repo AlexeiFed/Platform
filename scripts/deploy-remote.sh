@@ -65,7 +65,17 @@ if ! command -v pnpm >/dev/null 2>&1; then
   ( cd /root && corepack enable && corepack prepare pnpm@9.15.0 --activate )
 fi
 
-echo "→ pnpm install (offline cache если есть)"
+# mediasoup: при ошибке распаковки prebuild (TAR_ENTRY_ERROR) идёт локальная сборка и нужен pip (invoke).
+if command -v apt-get >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
+  if ! python3 -m pip --version >/dev/null 2>&1; then
+    echo "→ apt: python3-pip (fallback-сборка mediasoup worker)"
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -qq
+    apt-get install -y -qq python3-pip
+  fi
+fi
+
+echo "→ pnpm install (offline cache если есть; при неизменном lock можно пропустить)"
 # migrate deploy. P3005: БД уже с данными, но нет записей в _prisma_migrations (раньше был db push).
 # Тогда один раз: SQL миграции → resolve --applied → снова migrate deploy.
 sudo -u appuser bash -lc "
@@ -73,21 +83,37 @@ sudo -u appuser bash -lc "
   cd '$ROOT'
   # Увеличиваем heap Node — next build + tsc падают по OOM на слабом VPS.
   export NODE_OPTIONS='--max-old-space-size=4096'
-  # Важно: mediasoup postinstall качает prebuilt worker с GitHub и часто подвисает/таймаутится.
-  # Поэтому ставим зависимости без скриптов, а mediasoup собираем отдельно с ретраями.
-  pnpm install --frozen-lockfile --prefer-offline --ignore-scripts --config.network-timeout=600000
 
-  for i in 1 2 3 4 5; do
-    echo \"→ mediasoup postinstall (attempt \$i/5)\"
-    if pnpm rebuild mediasoup --config.network-timeout=600000; then
-      break
-    fi
-    if [ \"\$i\" -eq 5 ]; then
-      echo \"✖ mediasoup postinstall failed after retries\"
-      exit 1
-    fi
-    sleep 5
-  done
+  LOCK_SHA=\$(sha256sum pnpm-lock.yaml | awk '{print \$1}')
+  STAMP_FILE=\"\$PWD/.deploy-deps.stamp\"
+  mediasoup_worker_ok() {
+    find \"\$PWD/node_modules/.pnpm\" -path '*/node_modules/mediasoup/worker/out/Release/mediasoup-worker' -type f -executable 2>/dev/null | grep -q .
+  }
+  SKIP_DEPS=0
+  if [[ -f \"\$STAMP_FILE\" ]] && [[ \"\$(cat \"\$STAMP_FILE\")\" == \"\$LOCK_SHA\" ]] && mediasoup_worker_ok; then
+    SKIP_DEPS=1
+  fi
+
+  if [[ \"\$SKIP_DEPS\" -eq 1 ]]; then
+    echo \"→ lockfile и mediasoup worker без изменений — пропуск pnpm install и rebuild mediasoup\"
+  else
+    # Важно: mediasoup postinstall качает prebuilt worker с GitHub и часто подвисает/таймаутится.
+    # Поэтому ставим зависимости без скриптов, а mediasoup собираем отдельно с ретраями.
+    pnpm install --frozen-lockfile --prefer-offline --ignore-scripts --config.network-timeout=600000
+
+    for i in 1 2 3 4 5; do
+      echo \"→ mediasoup postinstall (attempt \$i/5)\"
+      if pnpm rebuild mediasoup --config.network-timeout=600000; then
+        break
+      fi
+      if [ \"\$i\" -eq 5 ]; then
+        echo \"✖ mediasoup postinstall failed after retries\"
+        exit 1
+      fi
+      sleep 5
+    done
+    printf '%s\n' \"\$LOCK_SHA\" > \"\$STAMP_FILE\"
+  fi
   pnpm exec prisma generate
   set +e
   migrate_out=\$(pnpm exec prisma migrate deploy 2>&1)
