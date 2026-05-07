@@ -71,6 +71,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       const lastSync = typeof token.lastActivitySyncAt === "number" ? token.lastActivitySyncAt : 0;
       if (now - lastSync < USER_ACTIVITY_UPDATE_INTERVAL_MS) return token;
 
+      // Middleware/Auth может выполняться в Edge runtime, там Prisma недоступна.
+      if (process.env.NEXT_RUNTIME === "edge") {
+        token.lastActivitySyncAt = now;
+        return token;
+      }
+
       try {
         await prisma.user.update({
           where: { id: userId },
