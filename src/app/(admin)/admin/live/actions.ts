@@ -3,7 +3,6 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import jwt from "jsonwebtoken";
-import { revalidatePath } from "next/cache";
 
 const getJwtSecret = () => {
   const secret = process.env.LIVE_SERVER_JWT_SECRET;
@@ -44,8 +43,6 @@ export async function getAdminLiveJoinToken(eventId: string) {
       getJwtSecret(),
       { expiresIn: "6h" }
     );
-
-    revalidatePath(`/admin/live/${event.id}`);
 
     return {
       success: true,
