@@ -74,6 +74,17 @@ async function getOrCreateRoom(roomId: string): Promise<RoomState> {
         clockRate: 90000,
         parameters: { "x-google-start-bitrate": 1000 },
       },
+      // Safari чаще предпочитает H264 — держим оба кодека.
+      {
+        kind: "video",
+        mimeType: "video/H264",
+        clockRate: 90000,
+        parameters: {
+          "packetization-mode": 1,
+          "profile-level-id": "42e01f",
+          "level-asymmetry-allowed": 1,
+        },
+      },
     ],
   });
 

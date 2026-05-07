@@ -454,6 +454,15 @@ export function LiveRoomClient({ liveServerUrl, token, role }: Props) {
             </div>
           </div>
         </div>
+
+        {/* audio playback (без UI): иначе звука не будет */}
+        <div className="hidden">
+          {remoteTracks
+            .filter((t) => t.kind === "audio" && t.userId !== selfUserId)
+            .map((t) => (
+              <RemoteAudio key={t.id} stream={t.stream} />
+            ))}
+        </div>
       </div>
     </div>
   );
