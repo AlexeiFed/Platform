@@ -44,6 +44,7 @@ export function LiveRoomClient({ liveServerUrl, token, canProduce }: Props) {
       try {
         const socket = io(liveServerUrl, {
           transports: ["websocket"],
+          path: "/live/socket.io",
           auth: { token },
         });
         socketRef.current = socket;

@@ -37,21 +37,27 @@ fi
 
 NGX_SRC="$ROOT/deploy/nginx-thebesteducation.ru.conf"
 UNIT_SRC="$ROOT/deploy/platform-thebesteducation.service"
+LIVE_UNIT_SRC="$ROOT/deploy/platform-thebesteducation-live.service"
 SITE_AVAIL="/etc/nginx/sites-available/thebesteducation.ru"
 SITE_EN="/etc/nginx/sites-enabled/thebesteducation.ru"
 UNIT_DST="/etc/systemd/system/platform-thebesteducation.service"
+LIVE_UNIT_DST="/etc/systemd/system/platform-thebesteducation-live.service"
 
-if [[ ! -L "$SITE_EN" ]] || [[ ! -f "$SITE_AVAIL" ]]; then
-  cp -f "$NGX_SRC" "$SITE_AVAIL"
-  ln -sf "$SITE_AVAIL" "$SITE_EN"
-  nginx -t
-  systemctl reload nginx
-fi
+cp -f "$NGX_SRC" "$SITE_AVAIL"
+ln -sf "$SITE_AVAIL" "$SITE_EN"
+nginx -t
+systemctl reload nginx
 
 if [[ ! -f "$UNIT_DST" ]]; then
   cp -f "$UNIT_SRC" "$UNIT_DST"
   systemctl daemon-reload
   systemctl enable platform-thebesteducation.service
+fi
+
+if [[ ! -f "$LIVE_UNIT_DST" ]]; then
+  cp -f "$LIVE_UNIT_SRC" "$LIVE_UNIT_DST"
+  systemctl daemon-reload
+  systemctl enable platform-thebesteducation-live.service
 fi
 
 export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
@@ -114,6 +120,10 @@ sudo -u appuser bash -lc "
 systemctl restart platform-thebesteducation.service
 sleep 1
 systemctl is-active platform-thebesteducation.service
+
+systemctl restart platform-thebesteducation-live.service
+sleep 1
+systemctl is-active platform-thebesteducation-live.service
 
 echo "→ проверка/обновление TLS сертификата"
 if ! certbot --nginx \

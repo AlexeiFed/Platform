@@ -94,6 +94,7 @@ function verifyToken(raw: string) {
 
 const server = http.createServer();
 const io = new Server(server, {
+  path: "/live/socket.io",
   cors: {
     origin: true,
     credentials: true,

@@ -1,0 +1,19 @@
+[Unit]
+Description=LMS Platform Live Server (mediasoup SFU) — thebesteducation.ru
+After=network.target
+
+[Service]
+Type=simple
+User=appuser
+Group=appuser
+WorkingDirectory=/var/www/platform
+Environment=NODE_ENV=production
+EnvironmentFile=-/var/www/platform/.env
+ExecStart=/usr/bin/node /var/www/platform/node_modules/.bin/tsx /var/www/platform/live-server/index.ts
+Restart=always
+RestartSec=5
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
+
