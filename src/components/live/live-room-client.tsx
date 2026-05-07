@@ -295,7 +295,9 @@ export function LiveRoomClient({ liveServerUrl, token, canProduce }: Props) {
 function RemoteVideo({ stream }: { stream: MediaStream }) {
   const ref = useRef<HTMLVideoElement | null>(null);
   useEffect(() => {
-    if (ref.current) ref.current.srcObject = stream;
+    if (!ref.current) return;
+    ref.current.srcObject = stream;
+    ref.current.play?.().catch(() => {});
   }, [stream]);
   return <video ref={ref} className="w-full rounded-xl border bg-black" autoPlay playsInline />;
 }
@@ -303,7 +305,9 @@ function RemoteVideo({ stream }: { stream: MediaStream }) {
 function RemoteAudio({ stream }: { stream: MediaStream }) {
   const ref = useRef<HTMLAudioElement | null>(null);
   useEffect(() => {
-    if (ref.current) ref.current.srcObject = stream;
+    if (!ref.current) return;
+    ref.current.srcObject = stream;
+    ref.current.play?.().catch(() => {});
   }, [stream]);
   return <audio ref={ref} autoPlay controls className="w-full" />;
 }
