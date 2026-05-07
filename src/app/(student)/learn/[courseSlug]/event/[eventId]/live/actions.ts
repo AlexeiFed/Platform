@@ -117,12 +117,13 @@ export async function getLiveJoinToken(eventId: string) {
       return { error: "Эфиры недоступны в вашем тарифе" } as const;
     }
 
-    const room = await prisma.liveRoom.upsert({
+    // Важно: студент должен заходить только в комнату, созданную для этого события.
+    // Комнату создаёт ведущий (админ/куратор) при старте/входе в эфир.
+    const room = await prisma.liveRoom.findUnique({
       where: { marathonEventId: eventId },
-      update: {},
-      create: { marathonEventId: eventId },
       select: { id: true, status: true, maxSpeakers: true },
     });
+    if (!room) return { error: "Эфир ещё не начался" } as const;
 
     const existingParticipant = await prisma.liveRoomParticipant.findUnique({
       where: { roomId_userId: { roomId: room.id, userId: session.user.id } },
