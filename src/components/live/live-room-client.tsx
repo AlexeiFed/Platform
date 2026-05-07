@@ -68,6 +68,7 @@ export function LiveRoomClient({ liveServerUrl, token, role }: Props) {
   const [camOn, setCamOn] = useState(true);
   const [peers, setPeers] = useState<PeerRow[]>([]);
   const [producerMuted, setProducerMuted] = useState<Record<string, boolean>>({});
+  const [needsAudioGesture, setNeedsAudioGesture] = useState(false);
 
   const socketRef = useRef<Socket | null>(null);
   const deviceRef = useRef<MediasoupDevice | null>(null);
@@ -80,9 +81,9 @@ export function LiveRoomClient({ liveServerUrl, token, role }: Props) {
   const videoProducerRef = useRef<any>(null);
 
   const label = useMemo(() => (isHost ? "Ведущий" : "Участник"), [isHost]);
-  const self = useMemo(() => decodeJwtPayload(token) as { userId?: string } | null, [token]);
-  const selfUserId = self?.userId ? String(self.userId) : null;
-  const selfRoomId = (decodeJwtPayload(token) as any)?.roomId ? String((decodeJwtPayload(token) as any).roomId) : null;
+  const decoded = useMemo(() => decodeJwtPayload(token) as { userId?: string; roomId?: string } | null, [token]);
+  const selfUserId = decoded?.userId ? String(decoded.userId) : null;
+  const selfRoomId = decoded?.roomId ? String(decoded.roomId) : null;
   const hostPeer = useMemo(() => peers.find((p) => p.role === "HOST") ?? null, [peers]);
   const hostUserId = hostPeer?.userId ?? null;
   const hostVideo = useMemo(() => {
@@ -92,6 +93,44 @@ export function LiveRoomClient({ liveServerUrl, token, role }: Props) {
 
   useEffect(() => {
     let alive = true;
+    const pendingProducers: Array<{ producerId: string; userId: string; kind?: string; paused?: boolean }> = [];
+    const drainPending = async () => {
+      const socket = socketRef.current;
+      const device = deviceRef.current;
+      const recvTransport = recvTransportRef.current;
+      if (!socket || !device || !recvTransport) return;
+      const items = pendingProducers.splice(0, pendingProducers.length);
+      for (const p of items) {
+        if (!p.producerId || !p.userId) continue;
+        if (p.kind === "audio" && typeof p.paused === "boolean") {
+          setProducerMuted((prev) => ({ ...prev, [String(p.producerId)]: Boolean(p.paused) }));
+        }
+        // consumeProducer defined below, but we can re-enqueue by emitting newProducer-style event
+        // We'll call socket.emit consume directly after transports are ready via helper.
+        try {
+          const res = await new Promise<ServerAck<any>>((resolve) => {
+            socket.emit(
+              "consume",
+              { transportId: recvTransport.id, producerId: p.producerId, rtpCapabilities: device.rtpCapabilities },
+              resolve
+            );
+          });
+          if (!res.ok) continue;
+          const consumer = await recvTransport.consume({
+            id: res.data.id,
+            producerId: res.data.producerId,
+            kind: res.data.kind,
+            rtpParameters: res.data.rtpParameters,
+          });
+          const stream = new MediaStream([consumer.track]);
+          setRemoteTracks((prev) => [
+            ...prev,
+            { id: consumer.id, producerId: res.data.producerId, userId: p.userId, kind: consumer.kind, stream },
+          ]);
+          socket.emit("resumeConsumer", { consumerId: consumer.id }, () => {});
+        } catch {}
+      }
+    };
 
     const run = async () => {
       try {
@@ -106,6 +145,71 @@ export function LiveRoomClient({ liveServerUrl, token, role }: Props) {
           if (!alive) return;
           setStatus("error");
           setError(e?.message ?? "Ошибка подключения");
+        });
+
+        // Register listeners ASAP (server can emit peers/existingProducers immediately).
+        socket.on("existingProducers", ({ producers }: any) => {
+          if (!Array.isArray(producers)) return;
+          for (const p of producers) {
+            if (p?.producerId && p?.userId) {
+              pendingProducers.push({
+                producerId: String(p.producerId),
+                userId: String(p.userId),
+                kind: typeof p.kind === "string" ? p.kind : undefined,
+                paused: typeof p.paused === "boolean" ? Boolean(p.paused) : undefined,
+              });
+            }
+          }
+          drainPending().catch(() => {});
+        });
+        socket.on("newProducer", ({ producerId, userId, kind }: any) => {
+          if (!producerId || !userId) return;
+          pendingProducers.push({
+            producerId: String(producerId),
+            userId: String(userId),
+            kind: typeof kind === "string" ? kind : undefined,
+          });
+          drainPending().catch(() => {});
+        });
+        socket.on("peers", ({ peers }: any) => {
+          if (!Array.isArray(peers)) return;
+          setPeers(
+            peers
+              .map((p) => ({
+                userId: String(p.userId),
+                role: p.role as PeerRow["role"],
+                name: typeof p.name === "string" ? p.name : null,
+              }))
+              .filter((p) => p.userId && (p.role === "HOST" || p.role === "SPEAKER" || p.role === "VIEWER"))
+          );
+        });
+        socket.on("peerJoined", (p: any) => {
+          const row: PeerRow = {
+            userId: String(p?.userId ?? ""),
+            role: p?.role,
+            name: typeof p?.name === "string" ? p.name : null,
+          };
+          if (!row.userId) return;
+          if (row.role !== "HOST" && row.role !== "SPEAKER" && row.role !== "VIEWER") return;
+          setPeers((prev) => (prev.some((x) => x.userId === row.userId) ? prev : [...prev, row]));
+        });
+        socket.on("peerLeft", ({ userId }: any) => {
+          const id = String(userId ?? "");
+          if (!id) return;
+          setPeers((prev) => prev.filter((p) => p.userId !== id));
+          setRemoteTracks((prev) => prev.filter((t) => t.userId !== id));
+        });
+        socket.on("producerClosed", ({ producerId }: any) => {
+          setRemoteTracks((prev) => prev.filter((t) => t.producerId !== producerId));
+          setProducerMuted((prev) => {
+            const next = { ...prev };
+            delete next[String(producerId)];
+            return next;
+          });
+        });
+        socket.on("producerMuted", ({ producerId, muted }: any) => {
+          if (!producerId) return;
+          setProducerMuted((prev) => ({ ...prev, [String(producerId)]: Boolean(muted) }));
         });
 
         const routerCaps: any = await new Promise((resolve) => socket.once("routerRtpCapabilities", resolve));
@@ -126,6 +230,8 @@ export function LiveRoomClient({ liveServerUrl, token, role }: Props) {
             else cb();
           });
         });
+
+        await drainPending();
 
         if (canProduce) {
           const sendTransportParams = await new Promise<ServerAck<any>>((resolve) => {
@@ -187,96 +293,6 @@ export function LiveRoomClient({ liveServerUrl, token, role }: Props) {
           }
         }
 
-        const consumeProducer = async (producerId: string, userId: string) => {
-          const device = deviceRef.current;
-          const recvTransport = recvTransportRef.current;
-          if (!device || !recvTransport) return;
-
-          const res = await new Promise<ServerAck<any>>((resolve) => {
-            socket.emit(
-              "consume",
-              { transportId: recvTransport.id, producerId, rtpCapabilities: device.rtpCapabilities },
-              resolve
-            );
-          });
-          if (!res.ok) return;
-
-          const consumer = await recvTransport.consume({
-            id: res.data.id,
-            producerId: res.data.producerId,
-            kind: res.data.kind,
-            rtpParameters: res.data.rtpParameters,
-          });
-
-          const stream = new MediaStream([consumer.track]);
-          setRemoteTracks((prev) => [
-            ...prev,
-            { id: consumer.id, producerId: res.data.producerId, userId, kind: consumer.kind, stream },
-          ]);
-
-          socket.emit("resumeConsumer", { consumerId: consumer.id }, () => {});
-        };
-
-        socket.on("newProducer", ({ producerId, userId }: any) => {
-          if (!producerId || !userId) return;
-          consumeProducer(producerId, userId).catch(() => {});
-        });
-
-        socket.on("producerClosed", ({ producerId }: any) => {
-          setRemoteTracks((prev) => prev.filter((t) => t.producerId !== producerId));
-          setProducerMuted((prev) => {
-            const next = { ...prev };
-            delete next[String(producerId)];
-            return next;
-          });
-        });
-
-        socket.on("existingProducers", ({ producers }: any) => {
-          if (!Array.isArray(producers)) return;
-          for (const p of producers) {
-            if (p?.producerId && p?.userId) {
-              if (p.kind === "audio" && typeof p.paused === "boolean") {
-                setProducerMuted((prev) => ({ ...prev, [String(p.producerId)]: Boolean(p.paused) }));
-              }
-              consumeProducer(p.producerId, p.userId).catch(() => {});
-            }
-          }
-        });
-
-        socket.on("peers", ({ peers }: any) => {
-          if (!Array.isArray(peers)) return;
-          setPeers(
-            peers
-              .map((p) => ({
-                userId: String(p.userId),
-                role: p.role as PeerRow["role"],
-                name: typeof p.name === "string" ? p.name : null,
-              }))
-              .filter((p) => p.userId && (p.role === "HOST" || p.role === "SPEAKER" || p.role === "VIEWER"))
-          );
-        });
-        socket.on("peerJoined", (p: any) => {
-          const row: PeerRow = {
-            userId: String(p?.userId ?? ""),
-            role: p?.role,
-            name: typeof p?.name === "string" ? p.name : null,
-          };
-          if (!row.userId) return;
-          if (row.role !== "HOST" && row.role !== "SPEAKER" && row.role !== "VIEWER") return;
-          setPeers((prev) => (prev.some((x) => x.userId === row.userId) ? prev : [...prev, row]));
-        });
-        socket.on("peerLeft", ({ userId }: any) => {
-          const id = String(userId ?? "");
-          if (!id) return;
-          setPeers((prev) => prev.filter((p) => p.userId !== id));
-          setRemoteTracks((prev) => prev.filter((t) => t.userId !== id));
-        });
-
-        socket.on("producerMuted", ({ producerId, muted }: any) => {
-          if (!producerId) return;
-          setProducerMuted((prev) => ({ ...prev, [String(producerId)]: Boolean(muted) }));
-        });
-
         if (!alive) return;
         setStatus("connected");
       } catch (e: any) {
@@ -301,6 +317,16 @@ export function LiveRoomClient({ liveServerUrl, token, role }: Props) {
       } catch {}
     };
   }, [liveServerUrl, token, canProduce, role]);
+
+  const tryEnableAudio = () => {
+    try {
+      const els = Array.from(document.querySelectorAll("audio")) as HTMLAudioElement[];
+      Promise.allSettled(els.map((a) => a.play())).then((res) => {
+        const anyRejected = res.some((r) => r.status === "rejected");
+        setNeedsAudioGesture(anyRejected);
+      });
+    } catch {}
+  };
 
   const retry = () => {
     startTransition(() => {
@@ -371,6 +397,11 @@ export function LiveRoomClient({ liveServerUrl, token, role }: Props) {
 
       <div className="space-y-2">
         <div className={tokens.typography.h3}>Эфир</div>
+        {needsAudioGesture && !isHost ? (
+          <Button type="button" variant="outline" size="sm" onClick={tryEnableAudio}>
+            Включить звук
+          </Button>
+        ) : null}
         <div className="flex flex-wrap items-center gap-2">
           {isHost ? (
             <Button
