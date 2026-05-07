@@ -29,6 +29,17 @@ const formatKhabarovskDateTime = (value: Date | null) => {
   }).format(value);
 };
 
+function ratingBlockCaption(blocks: unknown, blockId: string): string | null {
+  const arr = blocks as { id: string; type: string; content?: string }[] | null;
+  if (!Array.isArray(arr)) return null;
+  const b = arr.find((x) => x.id === blockId && x.type === "rating");
+  const raw = b?.content?.trim();
+  if (!raw) return null;
+  const plain = raw.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  if (!plain) return null;
+  return plain.length > 100 ? `${plain.slice(0, 100)}…` : plain;
+}
+
 export default async function AdminUserDetailsPage({ params }: Props) {
   const { userId } = await params;
 
@@ -130,6 +141,14 @@ export default async function AdminUserDetailsPage({ params }: Props) {
   if (!user) {
     notFound();
   }
+
+  const blockRatings = await prisma.lessonBlockRating.findMany({
+    where: { enrollment: { userId } },
+    orderBy: { updatedAt: "desc" },
+    include: {
+      lesson: { select: { title: true, blocks: true, product: { select: { title: true } } } },
+    },
+  });
 
   const roleLabel =
     user.role === "ADMIN" ? "Админ" : user.role === "CURATOR" ? "Куратор" : "Студент";
@@ -282,6 +301,50 @@ export default async function AdminUserDetailsPage({ params }: Props) {
                         ))}
                       </tr>
                     ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+      )}
+
+      {blockRatings.length > 0 && (
+        <section className="space-y-3">
+          <h2 className={tokens.typography.h4}>Оценки в уроках</h2>
+          <Card>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-xs text-muted-foreground">
+                    <tr className="border-b">
+                      <th className="py-2 px-3 text-left font-medium whitespace-nowrap">Дата</th>
+                      <th className="py-2 px-3 text-left font-medium">Урок</th>
+                      <th className="py-2 px-3 text-left font-medium max-w-[220px]">Подпись блока</th>
+                      <th className="py-2 px-3 text-right font-medium whitespace-nowrap">Оценка</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {blockRatings.map((row) => {
+                      const caption = ratingBlockCaption(row.lesson.blocks, row.blockId);
+                      return (
+                        <tr key={row.id} className="border-b last:border-0 hover:bg-accent/30">
+                          <td className="py-2 px-3 whitespace-nowrap align-top font-medium">
+                            {formatDate(row.updatedAt)}
+                          </td>
+                          <td className="py-2 px-3 align-top">
+                            <div className="font-medium">{row.lesson.title}</div>
+                            <div className="text-xs text-muted-foreground">{row.lesson.product.title}</div>
+                          </td>
+                          <td className="py-2 px-3 align-top text-muted-foreground max-w-[220px]">
+                            {caption ?? "—"}
+                          </td>
+                          <td className="py-2 px-3 text-right tabular-nums align-top font-semibold">
+                            {row.rating}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

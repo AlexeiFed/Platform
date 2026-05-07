@@ -28,6 +28,7 @@ import {
   Plus, GripVertical, FileText, Film, X, Pencil, Trash2,
   Eye, EyeOff, Image as ImageIcon, Upload, Loader2,
   ClipboardList, CalendarDays, ArrowUp, ArrowDown, ArrowLeft,
+  Gauge,
 } from "lucide-react";
 import {
   Dialog,
@@ -58,13 +59,17 @@ import type { MarathonEventType, MarathonTrack, ProductCriterion, ProductType, U
 
 // === Types ===
 
-export type ContentBlock = {
-  id: string;
-  type: "text" | "video" | "image" | "pdf";
-  content: string;
-  /** Только для type=image: ширина блока на странице студента */
+export type ContentBlock =
+  | { id: string; type: "text"; content: string }
+  | { id: string; type: "video"; content: string }
+  | { id: string; type: "image"; content: string; size?: "full" | "half" | "third" }
+  | { id: string; type: "pdf"; content: string; pages?: string[] }
+  | { id: string; type: "rating"; content: string };
+
+/** Патч блока в редакторе (Union + Partial даёт конфликт полей size/pages). */
+type ContentBlockPatch = {
+  content?: string;
   size?: "full" | "half" | "third";
-  /** Только для type=pdf: готовые картинки страниц (для быстрого рендера у ученика) */
   pages?: string[];
 };
 
@@ -424,8 +429,8 @@ function MediaBlockEditor({
   onUpdate,
   onRemove,
 }: {
-  block: ContentBlock;
-  onUpdate: (updates: Partial<Omit<ContentBlock, "id">>) => void;
+  block: Extract<ContentBlock, { type: "video" | "image" | "pdf" }>;
+  onUpdate: (updates: ContentBlockPatch) => void;
   onRemove: () => void;
 }) {
   const [showPicker, setShowPicker] = useState(false);
@@ -731,7 +736,7 @@ function SortableBlock({
   block, onUpdate, onRemove,
 }: {
   block: ContentBlock;
-  onUpdate: (updates: Partial<Omit<ContentBlock, "id">>) => void;
+  onUpdate: (updates: ContentBlockPatch) => void;
   onRemove: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: block.id });
@@ -759,6 +764,28 @@ function SortableBlock({
                 onChange={(e) => onUpdate({ content: e.target.value })}
                 placeholder="Текст (HTML/Markdown)..."
                 className="w-full min-h-[120px] rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            </div>
+          ) : block.type === "rating" ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Gauge className="h-4 w-4 text-amber-500" />
+                <span className="text-sm font-medium">Оценка нагрузки</span>
+                <div className="flex-1" />
+                <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={onRemove}>
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                У студента шкала <span className="text-foreground font-medium">0 — легко</span>,{" "}
+                <span className="text-foreground font-medium">10 — умер</span>. Текст ниже — необязательное вступление над
+                кнопками.
+              </p>
+              <textarea
+                value={block.content}
+                onChange={(e) => onUpdate({ content: e.target.value })}
+                placeholder="Например: Оцени по ощущениям, насколько сегодня было тяжело на тренировке"
+                className="w-full min-h-[88px] rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
             </div>
           ) : (
@@ -1181,8 +1208,8 @@ export function CourseEditor({
     setBlocks((prev) => [...prev, { id: uid(), type, content: "" }]);
   }
 
-  function updateBlock(id: string, updates: Partial<Omit<ContentBlock, "id">>) {
-    setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, ...updates } : b)));
+  function updateBlock(id: string, updates: ContentBlockPatch) {
+    setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, ...updates } as ContentBlock : b)));
   }
 
   function removeBlock(id: string) {
@@ -1374,6 +1401,9 @@ export function CourseEditor({
               </Button>
               <Button type="button" variant="outline" size="sm" onClick={() => addBlock("pdf")}>
                 <FileText className="h-3.5 w-3.5 mr-1.5 text-orange-500" /> + PDF
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => addBlock("rating")}>
+                <Gauge className="h-3.5 w-3.5 mr-1.5 text-amber-500" /> + Оценка
               </Button>
             </div>
           </div>

@@ -386,7 +386,7 @@ model Lesson {
   order             Int
   content           String?    @db.Text // legacy: Markdown/HTML
   videoUrl          String? // legacy: single video
-  blocks            Json? // [{id, type: "text"|"video"|"image", content}]
+  blocks            Json? // [{id, type: "text"|"video"|"image"|"pdf"|"rating", ...}]
   homeworkEnabled   Boolean    @default(false)
   homeworkQuestions Json? // ["question1", "question2", ...]
   unlockRule        UnlockRule @default(IMMEDIATELY)
@@ -400,6 +400,7 @@ model Lesson {
 
   attachments           LessonAttachment[]
   marathonEventLessons  MarathonEventLesson[]
+  lessonBlockRatings    LessonBlockRating[]
   submissions           HomeworkSubmission[]
 
   @@unique([productId, slug])
@@ -438,6 +439,7 @@ model Enrollment {
   tariff     ProductTariff           @relation(fields: [tariffId], references: [id], onDelete: Restrict)
   procedures UserMarathonProcedure[]
   eventCompletions MarathonEventCompletion[]
+  lessonBlockRatings LessonBlockRating[]
   tariffUpgrades TariffUpgrade[]
   tariffHistory  EnrollmentTariffHistory[]
   feedbackMessages CuratorFeedbackMessage[]
@@ -590,6 +592,25 @@ model MarathonEventCompletion {
   @@index([enrollmentId])
   @@index([eventId])
   @@map("marathon_event_completions")
+}
+
+/// Оценка нагрузки по блоку урока (0 — легко, 10 — максимум); blockId — id из JSON blocks.
+model LessonBlockRating {
+  id           String   @id @default(uuid())
+  enrollmentId String
+  lessonId     String
+  blockId      String
+  rating       Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  lesson     Lesson     @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([enrollmentId, lessonId, blockId])
+  @@index([enrollmentId])
+  @@index([lessonId])
+  @@map("lesson_block_ratings")
 }
 
 model ProcedureType {

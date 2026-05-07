@@ -14,6 +14,7 @@ import { LessonVideoPlayer } from "@/components/shared/lesson-video-player";
 import { HomeworkForm } from "./homework-form";
 import { HomeworkThread } from "./homework-thread";
 import { MarkHomeworkCompleted } from "./mark-homework-completed";
+import { LessonBlockRatingPicker } from "./lesson-block-rating-picker";
 import {
   effectiveCriteriaSet,
   enrollmentHasCriterion,
@@ -26,7 +27,7 @@ import type { ProductCriterion } from "@prisma/client";
 
 type ContentBlock = {
   id: string;
-  type: "text" | "video" | "image" | "pdf";
+  type: "text" | "video" | "image" | "pdf" | "rating";
   content: string;
   /** Ширина блока (только для image): full = полная, half = ½, third = ⅓ */
   size?: "full" | "half" | "third";
@@ -174,6 +175,22 @@ export default async function LessonPage({ params, searchParams }: Props) {
   const hasBlocks = blocks.length > 0;
   const hwQuestions = (lesson.homeworkQuestions as string[] | null) ?? [];
 
+  const ratingBlockIds = blocks.filter((b) => b.type === "rating").map((b) => b.id);
+  const blockRatingsRows =
+    ratingBlockIds.length > 0
+      ? await prisma.lessonBlockRating.findMany({
+          where: {
+            enrollmentId: enrollment.id,
+            lessonId: lesson.id,
+            blockId: { in: ratingBlockIds },
+          },
+          select: { blockId: true, rating: true },
+        })
+      : [];
+  const ratingByBlockId: Record<string, number> = Object.fromEntries(
+    blockRatingsRows.map((r) => [r.blockId, r.rating])
+  );
+
   const eventBackHref =
     product.type === "MARATHON" && eventQuery
       ? `/learn/${courseSlug}/event/${eventQuery}`
@@ -301,6 +318,21 @@ export default async function LessonPage({ params, searchParams }: Props) {
                       )}
                     </CardContent>
                   </Card>
+                </div>
+              );
+            }
+            if (block.type === "rating") {
+              return (
+                <div key={block.id} className="w-full">
+                  <LessonBlockRatingPicker
+                    lessonId={lesson.id}
+                    blockId={block.id}
+                    productId={product.id}
+                    courseSlug={courseSlug}
+                    lessonSlug={lessonSlug}
+                    introText={block.content}
+                    initialRating={ratingByBlockId[block.id] ?? null}
+                  />
                 </div>
               );
             }

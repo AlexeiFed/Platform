@@ -152,15 +152,23 @@ export async function updateProduct(id: string, input: z.infer<typeof productSch
   }
 }
 
-const contentBlockSchema = z.object({
-  id: z.string(),
-  type: z.enum(["text", "video", "image", "pdf"]),
-  content: z.string(),
-  /** Ширина блока изображения на странице студента */
-  size: z.enum(["full", "half", "third"]).optional(),
-  /** Для pdf: готовые страницы (URL картинок) */
-  pages: z.array(z.string()).optional(),
-});
+const contentBlockSchema = z.discriminatedUnion("type", [
+  z.object({ id: z.string(), type: z.literal("text"), content: z.string() }),
+  z.object({ id: z.string(), type: z.literal("video"), content: z.string() }),
+  z.object({
+    id: z.string(),
+    type: z.literal("image"),
+    content: z.string(),
+    size: z.enum(["full", "half", "third"]).optional(),
+  }),
+  z.object({
+    id: z.string(),
+    type: z.literal("pdf"),
+    content: z.string(),
+    pages: z.array(z.string()).optional(),
+  }),
+  z.object({ id: z.string(), type: z.literal("rating"), content: z.string() }),
+]);
 
 const lessonSchema = z.object({
   title: z.string().min(1),
