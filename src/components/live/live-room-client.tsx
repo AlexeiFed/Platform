@@ -28,12 +28,17 @@ export function LiveRoomClient({ liveServerUrl, token, canProduce }: Props) {
   const [error, setError] = useState("");
   const [remoteTracks, setRemoteTracks] = useState<RemoteTrack[]>([]);
   const [isPending, startTransition] = useTransition();
+  const [micOn, setMicOn] = useState(true);
+  const [camOn, setCamOn] = useState(true);
 
   const socketRef = useRef<Socket | null>(null);
   const deviceRef = useRef<MediasoupDevice | null>(null);
   const sendTransportRef = useRef<any>(null);
   const recvTransportRef = useRef<any>(null);
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
+  const audioProducerRef = useRef<any>(null);
+  const videoProducerRef = useRef<any>(null);
 
   const label = useMemo(() => (canProduce ? "Спикер/ведущий" : "Зритель"), [canProduce]);
 
@@ -100,13 +105,24 @@ export function LiveRoomClient({ liveServerUrl, token, canProduce }: Props) {
 
           try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+            localStreamRef.current = stream;
             if (localVideoRef.current) {
               localVideoRef.current.srcObject = stream;
             }
             const audioTrack = stream.getAudioTracks()[0];
             const videoTrack = stream.getVideoTracks()[0];
-            if (audioTrack) await sendTransport.produce({ track: audioTrack });
-            if (videoTrack) await sendTransport.produce({ track: videoTrack });
+            if (audioTrack) {
+              audioTrack.enabled = true;
+              const p = await sendTransport.produce({ track: audioTrack, appData: { kind: "audio" } });
+              audioProducerRef.current = p;
+              setMicOn(true);
+            }
+            if (videoTrack) {
+              videoTrack.enabled = true;
+              const p = await sendTransport.produce({ track: videoTrack, appData: { kind: "video" } });
+              videoProducerRef.current = p;
+              setCamOn(true);
+            }
           } catch (e: any) {
             setError(e?.message ?? "Не удалось получить доступ к камере/микрофону");
           }
@@ -150,6 +166,13 @@ export function LiveRoomClient({ liveServerUrl, token, canProduce }: Props) {
           setRemoteTracks((prev) => prev.filter((t) => t.producerId !== producerId));
         });
 
+        socket.on("existingProducers", ({ producers }: any) => {
+          if (!Array.isArray(producers)) return;
+          for (const p of producers) {
+            if (p?.producerId) consumeProducer(p.producerId).catch(() => {});
+          }
+        });
+
         if (!alive) return;
         setStatus("connected");
       } catch (e: any) {
@@ -168,6 +191,9 @@ export function LiveRoomClient({ liveServerUrl, token, canProduce }: Props) {
       try {
         sendTransportRef.current?.close?.();
         recvTransportRef.current?.close?.();
+      } catch {}
+      try {
+        localStreamRef.current?.getTracks()?.forEach((t) => t.stop());
       } catch {}
     };
   }, [liveServerUrl, token, canProduce]);
@@ -200,6 +226,44 @@ export function LiveRoomClient({ liveServerUrl, token, canProduce }: Props) {
 
       {canProduce ? (
         <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant={micOn ? "outline" : "default"}
+              aria-label={micOn ? "Выключить микрофон" : "Включить микрофон"}
+              onClick={() => {
+                const track = localStreamRef.current?.getAudioTracks?.()?.[0];
+                const producer = audioProducerRef.current;
+                const next = !micOn;
+                if (track) track.enabled = next;
+                try {
+                  if (producer) next ? producer.resume?.() : producer.pause?.();
+                } catch {}
+                setMicOn(next);
+              }}
+            >
+              {micOn ? "Микрофон: вкл" : "Микрофон: выкл"}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={camOn ? "outline" : "default"}
+              aria-label={camOn ? "Выключить камеру" : "Включить камеру"}
+              onClick={() => {
+                const track = localStreamRef.current?.getVideoTracks?.()?.[0];
+                const producer = videoProducerRef.current;
+                const next = !camOn;
+                if (track) track.enabled = next;
+                try {
+                  if (producer) next ? producer.resume?.() : producer.pause?.();
+                } catch {}
+                setCamOn(next);
+              }}
+            >
+              {camOn ? "Камера: вкл" : "Камера: выкл"}
+            </Button>
+          </div>
           <div className={`${tokens.typography.small} text-muted-foreground`}>Ваше видео (видно вам)</div>
           <video ref={localVideoRef} className="w-full max-w-xl rounded-xl border bg-black" autoPlay playsInline muted />
         </div>

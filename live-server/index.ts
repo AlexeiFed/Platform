@@ -141,6 +141,15 @@ io.on("connection", async (socket) => {
 
   socket.emit("routerRtpCapabilities", room.router.rtpCapabilities);
 
+  // Важно: если зритель подключился позже, ему нужно получить уже существующие продьюсеры,
+  // иначе он не увидит/не услышит эфир до появления новых потоков.
+  socket.emit("existingProducers", {
+    producers: [...room.producers.values()].map((p) => ({
+      producerId: p.id,
+      kind: p.kind,
+    })),
+  });
+
   socket.on("createWebRtcTransport", async (_, cb) => {
     try {
       const transport = await room.router.createWebRtcTransport({

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { LiveRoomClient } from "@/components/live/live-room-client";
 import { getAdminLiveJoinToken } from "../actions";
+import { LiveSpeakerRequestsHost } from "@/app/(student)/learn/[courseSlug]/event/[eventId]/live/live-speaker-requests-host";
 
 type Props = {
   params: Promise<{ eventId: string }>;
@@ -68,6 +69,8 @@ export default async function AdminLiveRoomPage({ params }: Props) {
       </div>
 
       <LiveRoomClient liveServerUrl={liveServerUrl} token={data.token} canProduce />
+
+      <LiveSpeakerRequestsHost eventId={eventId} />
     </div>
   );
 }
