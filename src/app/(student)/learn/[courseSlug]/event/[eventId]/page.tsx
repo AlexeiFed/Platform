@@ -22,6 +22,8 @@ import { computeMarathonEventDayStepper } from "@/lib/marathon-event-day-nav";
 import { MarathonEventDayStepper } from "@/components/shared/marathon-event-day-stepper";
 import { MarathonResumePointTracker } from "@/components/shared/marathon-resume";
 import type { ProductCriterion } from "@prisma/client";
+import { getOrCreateLiveRoom } from "./live/actions";
+import { LiveHostControls } from "./live/live-host-controls";
 
 type ContentBlock = {
   id: string;
@@ -122,6 +124,11 @@ export default async function MarathonEventPage({ params }: Props) {
   const lockedByTariff = Boolean(
     requiredCrit && critRow && !enrollmentHasCriterion(critRow, requiredCrit)
   );
+
+  const liveRoom =
+    event.type === "LIVE" && !lockedByTariff
+      ? await getOrCreateLiveRoom(event.id)
+      : null;
 
   const navEvents = await prisma.marathonEvent.findMany({
     where: { productId: product.id, published: true },
@@ -226,6 +233,33 @@ export default async function MarathonEventPage({ params }: Props) {
         </Card>
       ) : (
         <>
+          {event.type === "LIVE" && liveRoom && "success" in liveRoom && liveRoom.success ? (
+            <Card>
+              <CardContent className={`space-y-3 ${tokens.spacing.card}`}>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className={tokens.typography.h3}>Эфир</div>
+                    <div className={`${tokens.typography.small} text-muted-foreground`}>
+                      Статус:{" "}
+                      {liveRoom.data.status === "LIVE"
+                        ? "в эфире"
+                        : liveRoom.data.status === "ENDED"
+                          ? "завершён"
+                          : "ожидание"}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button asChild>
+                      <Link href={`/learn/${courseSlug}/event/${event.id}/live`}>Перейти в эфир</Link>
+                    </Button>
+                    {(session.user.role === "ADMIN" || session.user.role === "CURATOR") ? (
+                      <LiveHostControls eventId={event.id} status={liveRoom.data.status} />
+                    ) : null}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
       <Card>
         <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
           <div className="flex items-start gap-3">

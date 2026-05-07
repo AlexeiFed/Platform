@@ -15,6 +15,7 @@ import {
   ShoppingBag,
   Wallet,
   MessageSquare,
+  Video,
   User,
   LogOut,
 } from "lucide-react";
@@ -34,6 +35,7 @@ type NavItem = {
 const adminNav: NavItem[] = [
   { label: "Дашборд", href: "/admin", icon: LayoutDashboard },
   { label: "Курсы", href: "/admin/courses", icon: BookOpen },
+  { label: "Эфиры", href: "/admin/live", icon: Video },
   { label: "Пользователи", href: "/admin/users", icon: Users },
   { label: "Домашние задания", href: "/admin/homework", icon: ClipboardCheck },
   { label: "Обратная связь", href: "/admin/feedback", icon: MessageSquare },

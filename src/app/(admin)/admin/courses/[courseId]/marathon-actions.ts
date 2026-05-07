@@ -31,6 +31,7 @@ const marathonEventSchema = z.object({
   type: marathonEventTypeSchema,
   track: marathonTrackSchema.default("ALL"),
   dayOffset: z.coerce.number().int().min(0, "День марафона не может быть отрицательным"),
+  scheduledAt: z.string().optional(),
   weekNumber: z.coerce.number().int().min(0, "Неделя не может быть отрицательной (0 — подготовительный этап)").optional(),
   position: z.coerce.number().int().min(0).optional(),
   /** Порядок в списке = порядок уроков в программе (сервер сортирует по `lesson.order`). */
@@ -148,6 +149,7 @@ const buildMarathonEventFields = (
   type: input.type,
   track: input.track,
   dayOffset: input.dayOffset,
+  scheduledAt: parseOptionalDate(input.scheduledAt),
   weekNumber: input.weekNumber ?? null,
   position: input.position ?? 0,
   blocks: input.blocks ?? undefined,

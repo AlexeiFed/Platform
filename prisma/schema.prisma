@@ -31,6 +31,32 @@ enum HomeworkStatus {
   REJECTED
 }
 
+enum LiveRoomStatus {
+  SCHEDULED
+  LIVE
+  ENDED
+}
+
+enum LiveRoomParticipantRole {
+  HOST
+  SPEAKER
+  VIEWER
+}
+
+enum LiveRecordingStatus {
+  IDLE
+  RECORDING
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum LiveRecordingProfile {
+  AUDIO
+  LOW
+  HIGH
+}
+
 enum MarathonEventType {
   INFO
   TRAINING
@@ -98,6 +124,8 @@ model User {
   enrollments     Enrollment[]
   submissions     HomeworkSubmission[]
   chatMessages    ChatMessage[]
+  liveRoomParticipants LiveRoomParticipant[]
+  liveChatMessages     LiveChatMessage[]
   curatedProducts ProductCurator[]
   accounts        Account[]
   sessions        Session[]
@@ -429,6 +457,8 @@ model MarathonEvent {
   type        MarathonEventType
   track       MarathonTrack     @default(ALL)
   dayOffset   Int
+  /// Дата/время старта (используем для LIVE; для остальных типов может быть null)
+  scheduledAt DateTime?
   weekNumber  Int?
   position    Int               @default(0)
   blocks      Json?
@@ -439,10 +469,93 @@ model MarathonEvent {
   product      Product                 @relation(fields: [productId], references: [id], onDelete: Cascade)
   eventLessons MarathonEventLesson[]
   completions  MarathonEventCompletion[]
+  liveRooms    LiveRoom[]
 
   @@index([productId, dayOffset, position])
   @@index([productId, type])
+  @@index([productId, scheduledAt])
   @@map("marathon_events")
+}
+
+model LiveRoom {
+  id             String                 @id @default(uuid())
+  marathonEventId String                @unique
+  status         LiveRoomStatus         @default(SCHEDULED)
+  title          String?
+  /// Максимум спикеров в режиме вебинара
+  maxSpeakers    Int                    @default(6)
+  startedAt      DateTime?
+  endedAt        DateTime?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  marathonEvent  MarathonEvent          @relation(fields: [marathonEventId], references: [id], onDelete: Cascade)
+  participants   LiveRoomParticipant[]
+  recordings     LiveRoomRecording[]
+  chatMessages   LiveChatMessage[]
+
+  @@index([marathonEventId])
+  @@index([status])
+  @@map("live_rooms")
+}
+
+model LiveRoomParticipant {
+  id        String                   @id @default(uuid())
+  roomId    String
+  userId    String
+  role      LiveRoomParticipantRole  @default(VIEWER)
+  /// Запрос “стать спикером” (для вебинара)
+  speakerRequestedAt DateTime?
+  speakerApprovedAt  DateTime?
+  joinedAt  DateTime                 @default(now())
+  leftAt    DateTime?
+
+  room      LiveRoom                 @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user      User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, userId])
+  @@index([roomId])
+  @@index([userId])
+  @@index([role])
+  @@map("live_room_participants")
+}
+
+model LiveRoomRecording {
+  id        String               @id @default(uuid())
+  roomId    String
+  status    LiveRecordingStatus  @default(IDLE)
+  profile   LiveRecordingProfile
+  startedAt DateTime?
+  endedAt   DateTime?
+  /// HLS manifest (m3u8) в S3
+  manifestUrl String?
+  durationSec Int?
+  sizeBytes   BigInt?
+  error       String?
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  room      LiveRoom             @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@index([roomId])
+  @@index([status])
+  @@map("live_room_recordings")
+}
+
+model LiveChatMessage {
+  id        String   @id @default(uuid())
+  roomId    String
+  userId    String
+  content   String   @db.Text
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+
+  room LiveRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([roomId, createdAt])
+  @@index([userId])
+  @@map("live_chat_messages")
 }
 
 /// Прикреплённые к событию уроки (порядок — поле position).

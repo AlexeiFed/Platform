@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "live:server": "tsx live-server/index.ts",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
@@ -41,7 +42,10 @@
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.577.0",
+    "mediasoup": "^3.19.2",
+    "mediasoup-client": "^3.16.7",
     "next": "16.2.1",
     "next-auth": "5.0.0-beta.30",
     "next-themes": "^0.4.6",
@@ -52,22 +56,26 @@
     "react-hook-form": "^7.72.0",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1",
     "tailwind-merge": "^3.5.0",
     "zod": "^4.3.6"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "prisma",
       "@prisma/client",
       "@prisma/engines",
       "esbuild",
-      "unrs-resolver",
-      "sharp"
+      "mediasoup",
+      "prisma",
+      "sharp",
+      "unrs-resolver"
     ]
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/bcryptjs": "^3.0.0",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^20",
     "@types/nodemailer": "^8.0.0",
     "@types/react": "^19",

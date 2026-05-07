@@ -117,6 +117,7 @@ type SerializedMarathonEvent = {
   type: MarathonEventType;
   track: MarathonTrack;
   dayOffset: number;
+  scheduledAt: string | null;
   weekNumber: number | null;
   position: number;
   lessonIds: string[];
@@ -143,6 +144,7 @@ type MarathonEventForm = {
   type: MarathonEventType;
   track: MarathonTrack;
   dayOffset: string;
+  scheduledAt: string;
   weekNumber: string;
   lessonIds: string[];
   published: boolean;
@@ -171,10 +173,17 @@ function getEmptyMarathonEventForm(): MarathonEventForm {
     type: "INFO",
     track: "ALL",
     dayOffset: "0",
+    scheduledAt: "",
     weekNumber: "",
     lessonIds: [],
     published: false,
   };
+}
+
+function formatDatetimeLocalValue(iso: string) {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 function MarathonEventFields({
@@ -260,6 +269,20 @@ function MarathonEventFields({
           </select>
         </div>
       </div>
+
+      {form.type === "LIVE" ? (
+        <div className="space-y-2">
+          <label className={tokens.typography.label}>Дата и время эфира</label>
+          <Input
+            type="datetime-local"
+            value={form.scheduledAt}
+            onChange={(e) => onPatch({ scheduledAt: e.target.value })}
+          />
+          <div className={`${tokens.typography.small} text-muted-foreground`}>
+            Это время используется в админ-разделе «Эфиры» для календаря/списка комнат.
+          </div>
+        </div>
+      ) : null}
 
       <MarathonEventLessonPicker
         lessons={lessons.map((l) => ({ id: l.id, order: l.order, title: l.title }))}
@@ -929,6 +952,7 @@ export function CourseEditor({
         type: marathonEventForm.type,
         track: marathonEventForm.track,
         dayOffset: Number(marathonEventForm.dayOffset),
+        scheduledAt: marathonEventForm.scheduledAt || undefined,
         weekNumber:
           marathonEventForm.weekNumber.trim() === "" ? undefined : Number(marathonEventForm.weekNumber),
         lessonIds: marathonEventForm.lessonIds,
@@ -961,6 +985,7 @@ export function CourseEditor({
       type: event.type,
       track: event.track,
       dayOffset: String(event.dayOffset),
+      scheduledAt: event.scheduledAt ? formatDatetimeLocalValue(event.scheduledAt) : "",
       weekNumber: event.weekNumber != null ? String(event.weekNumber) : "",
       lessonIds: [...event.lessonIds],
       published: event.published,
@@ -989,6 +1014,7 @@ export function CourseEditor({
         type: marathonEditForm.type,
         track: marathonEditForm.track,
         dayOffset: Number(marathonEditForm.dayOffset),
+        scheduledAt: marathonEditForm.scheduledAt || undefined,
         weekNumber:
           marathonEditForm.weekNumber.trim() === "" ? undefined : Number(marathonEditForm.weekNumber),
         lessonIds: marathonEditForm.lessonIds,

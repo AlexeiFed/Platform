@@ -79,6 +79,7 @@ export default async function CourseEditorPage({ params }: Props) {
       ...event,
       lessonIds: eventLessons.map((el) => el.lessonId),
       blocks: event.blocks,
+      scheduledAt: event.scheduledAt?.toISOString() ?? null,
       createdAt: createdAt.toISOString(),
       updatedAt: updatedAt.toISOString(),
     })
