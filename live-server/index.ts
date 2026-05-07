@@ -21,6 +21,7 @@ const tokenSchema = z.object({
   roomId: z.string().uuid(),
   userId: z.string().uuid(),
   role: z.enum(["HOST", "SPEAKER", "VIEWER"]),
+  name: z.string().min(1).optional(),
 });
 
 type RoomState = {
@@ -35,6 +36,7 @@ type RoomState = {
       socketId: string;
       userId: string;
       role: "HOST" | "SPEAKER" | "VIEWER";
+      name: string | null;
       transportIds: Set<string>;
       producerIds: Set<string>;
       consumerIds: Set<string>;
@@ -125,6 +127,7 @@ io.on("connection", async (socket) => {
     socketId: socket.id,
     userId: live.userId,
     role: live.role,
+    name: live.name ?? null,
     transportIds: new Set(),
     producerIds: new Set(),
     consumerIds: new Set(),
@@ -147,8 +150,20 @@ io.on("connection", async (socket) => {
     producers: [...room.producers.values()].map((p) => ({
       producerId: p.id,
       kind: p.kind,
+      userId: (p.appData as any)?.userId ?? null,
+      paused: Boolean((p as any).paused),
     })),
   });
+
+  socket.emit("peers", {
+    peers: [...room.peers.values()].map((p) => ({
+      userId: p.userId,
+      role: p.role,
+      name: p.name,
+    })),
+  });
+
+  socket.to(roomId).emit("peerJoined", { userId: live.userId, role: live.role, name: live.name ?? null });
 
   socket.on("createWebRtcTransport", async (_, cb) => {
     try {
@@ -209,7 +224,11 @@ io.on("connection", async (socket) => {
       const transport = room.transports.get(transportId);
       if (!transport) return cb({ ok: false, error: "transport not found" });
 
-      const producer = await transport.produce({ kind, rtpParameters, appData });
+      const producer = await transport.produce({
+        kind,
+        rtpParameters,
+        appData: { ...(appData ?? {}), userId: peer.userId, kind },
+      });
       room.producers.set(producer.id, producer);
       peer.producerIds.add(producer.id);
 
@@ -227,6 +246,51 @@ io.on("connection", async (socket) => {
       cb({ ok: true, data: { id: producer.id } });
     } catch (e: any) {
       cb({ ok: false, error: e?.message ?? "produce error" });
+    }
+  });
+
+  socket.on("setUserAudioMuted", async ({ userId, muted }, cb) => {
+    try {
+      const peer = room.peers.get(peerKey);
+      if (!peer || peer.role !== "HOST") return cb?.({ ok: false, error: "forbidden" });
+      const target = String(userId);
+      const isMuted = Boolean(muted);
+
+      for (const p of room.producers.values()) {
+        const app = (p.appData ?? {}) as any;
+        if (app.userId !== target) continue;
+        if (p.kind !== "audio") continue;
+        try {
+          if (isMuted) await (p as any).pause?.();
+          else await (p as any).resume?.();
+        } catch {}
+        socket.to(roomId).emit("producerMuted", { producerId: p.id, muted: isMuted });
+      }
+
+      cb?.({ ok: true });
+    } catch (e: any) {
+      cb?.({ ok: false, error: e?.message ?? "mute error" });
+    }
+  });
+
+  socket.on("setAllAudioMuted", async ({ muted }, cb) => {
+    try {
+      const peer = room.peers.get(peerKey);
+      if (!peer || peer.role !== "HOST") return cb?.({ ok: false, error: "forbidden" });
+      const isMuted = Boolean(muted);
+
+      for (const p of room.producers.values()) {
+        if (p.kind !== "audio") continue;
+        try {
+          if (isMuted) await (p as any).pause?.();
+          else await (p as any).resume?.();
+        } catch {}
+        socket.to(roomId).emit("producerMuted", { producerId: p.id, muted: isMuted });
+      }
+
+      cb?.({ ok: true });
+    } catch (e: any) {
+      cb?.({ ok: false, error: e?.message ?? "mute error" });
     }
   });
 
@@ -292,6 +356,7 @@ io.on("connection", async (socket) => {
     }
 
     room.peers.delete(peerKey);
+    socket.to(roomId).emit("peerLeft", { userId: live.userId });
 
     prisma.liveRoomParticipant
       .update({

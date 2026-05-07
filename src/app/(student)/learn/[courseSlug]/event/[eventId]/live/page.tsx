@@ -83,7 +83,7 @@ export default async function LivePage({ params }: Props) {
       ) : (
         <LiveSpeakerRequestsHost eventId={eventId} />
       )}
-      <LiveRoomClient liveServerUrl={liveServerUrl} token={token} canProduce={canProduce} />
+      <LiveRoomClient liveServerUrl={liveServerUrl} token={token} role={role} />
     </div>
   );
 }

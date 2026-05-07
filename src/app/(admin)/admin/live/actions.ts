@@ -39,7 +39,7 @@ export async function getAdminLiveJoinToken(eventId: string) {
     });
 
     const token = jwt.sign(
-      { roomId: room.id, userId: session.user.id, role: "HOST" },
+      { roomId: room.id, userId: session.user.id, role: "HOST", name: session.user.name ?? "Ведущий" },
       getJwtSecret(),
       { expiresIn: "6h" }
     );

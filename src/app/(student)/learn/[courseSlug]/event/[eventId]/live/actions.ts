@@ -148,7 +148,7 @@ export async function getLiveJoinToken(eventId: string) {
     });
 
     const token = jwt.sign(
-      { roomId: room.id, userId: session.user.id, role },
+      { roomId: room.id, userId: session.user.id, role, name: session.user.name ?? "Участник" },
       getJwtSecret(),
       { expiresIn: "6h" }
     );

@@ -68,7 +68,7 @@ export default async function AdminLiveRoomPage({ params }: Props) {
         </Button>
       </div>
 
-      <LiveRoomClient liveServerUrl={liveServerUrl} token={data.token} canProduce />
+      <LiveRoomClient liveServerUrl={liveServerUrl} token={data.token} role="HOST" />
 
       <LiveSpeakerRequestsHost eventId={eventId} />
     </div>
