@@ -6,8 +6,6 @@ import { LiveRoomClient } from "@/components/live/live-room-client";
 import { getLiveJoinToken } from "./actions";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { LiveSpeakerRequest } from "./live-speaker-request";
-import { LiveSpeakerRequestsHost } from "./live-speaker-requests-host";
 
 type Props = {
   params: Promise<{ courseSlug: string; eventId: string }>;
@@ -63,9 +61,6 @@ export default async function LivePage({ params }: Props) {
     speakerApprovedAt: string | null;
   };
 
-  const canProduce = role === "HOST" || role === "SPEAKER";
-  const isHost = role === "HOST";
-
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <div className="space-y-1">
@@ -74,15 +69,6 @@ export default async function LivePage({ params }: Props) {
           Статус: {room.status === "LIVE" ? "в эфире" : room.status === "SCHEDULED" ? "ожидание" : "завершён"}
         </div>
       </div>
-      {!isHost ? (
-        <LiveSpeakerRequest
-          eventId={eventId}
-          alreadyRequested={Boolean(participant?.speakerRequestedAt)}
-          approved={Boolean(participant?.speakerApprovedAt)}
-        />
-      ) : (
-        <LiveSpeakerRequestsHost eventId={eventId} />
-      )}
       <LiveRoomClient liveServerUrl={liveServerUrl} token={token} role={role} />
     </div>
   );

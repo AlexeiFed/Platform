@@ -219,7 +219,6 @@ io.on("connection", async (socket) => {
     try {
       const peer = room.peers.get(peerKey);
       if (!peer) return cb({ ok: false, error: "peer not found" });
-      if (peer.role === "VIEWER") return cb({ ok: false, error: "viewer cannot produce" });
 
       const transport = room.transports.get(transportId);
       if (!transport) return cb({ ok: false, error: "transport not found" });

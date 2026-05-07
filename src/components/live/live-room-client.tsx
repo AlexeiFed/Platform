@@ -31,6 +31,23 @@ type PeerRow = {
   name: string | null;
 };
 
+function decodeJwtPayload(token: string): any | null {
+  try {
+    const part = token.split(".")[1];
+    if (!part) return null;
+    const b64 = part.replace(/-/g, "+").replace(/_/g, "/");
+    const json = decodeURIComponent(
+      atob(b64)
+        .split("")
+        .map((c) => "%" + c.charCodeAt(0).toString(16).padStart(2, "0"))
+        .join("")
+    );
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
+
 function initials(name: string | null) {
   const raw = (name ?? "").trim();
   if (!raw) return "U";
@@ -41,8 +58,8 @@ function initials(name: string | null) {
 }
 
 export function LiveRoomClient({ liveServerUrl, token, role }: Props) {
-  const canProduce = role === "HOST" || role === "SPEAKER";
   const isHost = role === "HOST";
+  const canProduce = true; // "как в Zoom": все с видео, у студентов mic off по умолчанию
   const [status, setStatus] = useState<"connecting" | "connected" | "error">("connecting");
   const [error, setError] = useState("");
   const [remoteTracks, setRemoteTracks] = useState<RemoteTrack[]>([]);
@@ -61,7 +78,15 @@ export function LiveRoomClient({ liveServerUrl, token, role }: Props) {
   const audioProducerRef = useRef<any>(null);
   const videoProducerRef = useRef<any>(null);
 
-  const label = useMemo(() => (canProduce ? "Спикер/ведущий" : "Зритель"), [canProduce]);
+  const label = useMemo(() => (isHost ? "Ведущий" : "Участник"), [isHost]);
+  const self = useMemo(() => decodeJwtPayload(token) as { userId?: string } | null, [token]);
+  const selfUserId = self?.userId ? String(self.userId) : null;
+  const hostPeer = useMemo(() => peers.find((p) => p.role === "HOST") ?? null, [peers]);
+  const hostUserId = hostPeer?.userId ?? null;
+  const hostVideo = useMemo(() => {
+    if (!hostUserId) return null;
+    return remoteTracks.find((t) => t.userId === hostUserId && t.kind === "video") ?? null;
+  }, [remoteTracks, hostUserId]);
 
   useEffect(() => {
     let alive = true;
@@ -298,50 +323,44 @@ export function LiveRoomClient({ liveServerUrl, token, role }: Props) {
         </div>
       ) : null}
 
-      {canProduce ? (
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              size="icon"
-              variant={micOn ? "outline" : "secondary"}
-              aria-label={micOn ? "Выключить микрофон" : "Включить микрофон"}
-              onClick={() => {
-                const track = localStreamRef.current?.getAudioTracks?.()?.[0];
-                const producer = audioProducerRef.current;
-                const next = !micOn;
-                if (track) track.enabled = next;
-                try {
-                  if (producer) next ? producer.resume?.() : producer.pause?.();
-                } catch {}
-                setMicOn(next);
-              }}
-            >
-              {micOn ? <Mic /> : <MicOff />}
-            </Button>
-            <Button
-              type="button"
-              size="icon"
-              variant={camOn ? "outline" : "secondary"}
-              aria-label={camOn ? "Выключить камеру" : "Включить камеру"}
-              onClick={() => {
-                const track = localStreamRef.current?.getVideoTracks?.()?.[0];
-                const producer = videoProducerRef.current;
-                const next = !camOn;
-                if (track) track.enabled = next;
-                try {
-                  if (producer) next ? producer.resume?.() : producer.pause?.();
-                } catch {}
-                setCamOn(next);
-              }}
-            >
-              {camOn ? <Video /> : <VideoOff />}
-            </Button>
-          </div>
-          <div className={`${tokens.typography.small} text-muted-foreground`}>Ваше видео (видно вам)</div>
-          <video ref={localVideoRef} className="w-full max-w-xl rounded-xl border bg-black" autoPlay playsInline muted />
-        </div>
-      ) : null}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          size="icon"
+          variant={micOn ? "outline" : "secondary"}
+          aria-label={micOn ? "Выключить микрофон" : "Включить микрофон"}
+          onClick={() => {
+            const track = localStreamRef.current?.getAudioTracks?.()?.[0];
+            const producer = audioProducerRef.current;
+            const next = !micOn;
+            if (track) track.enabled = next;
+            try {
+              if (producer) next ? producer.resume?.() : producer.pause?.();
+            } catch {}
+            setMicOn(next);
+          }}
+        >
+          {micOn ? <Mic /> : <MicOff />}
+        </Button>
+        <Button
+          type="button"
+          size="icon"
+          variant={camOn ? "outline" : "secondary"}
+          aria-label={camOn ? "Выключить камеру" : "Включить камеру"}
+          onClick={() => {
+            const track = localStreamRef.current?.getVideoTracks?.()?.[0];
+            const producer = videoProducerRef.current;
+            const next = !camOn;
+            if (track) track.enabled = next;
+            try {
+              if (producer) next ? producer.resume?.() : producer.pause?.();
+            } catch {}
+            setCamOn(next);
+          }}
+        >
+          {camOn ? <Video /> : <VideoOff />}
+        </Button>
+      </div>
 
       <div className="space-y-2">
         <div className={tokens.typography.h3}>Эфир</div>
@@ -358,52 +377,61 @@ export function LiveRoomClient({ liveServerUrl, token, role }: Props) {
           ) : null}
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {peers.length === 0 ? (
-            <div className={`${tokens.typography.small} text-muted-foreground`}>Пока никого нет.</div>
-          ) : (
-            peers.map((p) => {
-              const video = remoteTracks.find((t) => t.userId === p.userId && t.kind === "video") ?? null;
-              const audio = remoteTracks.find((t) => t.userId === p.userId && t.kind === "audio") ?? null;
-              const muted = audio ? Boolean(producerMuted[audio.producerId]) : true;
-              return (
-                <div key={p.userId} className="overflow-hidden rounded-xl border bg-muted/20">
-                  <div className="relative aspect-video bg-black">
-                    {video ? (
-                      <RemoteVideo stream={video.stream} />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-3xl font-semibold text-white/80">
-                        {initials(p.name)}
+        <div className="relative overflow-hidden rounded-2xl border bg-black">
+          <div className="relative aspect-video w-full">
+            {isHost ? (
+              <video ref={localVideoRef} className="h-full w-full object-cover" autoPlay playsInline muted />
+            ) : hostVideo ? (
+              <RemoteVideo stream={hostVideo.stream} />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-5xl font-semibold text-white/80">
+                {initials(hostPeer?.name ?? null)}
+              </div>
+            )}
+
+            <div className="absolute left-3 top-3 flex max-w-full gap-2 overflow-x-auto rounded-xl bg-black/35 p-2 backdrop-blur">
+              {peers
+                .filter((p) => (isHost ? p.userId !== selfUserId : p.userId !== hostUserId))
+                .map((p) => {
+                  const video = remoteTracks.find((t) => t.userId === p.userId && t.kind === "video") ?? null;
+                  const audio = remoteTracks.find((t) => t.userId === p.userId && t.kind === "audio") ?? null;
+                  const muted = audio ? Boolean(producerMuted[audio.producerId]) : true;
+                  return (
+                    <div key={p.userId} className="relative h-20 w-28 shrink-0 overflow-hidden rounded-lg border border-white/20 bg-black">
+                      {video ? (
+                        <RemoteVideo stream={video.stream} />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-xl font-semibold text-white/80">
+                          {initials(p.name)}
+                        </div>
+                      )}
+                      <div className="absolute inset-x-1 bottom-1 flex items-center justify-between gap-1">
+                        <div className="truncate rounded bg-black/55 px-1 py-0.5 text-[10px] text-white">
+                          {p.name ?? p.userId}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <div className="rounded bg-black/55 p-1 text-white">{muted ? <MicOff className="h-3 w-3" /> : <Mic className="h-3 w-3" />}</div>
+                          {isHost && p.userId !== selfUserId ? (
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7 bg-black/55 text-white hover:bg-black/70"
+                              aria-label={muted ? "Включить микрофон участнику" : "Выключить микрофон участнику"}
+                              onClick={() =>
+                                socketRef.current?.emit("setUserAudioMuted", { userId: p.userId, muted: !muted }, () => {})
+                              }
+                            >
+                              {muted ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
+                            </Button>
+                          ) : null}
+                        </div>
                       </div>
-                    )}
-                    <div className="absolute right-2 top-2 flex items-center gap-1">
-                      <Badge variant="secondary" className="gap-1">
-                        {muted ? <MicOff className="h-3 w-3" /> : <Mic className="h-3 w-3" />}
-                      </Badge>
-                      {isHost && p.role !== "HOST" ? (
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          aria-label={muted ? "Включить микрофон участнику" : "Выключить микрофон участнику"}
-                          onClick={() => socketRef.current?.emit("setUserAudioMuted", { userId: p.userId, muted: !muted }, () => {})}
-                        >
-                          {muted ? <Mic /> : <MicOff />}
-                        </Button>
-                      ) : null}
                     </div>
-                  </div>
-                  <div className="flex items-center justify-between gap-2 p-2">
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-medium">{p.name ?? p.userId}</div>
-                      <div className="text-xs text-muted-foreground">{p.role === "HOST" ? "Ведущий" : p.role === "SPEAKER" ? "Спикер" : "Зритель"}</div>
-                    </div>
-                  </div>
-                  {audio ? <RemoteAudio stream={audio.stream} /> : null}
-                </div>
-              );
-            })
-          )}
+                  );
+                })}
+            </div>
+          </div>
         </div>
       </div>
     </div>
