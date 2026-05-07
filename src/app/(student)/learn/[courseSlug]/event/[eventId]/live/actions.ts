@@ -124,6 +124,7 @@ export async function getLiveJoinToken(eventId: string) {
       select: { id: true, status: true, maxSpeakers: true },
     });
     if (!room) return { error: "Эфир ещё не начался" } as const;
+    if (room.status !== "LIVE") return { error: "Эфир ещё не начался" } as const;
 
     const existingParticipant = await prisma.liveRoomParticipant.findUnique({
       where: { roomId_userId: { roomId: room.id, userId: session.user.id } },

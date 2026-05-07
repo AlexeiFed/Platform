@@ -26,9 +26,9 @@ export async function getAdminLiveJoinToken(eventId: string) {
 
     const room = await prisma.liveRoom.upsert({
       where: { marathonEventId: event.id },
-      update: {},
-      create: { marathonEventId: event.id },
-      select: { id: true, status: true, maxSpeakers: true },
+      update: { status: "LIVE", startedAt: new Date(), endedAt: null },
+      create: { marathonEventId: event.id, status: "LIVE", startedAt: new Date() },
+      select: { id: true, status: true, maxSpeakers: true, startedAt: true },
     });
 
     await prisma.liveRoomParticipant.upsert({
