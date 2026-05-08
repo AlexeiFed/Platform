@@ -12,8 +12,6 @@ import {
 } from "@/lib/marathon-live-broadcast";
 import type { LiveRoomParticipantRole } from "@prisma/client";
 
-export { startLiveRoom, endLiveRoom } from "@/lib/live-room-actions";
-
 const getJwtSecret = () => {
   const secret = process.env.LIVE_SERVER_JWT_SECRET;
   if (!secret || secret.length < 20) throw new Error("LIVE_SERVER_JWT_SECRET is not set");
