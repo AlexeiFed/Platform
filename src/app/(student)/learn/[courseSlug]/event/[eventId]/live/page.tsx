@@ -55,11 +55,6 @@ export default async function LivePage({ params }: Props) {
     role: "HOST" | "SPEAKER" | "VIEWER";
     room: { status: "SCHEDULED" | "LIVE" | "ENDED" };
   };
-  const participant = (join as any).data.participant as {
-    role: "HOST" | "SPEAKER" | "VIEWER";
-    speakerRequestedAt: string | null;
-    speakerApprovedAt: string | null;
-  };
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -69,7 +64,13 @@ export default async function LivePage({ params }: Props) {
           Статус: {room.status === "LIVE" ? "в эфире" : room.status === "SCHEDULED" ? "ожидание" : "завершён"}
         </div>
       </div>
-      <LiveRoomClient liveServerUrl={liveServerUrl} token={token} role={role} />
+      <LiveRoomClient
+        liveServerUrl={liveServerUrl}
+        token={token}
+        role={role}
+        marathonEventId={eventId}
+        afterEndRedirectHref={role === "HOST" ? `/learn/${courseSlug}/event/${eventId}` : undefined}
+      />
     </div>
   );
 }

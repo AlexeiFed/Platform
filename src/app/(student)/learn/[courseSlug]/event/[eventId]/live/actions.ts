@@ -3,10 +3,16 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import jwt from "jsonwebtoken";
-import { revalidatePath } from "next/cache";
 import { enrollmentHasCriterion, loadEnrollmentForCriteriaByUserProduct } from "@/lib/enrollment-criteria";
 import { criterionForMarathonEventType } from "@/lib/product-criteria";
-import type { LiveRoomParticipantRole, LiveRoomStatus } from "@prisma/client";
+import {
+  getLiveBroadcastDateKey,
+  isMarathonLiveJoinAllowedToday,
+  marathonLiveJoinDeniedMessage,
+} from "@/lib/marathon-live-broadcast";
+import type { LiveRoomParticipantRole } from "@prisma/client";
+
+export { startLiveRoom, endLiveRoom } from "@/lib/live-room-actions";
 
 const getJwtSecret = () => {
   const secret = process.env.LIVE_SERVER_JWT_SECRET;
@@ -41,55 +47,25 @@ export async function getOrCreateLiveRoom(eventId: string) {
       where: { marathonEventId: eventId },
       update: {},
       create: { marathonEventId: eventId },
-      select: { id: true, status: true, maxSpeakers: true, marathonEvent: { select: { product: { select: { slug: true } } } } },
+      select: {
+        id: true,
+        status: true,
+        maxSpeakers: true,
+        marathonEvent: { select: { product: { select: { slug: true } } } },
+      },
     });
 
-    return { success: true, data: { id: room.id, status: room.status, maxSpeakers: room.maxSpeakers, productSlug: room.marathonEvent.product.slug } } as const;
+    return {
+      success: true,
+      data: {
+        id: room.id,
+        status: room.status,
+        maxSpeakers: room.maxSpeakers,
+        productSlug: room.marathonEvent.product.slug,
+      },
+    } as const;
   } catch (e) {
     console.error("[getOrCreateLiveRoom]", e);
-    return { error: "Произошла ошибка" } as const;
-  }
-}
-
-export async function startLiveRoom(eventId: string) {
-  const session = await auth();
-  if (!session || (session.user.role !== "ADMIN" && session.user.role !== "CURATOR")) {
-    return { error: "Нет доступа" } as const;
-  }
-
-  try {
-    const room = await prisma.liveRoom.upsert({
-      where: { marathonEventId: eventId },
-      update: { status: "LIVE" satisfies LiveRoomStatus, startedAt: new Date(), endedAt: null },
-      create: { marathonEventId: eventId, status: "LIVE" satisfies LiveRoomStatus, startedAt: new Date() },
-      select: { id: true, marathonEvent: { select: { product: { select: { slug: true } } } } },
-    });
-    revalidatePath(`/learn/${room.marathonEvent.product.slug}/event/${eventId}`);
-    revalidatePath(`/learn/${room.marathonEvent.product.slug}/event/${eventId}/live`);
-    return { success: true, data: { roomId: room.id } } as const;
-  } catch (e) {
-    console.error("[startLiveRoom]", e);
-    return { error: "Произошла ошибка" } as const;
-  }
-}
-
-export async function endLiveRoom(eventId: string) {
-  const session = await auth();
-  if (!session || (session.user.role !== "ADMIN" && session.user.role !== "CURATOR")) {
-    return { error: "Нет доступа" } as const;
-  }
-
-  try {
-    const room = await prisma.liveRoom.update({
-      where: { marathonEventId: eventId },
-      data: { status: "ENDED" satisfies LiveRoomStatus, endedAt: new Date() },
-      select: { id: true, marathonEvent: { select: { product: { select: { slug: true } } } } },
-    });
-    revalidatePath(`/learn/${room.marathonEvent.product.slug}/event/${eventId}`);
-    revalidatePath(`/learn/${room.marathonEvent.product.slug}/event/${eventId}/live`);
-    return { success: true } as const;
-  } catch (e) {
-    console.error("[endLiveRoom]", e);
     return { error: "Произошла ошибка" } as const;
   }
 }
@@ -101,7 +77,14 @@ export async function getLiveJoinToken(eventId: string) {
   try {
     const event = await prisma.marathonEvent.findUnique({
       where: { id: eventId },
-      select: { id: true, type: true, productId: true, product: { select: { slug: true, type: true } } },
+      select: {
+        id: true,
+        type: true,
+        productId: true,
+        dayOffset: true,
+        scheduledAt: true,
+        product: { select: { slug: true, type: true, startDate: true } },
+      },
     });
     if (!event || event.product.type !== "MARATHON") return { error: "Событие не найдено" } as const;
 
@@ -117,13 +100,30 @@ export async function getLiveJoinToken(eventId: string) {
       return { error: "Эфиры недоступны в вашем тарифе" } as const;
     }
 
-    // Важно: студент должен заходить только в комнату, созданную для этого события.
-    // Комнату создаёт ведущий (админ/куратор) при старте/входе в эфир.
+    const gate = isMarathonLiveJoinAllowedToday({
+      dayOffset: event.dayOffset,
+      scheduledAt: event.scheduledAt,
+      productStartDate: event.product.startDate,
+    });
+    if (!gate.ok) {
+      return { error: marathonLiveJoinDeniedMessage(gate) } as const;
+    }
+
+    const broadcastDay = getLiveBroadcastDateKey({
+      dayOffset: event.dayOffset,
+      scheduledAt: event.scheduledAt,
+      productStartDate: event.product.startDate,
+    });
+    if (!broadcastDay) {
+      return { error: marathonLiveJoinDeniedMessage({ ok: false, reason: "no_schedule" }) } as const;
+    }
+
     const room = await prisma.liveRoom.findUnique({
       where: { marathonEventId: eventId },
       select: { id: true, status: true, maxSpeakers: true },
     });
     if (!room) return { error: "Эфир ещё не начался" } as const;
+    if (room.status === "ENDED") return { error: "Эфир завершён, повторный вход недоступен" } as const;
     if (room.status !== "LIVE") return { error: "Эфир ещё не начался" } as const;
 
     const existingParticipant = await prisma.liveRoomParticipant.findUnique({
@@ -131,10 +131,6 @@ export async function getLiveJoinToken(eventId: string) {
       select: { role: true, speakerApprovedAt: true },
     });
 
-    // Роль:
-    // - HOST: admin/curator
-    // - SPEAKER: если апрувнули (или уже был спикером)
-    // - VIEWER: иначе
     const role: LiveRoomParticipantRole =
       session.user.role === "ADMIN" || session.user.role === "CURATOR"
         ? "HOST"
@@ -150,9 +146,16 @@ export async function getLiveJoinToken(eventId: string) {
     });
 
     const token = jwt.sign(
-      { roomId: room.id, userId: session.user.id, role, name: session.user.name ?? "Участник" },
+      {
+        roomId: room.id,
+        marathonEventId: event.id,
+        broadcastDay,
+        userId: session.user.id,
+        role,
+        name: session.user.name ?? "Участник",
+      },
       getJwtSecret(),
-      { expiresIn: "6h" }
+      { expiresIn: "8h" }
     );
 
     return {
@@ -180,12 +183,34 @@ export async function requestSpeaker(eventId: string) {
   if (!session) return { error: "Необходимо войти в аккаунт" } as const;
 
   try {
-    const room = await prisma.liveRoom.upsert({
-      where: { marathonEventId: eventId },
-      update: {},
-      create: { marathonEventId: eventId },
-      select: { id: true },
+    const event = await prisma.marathonEvent.findUnique({
+      where: { id: eventId },
+      select: {
+        id: true,
+        productId: true,
+        dayOffset: true,
+        scheduledAt: true,
+        product: { select: { startDate: true } },
+      },
     });
+    if (!event) return { error: "Событие не найдено" } as const;
+
+    const gate = isMarathonLiveJoinAllowedToday({
+      dayOffset: event.dayOffset,
+      scheduledAt: event.scheduledAt,
+      productStartDate: event.product.startDate,
+    });
+    if (!gate.ok) {
+      return { error: marathonLiveJoinDeniedMessage(gate) } as const;
+    }
+
+    const room = await prisma.liveRoom.findUnique({
+      where: { marathonEventId: eventId },
+      select: { id: true, status: true },
+    });
+    if (!room || room.status !== "LIVE") {
+      return { error: "Запрос спикера доступен только во время эфира" } as const;
+    }
 
     await prisma.liveRoomParticipant.upsert({
       where: { roomId_userId: { roomId: room.id, userId: session.user.id } },
@@ -278,4 +303,3 @@ export async function approveSpeaker(eventId: string, userId: string) {
     return { error: "Произошла ошибка" } as const;
   }
 }
-

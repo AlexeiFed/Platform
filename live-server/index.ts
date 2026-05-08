@@ -14,11 +14,29 @@ const env = z
     LIVE_RTC_MIN_PORT: z.coerce.number().default(40000),
     LIVE_RTC_MAX_PORT: z.coerce.number().default(49999),
     LIVE_ANNOUNCED_IP: z.string().optional(),
+    MARATHON_TIME_ZONE: z.string().optional().default("Europe/Moscow"),
   })
   .parse(process.env);
 
+function marathonDateKeyInZone(value: Date, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(value);
+
+  const year = parts.find((p) => p.type === "year")?.value ?? "0000";
+  const month = parts.find((p) => p.type === "month")?.value ?? "00";
+  const day = parts.find((p) => p.type === "day")?.value ?? "00";
+
+  return `${year}-${month}-${day}`;
+}
+
 const tokenSchema = z.object({
   roomId: z.string().uuid(),
+  marathonEventId: z.string().uuid(),
+  broadcastDay: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   userId: z.string().uuid(),
   role: z.enum(["HOST", "SPEAKER", "VIEWER"]),
   name: z.string().min(1).optional(),
@@ -114,11 +132,25 @@ const io = new Server(server, {
   },
 });
 
-io.use((socket, next) => {
+io.use(async (socket, next) => {
   try {
     const token = socket.handshake.auth?.token ?? socket.handshake.query?.token;
     if (!token || typeof token !== "string") return next(new Error("No token"));
     const parsed = verifyToken(token);
+
+    const todayKey = marathonDateKeyInZone(new Date(), env.MARATHON_TIME_ZONE);
+    if (parsed.broadcastDay !== todayKey) {
+      return next(new Error("Wrong broadcast day"));
+    }
+
+    const row = await prisma.liveRoom.findUnique({
+      where: { id: parsed.roomId },
+      select: { marathonEventId: true, status: true },
+    });
+    if (!row) return next(new Error("Room not found"));
+    if (row.marathonEventId !== parsed.marathonEventId) return next(new Error("Room mismatch"));
+    if (row.status === "ENDED") return next(new Error("Room ended"));
+
     (socket.data as any).live = parsed;
     next();
   } catch (e) {

@@ -5,7 +5,9 @@ import { tokens } from "@/lib/design-tokens";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { LiveRoomClient } from "@/components/live/live-room-client";
+import { LiveHostControls } from "@/components/live/live-host-controls";
 import { getAdminLiveJoinToken } from "../actions";
+import { isMarathonLiveJoinAllowedToday } from "@/lib/marathon-live-broadcast";
 
 type Props = {
   params: Promise<{ eventId: string }>;
@@ -21,9 +23,28 @@ export default async function AdminLiveRoomPage({ params }: Props) {
 
   const event = await prisma.marathonEvent.findUnique({
     where: { id: eventId },
-    select: { id: true, title: true, type: true },
+    select: {
+      id: true,
+      title: true,
+      type: true,
+      dayOffset: true,
+      scheduledAt: true,
+      product: { select: { startDate: true } },
+    },
   });
   if (!event || event.type !== "LIVE") notFound();
+
+  const liveDayOk = isMarathonLiveJoinAllowedToday({
+    dayOffset: event.dayOffset,
+    scheduledAt: event.scheduledAt,
+    productStartDate: event.product.startDate,
+  }).ok;
+
+  const liveRow = await prisma.liveRoom.findUnique({
+    where: { marathonEventId: eventId },
+    select: { status: true },
+  });
+  const roomStatus = liveRow?.status ?? "SCHEDULED";
 
   const join = await getAdminLiveJoinToken(eventId);
   if ("error" in join && join.error) {
@@ -68,7 +89,15 @@ export default async function AdminLiveRoomPage({ params }: Props) {
         </Button>
       </div>
 
-      <LiveRoomClient liveServerUrl={liveServerUrl} token={data.token} role="HOST" />
+      <LiveHostControls eventId={eventId} status={roomStatus} joinDayAllowed={liveDayOk} />
+
+      <LiveRoomClient
+        liveServerUrl={liveServerUrl}
+        token={data.token}
+        role="HOST"
+        marathonEventId={eventId}
+        afterEndRedirectHref="/admin/live"
+      />
 
       {data.productSlug ? (
         <div className="rounded-xl border bg-muted/20 p-3">

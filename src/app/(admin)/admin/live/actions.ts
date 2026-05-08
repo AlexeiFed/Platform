@@ -3,6 +3,11 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import jwt from "jsonwebtoken";
+import {
+  getLiveBroadcastDateKey,
+  isMarathonLiveJoinAllowedToday,
+  marathonLiveJoinDeniedMessage,
+} from "@/lib/marathon-live-broadcast";
 
 const getJwtSecret = () => {
   const secret = process.env.LIVE_SERVER_JWT_SECRET;
@@ -19,17 +24,47 @@ export async function getAdminLiveJoinToken(eventId: string) {
   try {
     const event = await prisma.marathonEvent.findUnique({
       where: { id: eventId },
-      select: { id: true, title: true, type: true, productId: true, product: { select: { slug: true, type: true } } },
+      select: {
+        id: true,
+        title: true,
+        type: true,
+        productId: true,
+        dayOffset: true,
+        scheduledAt: true,
+        product: { select: { slug: true, type: true, startDate: true } },
+      },
     });
     if (!event || event.product.type !== "MARATHON") return { error: "Событие не найдено" } as const;
     if (event.type !== "LIVE") return { error: "Это не событие эфира" } as const;
 
+    const gate = isMarathonLiveJoinAllowedToday({
+      dayOffset: event.dayOffset,
+      scheduledAt: event.scheduledAt,
+      productStartDate: event.product.startDate,
+    });
+    if (!gate.ok) {
+      return { error: marathonLiveJoinDeniedMessage(gate) } as const;
+    }
+
+    const broadcastDay = getLiveBroadcastDateKey({
+      dayOffset: event.dayOffset,
+      scheduledAt: event.scheduledAt,
+      productStartDate: event.product.startDate,
+    });
+    if (!broadcastDay) {
+      return { error: marathonLiveJoinDeniedMessage({ ok: false, reason: "no_schedule" }) } as const;
+    }
+
     const room = await prisma.liveRoom.upsert({
       where: { marathonEventId: event.id },
-      update: { status: "LIVE", startedAt: new Date(), endedAt: null },
-      create: { marathonEventId: event.id, status: "LIVE", startedAt: new Date() },
-      select: { id: true, status: true, maxSpeakers: true, startedAt: true },
+      update: {},
+      create: { marathonEventId: event.id },
+      select: { id: true, status: true, maxSpeakers: true },
     });
+
+    if (room.status === "ENDED") {
+      return { error: "Это событие эфира завершено" } as const;
+    }
 
     await prisma.liveRoomParticipant.upsert({
       where: { roomId_userId: { roomId: room.id, userId: session.user.id } },
@@ -39,9 +74,16 @@ export async function getAdminLiveJoinToken(eventId: string) {
     });
 
     const token = jwt.sign(
-      { roomId: room.id, userId: session.user.id, role: "HOST", name: session.user.name ?? "Ведущий" },
+      {
+        roomId: room.id,
+        marathonEventId: event.id,
+        broadcastDay,
+        userId: session.user.id,
+        role: "HOST",
+        name: session.user.name ?? "Ведущий",
+      },
       getJwtSecret(),
-      { expiresIn: "6h" }
+      { expiresIn: "8h" }
     );
 
     return {
@@ -58,4 +100,3 @@ export async function getAdminLiveJoinToken(eventId: string) {
     return { error: "Произошла ошибка" } as const;
   }
 }
-

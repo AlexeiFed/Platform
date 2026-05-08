@@ -23,7 +23,11 @@ import { MarathonEventDayStepper } from "@/components/shared/marathon-event-day-
 import { MarathonResumePointTracker } from "@/components/shared/marathon-resume";
 import type { ProductCriterion } from "@prisma/client";
 import { getOrCreateLiveRoom } from "./live/actions";
-import { LiveHostControls } from "./live/live-host-controls";
+import { LiveHostControls } from "@/components/live/live-host-controls";
+import {
+  isMarathonLiveJoinAllowedToday,
+  marathonLiveJoinDeniedMessage,
+} from "@/lib/marathon-live-broadcast";
 
 type ContentBlock = {
   id: string;
@@ -129,6 +133,18 @@ export default async function MarathonEventPage({ params }: Props) {
     event.type === "LIVE" && !lockedByTariff
       ? await getOrCreateLiveRoom(event.id)
       : null;
+
+  const liveDayGate =
+    event.type === "LIVE"
+      ? isMarathonLiveJoinAllowedToday({
+          dayOffset: event.dayOffset,
+          scheduledAt: event.scheduledAt,
+          productStartDate: product.startDate,
+        })
+      : ({ ok: true } as const);
+
+  const canEnterLiveToday = liveDayGate.ok;
+  const liveDayBlockMessage = !canEnterLiveToday ? marathonLiveJoinDeniedMessage(liveDayGate) : null;
 
   const navEvents = await prisma.marathonEvent.findMany({
     where: { productId: product.id, published: true },
@@ -249,11 +265,25 @@ export default async function MarathonEventPage({ params }: Props) {
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <Button asChild>
-                      <Link href={`/learn/${courseSlug}/event/${event.id}/live`}>Перейти в эфир</Link>
-                    </Button>
+                    {liveRoom.data.status === "ENDED" ? (
+                      <div className={`max-w-sm ${tokens.typography.small} text-muted-foreground`}>
+                        Эфир завершён, вход в комнату недоступен.
+                      </div>
+                    ) : canEnterLiveToday ? (
+                      <Button asChild>
+                        <Link href={`/learn/${courseSlug}/event/${event.id}/live`}>Перейти в эфир</Link>
+                      </Button>
+                    ) : (
+                      <div className={`max-w-sm ${tokens.typography.small} text-muted-foreground`}>
+                        {liveDayBlockMessage ?? "Эфир сейчас недоступен."}
+                      </div>
+                    )}
                     {(session.user.role === "ADMIN" || session.user.role === "CURATOR") ? (
-                      <LiveHostControls eventId={event.id} status={liveRoom.data.status} />
+                      <LiveHostControls
+                        eventId={event.id}
+                        status={liveRoom.data.status}
+                        joinDayAllowed={canEnterLiveToday}
+                      />
                     ) : null}
                   </div>
                 </div>

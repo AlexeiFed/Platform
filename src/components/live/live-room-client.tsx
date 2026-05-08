@@ -1,13 +1,24 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+  type MutableRefObject,
+} from "react";
+import { useRouter } from "next/navigation";
 import { io, type Socket } from "socket.io-client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { tokens } from "@/lib/design-tokens";
 import type { Device as MediasoupDevice } from "mediasoup-client";
 import { Device } from "mediasoup-client";
-import { Mic, MicOff, Video, VideoOff, VolumeX } from "lucide-react";
+import { Mic, MicOff, Video, VideoOff, VolumeX, Maximize2, Minimize2 } from "lucide-react";
+import { endLiveRoom } from "@/lib/live-room-actions";
+import { cn } from "@/lib/utils";
 
 type ServerAck<T> = { ok: true; data: T } | { ok: false; error: string };
 
@@ -15,6 +26,8 @@ type Props = {
   liveServerUrl: string;
   token: string;
   role: "HOST" | "SPEAKER" | "VIEWER";
+  marathonEventId?: string;
+  afterEndRedirectHref?: string;
 };
 
 type RemoteTrack = {
@@ -57,7 +70,14 @@ function initials(name: string | null) {
   return (a + (b ?? "")).toUpperCase();
 }
 
-export function LiveRoomClient({ liveServerUrl, token, role }: Props) {
+export function LiveRoomClient({
+  liveServerUrl,
+  token,
+  role,
+  marathonEventId,
+  afterEndRedirectHref,
+}: Props) {
+  const router = useRouter();
   const isHost = role === "HOST";
   const canProduce = true; // "как в Zoom": все с видео, у студентов mic off по умолчанию
   const [status, setStatus] = useState<"connecting" | "connected" | "error">("connecting");
@@ -69,8 +89,11 @@ export function LiveRoomClient({ liveServerUrl, token, role }: Props) {
   const [peers, setPeers] = useState<PeerRow[]>([]);
   const [producerMuted, setProducerMuted] = useState<Record<string, boolean>>({});
   const [needsAudioGesture, setNeedsAudioGesture] = useState(false);
+  const [stageFullscreen, setStageFullscreen] = useState(false);
 
   const socketRef = useRef<Socket | null>(null);
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const mainDisplayVideoRef = useRef<HTMLVideoElement | null>(null);
   const deviceRef = useRef<MediasoupDevice | null>(null);
   const sendTransportRef = useRef<any>(null);
   const recvTransportRef = useRef<any>(null);
@@ -79,6 +102,55 @@ export function LiveRoomClient({ liveServerUrl, token, role }: Props) {
   const localStreamRef = useRef<MediaStream | null>(null);
   const audioProducerRef = useRef<any>(null);
   const videoProducerRef = useRef<any>(null);
+
+  const syncStageFs = () => {
+    const doc = document as Document & { webkitFullscreenElement?: Element | null };
+    const fs = document.fullscreenElement ?? doc.webkitFullscreenElement ?? null;
+    setStageFullscreen(fs === stageRef.current);
+  };
+
+  useEffect(() => {
+    document.addEventListener("fullscreenchange", syncStageFs);
+    document.addEventListener("webkitfullscreenchange", syncStageFs as EventListener);
+    return () => {
+      document.removeEventListener("fullscreenchange", syncStageFs);
+      document.removeEventListener("webkitfullscreenchange", syncStageFs as EventListener);
+    };
+  }, []);
+
+  const toggleStageFullscreen = async () => {
+    const stage = stageRef.current;
+    const vid = mainDisplayVideoRef.current;
+    const webkitVid = vid as HTMLVideoElement & { webkitEnterFullscreen?: () => void };
+    const doc = document as Document & {
+      webkitFullscreenElement?: Element | null;
+      webkitExitFullscreen?: () => void;
+    };
+
+    try {
+      if (document.fullscreenElement || doc.webkitFullscreenElement) {
+        if (document.exitFullscreen) await document.exitFullscreen();
+        else doc.webkitExitFullscreen?.();
+        return;
+      }
+      const webkitStage = stage as HTMLElement & { webkitRequestFullscreen?: () => void };
+      if (stage?.requestFullscreen) {
+        await stage.requestFullscreen();
+        return;
+      }
+      if (webkitStage?.webkitRequestFullscreen) {
+        webkitStage.webkitRequestFullscreen();
+        return;
+      }
+      webkitVid?.webkitEnterFullscreen?.();
+    } catch {
+      try {
+        webkitVid?.webkitEnterFullscreen?.();
+      } catch {
+        /* ignore */
+      }
+    }
+  };
 
   const label = useMemo(() => (isHost ? "Ведущий" : "Участник"), [isHost]);
   const decoded = useMemo(() => decodeJwtPayload(token) as { userId?: string; roomId?: string } | null, [token]);
@@ -334,6 +406,22 @@ export function LiveRoomClient({ liveServerUrl, token, role }: Props) {
     });
   };
 
+  const confirmEndBroadcast = () => {
+    if (!marathonEventId || !confirm("Завершить эфир для этого события? Повторный вход будет недоступен.")) return;
+    startTransition(async () => {
+      const res = await endLiveRoom(marathonEventId);
+      if (res && "error" in res && res.error) {
+        setError(res.error);
+        return;
+      }
+      try {
+        socketRef.current?.disconnect();
+      } catch {}
+      if (afterEndRedirectHref) router.push(afterEndRedirectHref);
+      else router.refresh();
+    });
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -413,21 +501,59 @@ export function LiveRoomClient({ liveServerUrl, token, role }: Props) {
               <VolumeX className="mr-1" /> Выключить всем
             </Button>
           ) : null}
+          {isHost && marathonEventId ? (
+            <Button type="button" size="sm" variant="destructive" disabled={isPending} onClick={confirmEndBroadcast}>
+              {isPending ? "..." : "Завершить эфир"}
+            </Button>
+          ) : null}
         </div>
 
-        <div className="relative overflow-hidden rounded-2xl border bg-black">
-          <div className="relative aspect-video w-full">
+        <div
+          ref={stageRef}
+          className={cn(
+            "relative overflow-hidden border bg-black",
+            stageFullscreen ? "border-0 md:rounded-none" : "rounded-2xl"
+          )}
+        >
+          <Button
+            type="button"
+            variant="secondary"
+            size="icon"
+            className={cn(tokens.radius.md, "absolute right-2 top-2 z-30 h-10 w-10 bg-black/55 text-white shadow-md backdrop-blur-sm hover:bg-black/75 sm:right-3 sm:top-3")}
+            aria-label={stageFullscreen ? "Выйти из полноэкранного режима" : "На весь экран"}
+            onClick={() => void toggleStageFullscreen()}
+          >
+            {stageFullscreen ? <Minimize2 className="h-5 w-5 shrink-0" /> : <Maximize2 className="h-5 w-5 shrink-0" />}
+          </Button>
+
+          <div
+            className={cn(
+              "relative mx-auto flex w-full items-center justify-center bg-black",
+              stageFullscreen
+                ? "min-h-[100dvh] w-full md:aspect-auto md:min-h-0 md:h-full"
+                : "aspect-video max-h-[min(88dvh,100vw)] min-h-[min(48vh,520px)] w-full md:aspect-video md:min-h-0 md:max-h-[min(80vh,920px)]"
+            )}
+          >
             {isHost ? (
-              <video ref={localVideoRef} className="h-full w-full object-cover" autoPlay playsInline muted />
+              <video
+                ref={(node) => {
+                  localVideoRef.current = node;
+                  mainDisplayVideoRef.current = node;
+                }}
+                className="h-full w-full max-w-full object-cover"
+                autoPlay
+                playsInline
+                muted
+              />
             ) : hostVideo ? (
-              <RemoteVideo stream={hostVideo.stream} />
+              <RemoteVideo ref={mainDisplayVideoRef} stream={hostVideo.stream} />
             ) : (
-              <div className="flex h-full w-full items-center justify-center text-5xl font-semibold text-white/80">
+              <div className="flex h-full min-h-[200px] w-full items-center justify-center text-5xl font-semibold text-white/80">
                 {initials(hostPeer?.name ?? null)}
               </div>
             )}
 
-            <div className="absolute left-3 top-3 flex max-w-full gap-2 overflow-x-auto rounded-xl bg-black/35 p-2 backdrop-blur">
+            <div className="absolute bottom-12 left-2 right-2 flex gap-2 overflow-x-auto rounded-xl bg-black/35 p-2 backdrop-blur sm:bottom-auto sm:left-3 sm:right-auto sm:top-14 md:overflow-x-visible">
               {/* self view */}
               <div className="relative h-20 w-28 shrink-0 overflow-hidden rounded-lg border border-white/20 bg-black">
                 <video ref={selfThumbVideoRef} className="h-full w-full object-cover" autoPlay playsInline muted />
@@ -451,7 +577,7 @@ export function LiveRoomClient({ liveServerUrl, token, role }: Props) {
                   return (
                     <div key={p.userId} className="relative h-20 w-28 shrink-0 overflow-hidden rounded-lg border border-white/20 bg-black">
                       {video ? (
-                        <RemoteVideo stream={video.stream} />
+                        <RemoteVideo stream={video.stream} className="rounded-lg" />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center text-xl font-semibold text-white/80">
                           {initials(p.name)}
@@ -499,15 +625,29 @@ export function LiveRoomClient({ liveServerUrl, token, role }: Props) {
   );
 }
 
-function RemoteVideo({ stream }: { stream: MediaStream }) {
-  const ref = useRef<HTMLVideoElement | null>(null);
-  useEffect(() => {
-    if (!ref.current) return;
-    ref.current.srcObject = stream;
-    ref.current.play?.().catch(() => {});
-  }, [stream]);
-  return <video ref={ref} className="w-full rounded-xl border bg-black" autoPlay playsInline />;
-}
+const RemoteVideo = forwardRef<HTMLVideoElement, { stream: MediaStream; className?: string }>(
+  function RemoteVideo({ stream, className }, ref) {
+    const innerRef = useRef<HTMLVideoElement | null>(null);
+
+    const setVid = (el: HTMLVideoElement | null) => {
+      innerRef.current = el;
+      if (!ref) return;
+      if (typeof ref === "function") ref(el);
+      else (ref as MutableRefObject<HTMLVideoElement | null>).current = el;
+    };
+
+    useEffect(() => {
+      const el = innerRef.current;
+      if (!el) return;
+      el.srcObject = stream;
+      el.play?.().catch(() => {});
+    }, [stream]);
+
+    return (
+      <video ref={setVid} className={cn("h-full w-full bg-black object-cover", className)} autoPlay playsInline muted />
+    );
+  }
+);
 
 function RemoteAudio({ stream }: { stream: MediaStream }) {
   const ref = useRef<HTMLAudioElement | null>(null);

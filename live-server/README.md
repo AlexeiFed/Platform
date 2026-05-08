@@ -10,6 +10,9 @@
 - `LIVE_RTC_MIN_PORT` (default: `40000`)
 - `LIVE_RTC_MAX_PORT` (default: `49999`)
 - `LIVE_ANNOUNCED_IP` — публичный IP сервера (важно для NAT)
+- `MARATHON_TIME_ZONE` — IANA TZ, **тот же**, что у Next (`MARATHON_TIME_ZONE` / расчёт дня эфира). По умолчанию `Europe/Moscow`.
+
+При handshake проверяются: календарный день в токене (`broadcastDay`) = «сегодня» в этой TZ, `marathonEventId` совпадает с комнатой в БД, комната не в статусе `ENDED`.
 
 ## Запуск
 
