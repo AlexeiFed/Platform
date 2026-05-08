@@ -1,11 +1,11 @@
 import { getMarathonEventDate } from "@/lib/marathon-progress";
-
-const DEFAULT_TZ = process.env.MARATHON_TIME_ZONE ?? "Europe/Moscow";
+import { getResolvedMarathonTimeZone, resolveMarathonTimeZone } from "@/lib/marathon-time-zone";
 
 /** Ключ даты YYYY-MM-DD в заданной TZ (как в marathon-progress). */
-export const marathonDateKeyInZone = (value: Date | string, timeZone: string = DEFAULT_TZ): string => {
+export const marathonDateKeyInZone = (value: Date | string, timeZone?: string): string => {
+  const tz = timeZone !== undefined ? resolveMarathonTimeZone(timeZone) : getResolvedMarathonTimeZone();
   const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
+    timeZone: tz,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -29,11 +29,12 @@ export const getLiveBroadcastDateKey = ({
   dayOffset,
   scheduledAt,
   productStartDate,
-  timeZone = DEFAULT_TZ,
+  timeZone,
 }: LiveBroadcastEventFields & { timeZone?: string }): string | null => {
-  if (scheduledAt != null) return marathonDateKeyInZone(scheduledAt, timeZone);
+  const tz = timeZone !== undefined ? resolveMarathonTimeZone(timeZone) : getResolvedMarathonTimeZone();
+  if (scheduledAt != null) return marathonDateKeyInZone(scheduledAt, tz);
   if (productStartDate != null) {
-    return marathonDateKeyInZone(getMarathonEventDate(productStartDate, dayOffset), timeZone);
+    return marathonDateKeyInZone(getMarathonEventDate(productStartDate, dayOffset), tz);
   }
   return null;
 };
@@ -42,11 +43,12 @@ export const getLiveBroadcastDateKey = ({
 export const isMarathonLiveJoinAllowedToday = (
   event: LiveBroadcastEventFields,
   now: Date = new Date(),
-  timeZone: string = DEFAULT_TZ
+  timeZone?: string
 ): { ok: true } | { ok: false; reason: "no_schedule" | "too_early" | "too_late" } => {
-  const broadcastKey = getLiveBroadcastDateKey({ ...event, timeZone });
+  const tz = timeZone !== undefined ? resolveMarathonTimeZone(timeZone) : getResolvedMarathonTimeZone();
+  const broadcastKey = getLiveBroadcastDateKey({ ...event, timeZone: tz });
   if (!broadcastKey) return { ok: false, reason: "no_schedule" };
-  const todayKey = marathonDateKeyInZone(now, timeZone);
+  const todayKey = marathonDateKeyInZone(now, tz);
   if (todayKey < broadcastKey) return { ok: false, reason: "too_early" };
   if (todayKey > broadcastKey) return { ok: false, reason: "too_late" };
   return { ok: true };

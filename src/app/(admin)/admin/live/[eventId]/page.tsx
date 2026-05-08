@@ -47,7 +47,7 @@ export default async function AdminLiveRoomPage({ params }: Props) {
   const roomStatus = liveRow?.status ?? "SCHEDULED";
 
   const join = await getAdminLiveJoinToken(eventId);
-  if ("error" in join && join.error) {
+  if ("error" in join || !("data" in join) || !join.data) {
     redirect("/admin/live");
   }
 
@@ -68,11 +68,7 @@ export default async function AdminLiveRoomPage({ params }: Props) {
     );
   }
 
-  const data = (join as any).data as {
-    token: string;
-    room: { status: "SCHEDULED" | "LIVE" | "ENDED" };
-    productSlug?: string;
-  };
+  const data = join.data;
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">

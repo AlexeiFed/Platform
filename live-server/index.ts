@@ -18,6 +18,19 @@ const env = z
   })
   .parse(process.env);
 
+function marathonTimeZoneValidated(rawFromEnv: string): string {
+  const candidate = rawFromEnv.trim() || "Europe/Moscow";
+  try {
+    new Intl.DateTimeFormat("en-CA", { timeZone: candidate }).formatToParts(new Date());
+    return candidate;
+  } catch {
+    console.warn(`[live-server] invalid MARATHON_TIME_ZONE "${rawFromEnv}", using Europe/Moscow`);
+    return "Europe/Moscow";
+  }
+}
+
+const marathonTz = marathonTimeZoneValidated(env.MARATHON_TIME_ZONE);
+
 function marathonDateKeyInZone(value: Date, timeZone: string): string {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone,
@@ -138,7 +151,7 @@ io.use(async (socket, next) => {
     if (!token || typeof token !== "string") return next(new Error("No token"));
     const parsed = verifyToken(token);
 
-    const todayKey = marathonDateKeyInZone(new Date(), env.MARATHON_TIME_ZONE);
+    const todayKey = marathonDateKeyInZone(new Date(), marathonTz);
     if (parsed.broadcastDay !== todayKey) {
       return next(new Error("Wrong broadcast day"));
     }

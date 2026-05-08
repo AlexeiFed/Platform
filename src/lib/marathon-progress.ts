@@ -1,3 +1,5 @@
+import { getResolvedMarathonTimeZone, resolveMarathonTimeZone } from "@/lib/marathon-time-zone";
+
 type MarathonProgressEvent = {
   id: string;
   /** Все прикреплённые к событию уроки; достаточно сдать одно ДЗ — событие считается закрытым по ДЗ */
@@ -37,8 +39,6 @@ export const getMarathonEventDate = (startDate: Date | string, dayOffset: number
   return result;
 };
 
-const MARATHON_DEFAULT_TIME_ZONE = process.env.MARATHON_TIME_ZONE ?? "Europe/Moscow";
-
 const toDateKeyInTimeZone = (value: Date | string, timeZone: string): string => {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone,
@@ -58,7 +58,7 @@ export const isMarathonEventAccessible = ({
   startDate,
   dayOffset,
   now = new Date(),
-  timeZone = MARATHON_DEFAULT_TIME_ZONE,
+  timeZone,
 }: {
   startDate: Date | string;
   dayOffset: number;
@@ -66,8 +66,9 @@ export const isMarathonEventAccessible = ({
   timeZone?: string;
 }) => {
   if (dayOffset <= 0) return true;
+  const tz = timeZone !== undefined ? resolveMarathonTimeZone(timeZone) : getResolvedMarathonTimeZone();
   const unlockDate = getMarathonEventDate(startDate, dayOffset);
-  return toDateKeyInTimeZone(now, timeZone) >= toDateKeyInTimeZone(unlockDate, timeZone);
+  return toDateKeyInTimeZone(now, tz) >= toDateKeyInTimeZone(unlockDate, tz);
 };
 
 export const calculateMarathonProgress = ({

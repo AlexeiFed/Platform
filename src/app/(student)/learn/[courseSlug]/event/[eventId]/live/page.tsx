@@ -29,7 +29,7 @@ export default async function LivePage({ params }: Props) {
   if (!event || event.productId !== product.id || !event.published) notFound();
 
   const join = await getLiveJoinToken(eventId);
-  if ("error" in join && join.error) {
+  if ("error" in join || !("data" in join) || !join.data) {
     redirect(`/learn/${courseSlug}/event/${eventId}`);
   }
 
@@ -50,11 +50,7 @@ export default async function LivePage({ params }: Props) {
     );
   }
 
-  const { token, role, room } = (join as any).data as {
-    token: string;
-    role: "HOST" | "SPEAKER" | "VIEWER";
-    room: { status: "SCHEDULED" | "LIVE" | "ENDED" };
-  };
+  const { token, role, room } = join.data;
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
