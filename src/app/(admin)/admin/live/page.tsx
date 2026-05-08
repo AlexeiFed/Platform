@@ -7,15 +7,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getMarathonEventDate } from "@/lib/marathon-progress";
+import {
+  isMarathonLiveJoinAllowedToday,
+  marathonDateKeyInZone,
+  marathonLiveJoinDeniedMessage,
+} from "@/lib/marathon-live-broadcast";
+import { cn } from "@/lib/utils";
 
 type Props = {
   searchParams: Promise<{ productId?: string; date?: string }>;
 };
-
-function dateKey(d: Date) {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
 
 function formatRuDate(d: Date) {
   return new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", year: "numeric" }).format(d);
@@ -23,10 +24,6 @@ function formatRuDate(d: Date) {
 
 function formatRuTime(d: Date) {
   return new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit" }).format(d);
-}
-
-function startOfDay(d: Date) {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
 export default async function AdminLivePage({ searchParams }: Props) {
@@ -62,7 +59,7 @@ export default async function AdminLivePage({ searchParams }: Props) {
     return {
       ...ev,
       effectiveAt: d,
-      effectiveDateKey: dateKey(d),
+      effectiveDateKey: marathonDateKeyInZone(d),
       hasTime: Boolean(ev.scheduledAt),
     };
   });
@@ -92,14 +89,15 @@ export default async function AdminLivePage({ searchParams }: Props) {
 
   const dates = [...new Set(items.map((i) => i.effectiveDateKey))].sort();
   const now = new Date();
-  const todayKey = dateKey(now);
+  const todayKey = marathonDateKeyInZone(now);
 
   return (
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className={tokens.typography.h2}>Эфиры</h1>
         <div className={`${tokens.typography.small} text-muted-foreground`}>
-          Выберите марафон и дату — увидите запланированные события «Эфир» и сможете зайти в комнату.
+          Выберите марафон и дату. Вход в комнату доступен только в календарный день эфира (как у студентов),
+          даже если сессия в системе ещё помечена как «идёт».
         </div>
       </div>
 
@@ -107,24 +105,25 @@ export default async function AdminLivePage({ searchParams }: Props) {
         <CardHeader>
           <CardTitle className="text-base">Фильтры</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <div className={tokens.typography.label}>Марафон</div>
-            <div className="flex flex-wrap gap-2">
+        <CardContent className="grid grid-cols-1 gap-8 xl:grid-cols-2">
+          <div className="flex min-w-0 flex-col gap-3">
+            <label className={cn(tokens.typography.label, "block")}>Марафон</label>
+            <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap">
               {marathons.map((m) => (
                 <Button
                   key={m.id}
                   asChild
                   size="sm"
                   variant={m.id === selectedProductId ? "default" : "outline"}
+                  className="h-auto min-h-9 w-full justify-start whitespace-normal px-3 py-2 text-left sm:w-auto sm:max-w-full"
                 >
                   <Link href={`/admin/live?productId=${encodeURIComponent(m.id)}`}>{m.title}</Link>
                 </Button>
               ))}
             </div>
           </div>
-          <div className="space-y-2">
-            <div className={tokens.typography.label}>Дата</div>
+          <div className="flex min-w-0 flex-col gap-3">
+            <label className={cn(tokens.typography.label, "block")}>Дата</label>
             <div className="flex flex-wrap gap-2">
               {dates.length === 0 ? (
                 <div className={`${tokens.typography.small} text-muted-foreground`}>Эфиров пока нет.</div>
@@ -135,6 +134,7 @@ export default async function AdminLivePage({ searchParams }: Props) {
                     asChild
                     size="sm"
                     variant={d === selectedDate ? "default" : "outline"}
+                    className="shrink-0"
                   >
                     <Link
                       href={`/admin/live?productId=${encodeURIComponent(selectedProductId ?? "")}&date=${encodeURIComponent(d)}`}
@@ -157,33 +157,65 @@ export default async function AdminLivePage({ searchParams }: Props) {
           {filtered.length === 0 ? (
             <div className={`${tokens.typography.small} text-muted-foreground`}>Нет эфиров для выбранных условий.</div>
           ) : (
-            filtered.map((ev) => (
-              <div
-                key={ev.id}
-                className={[
-                  "flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3",
-                  roomStatuses.get(ev.id) === "LIVE" ? "border-primary/40 bg-primary/5" : "",
-                ].join(" ")}
-              >
-                <div className="min-w-0">
-                  <div className="truncate font-medium">{ev.title}</div>
-                  <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                    <span>{formatRuDate(ev.effectiveAt)}</span>
-                    <Badge variant="outline">{ev.scheduledAt ? formatRuTime(ev.effectiveAt) : "время не задано"}</Badge>
-                    <Badge variant="secondary">LIVE</Badge>
-                    {ev.effectiveDateKey === todayKey ? <Badge variant="outline">сегодня</Badge> : null}
-                    {roomStatuses.get(ev.id) === "LIVE" ? (
-                      <Badge variant="success">идёт</Badge>
-                    ) : ev.hasTime && ev.effectiveAt.getTime() - now.getTime() > 0 && ev.effectiveAt.getTime() - now.getTime() <= 60 * 60 * 1000 ? (
-                      <Badge variant="warning">скоро</Badge>
-                    ) : null}
+            filtered.map((ev) => {
+              const joinGate = isMarathonLiveJoinAllowedToday({
+                dayOffset: ev.dayOffset,
+                scheduledAt: ev.scheduledAt,
+                productStartDate: selected?.startDate ?? null,
+              });
+              const roomStatus = roomStatuses.get(ev.id);
+              const liveInDb = roomStatus === "LIVE";
+              const inBroadcastDay = joinGate.ok;
+              const canOpenRoom = joinGate.ok && roomStatus !== "ENDED";
+
+              const blockReason =
+                roomStatus === "ENDED"
+                  ? "Эфир завершён, вход в комнату недоступен."
+                  : joinGate.ok === false
+                    ? marathonLiveJoinDeniedMessage(joinGate)
+                    : "Вход недоступен.";
+
+              return (
+                <div
+                  key={ev.id}
+                  className={cn(
+                    "flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between",
+                    liveInDb && inBroadcastDay ? "border-primary/40 bg-primary/5" : ""
+                  )}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="break-words font-medium">{ev.title}</div>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                      <span>{formatRuDate(ev.effectiveAt)}</span>
+                      <Badge variant="outline">
+                        {ev.scheduledAt ? formatRuTime(ev.effectiveAt) : "время не задано"}
+                      </Badge>
+                      <Badge variant="secondary">LIVE</Badge>
+                      {ev.effectiveDateKey === todayKey ? <Badge variant="outline">сегодня</Badge> : null}
+                      {liveInDb && inBroadcastDay ? (
+                        <Badge variant="success">идёт</Badge>
+                      ) : liveInDb && !inBroadcastDay ? (
+                        <Badge variant="warning">не завершён в системе</Badge>
+                      ) : ev.hasTime &&
+                        joinGate.ok &&
+                        ev.effectiveAt.getTime() - now.getTime() > 0 &&
+                        ev.effectiveAt.getTime() - now.getTime() <= 60 * 60 * 1000 ? (
+                        <Badge variant="warning">скоро</Badge>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:items-end">
+                    {canOpenRoom ? (
+                      <Button asChild className="w-full sm:w-auto">
+                        <Link href={`/admin/live/${ev.id}`}>В комнату</Link>
+                      </Button>
+                    ) : (
+                      <p className="max-w-md text-sm leading-snug text-muted-foreground sm:text-right">{blockReason}</p>
+                    )}
                   </div>
                 </div>
-                <Button asChild>
-                  <Link href={`/admin/live/${ev.id}`}>В комнату</Link>
-                </Button>
-              </div>
-            ))
+              );
+            })
           )}
         </CardContent>
       </Card>
