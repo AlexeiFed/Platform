@@ -254,10 +254,30 @@ model Product {
   curatorAssignments ProductCurator[]
   payments           Payment[]
   tariffs            ProductTariff[]
+  additionalMaterials ProductAdditionalMaterial[]
 
   @@index([slug])
   @@index([type])
   @@map("products")
+}
+
+/// Дополнительные файлы курса/марафона (S3). visibilityFrom = null — видны всегда.
+model ProductAdditionalMaterial {
+  id              String    @id @default(uuid())
+  productId       String
+  title           String
+  fileKey         String
+  mimeType        String
+  sizeBytes       Int?
+  coverKey        String?
+  visibilityFrom  DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, createdAt])
+  @@map("product_additional_materials")
 }
 
 model ProductTariff {

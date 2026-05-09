@@ -1,5 +1,5 @@
 // Секция сайдбара с навигацией по активному курсу/марафону студента.
-// Содержит карточку текущего курса с прогрессом, ссылки на описание/правила/обратную связь
+// Содержит карточку текущего курса с прогрессом, ссылки на описание/правила/доп. материалы/обратную связь
 // и сворачиваемые блоки уроков/расписания/процедур.
 "use client";
 
@@ -11,6 +11,7 @@ import {
   ChevronRight,
   Circle,
   FileText,
+  Library,
   Lock,
   MessageCircle,
   ScrollText,
@@ -266,6 +267,7 @@ export function CourseNavSidebarSection({ onNavigate }: { onNavigate?: () => voi
   const base = `/learn/${payload.courseSlug}`;
   const overviewActive = pathname === base;
   const rulesActive = pathname === `${base}/rules`;
+  const additionalActive = pathname === `${base}/additional-materials`;
   const feedbackActive = pathname === `${base}/feedback`;
   const eventActive = scopeEventId ? pathname === `${base}/event/${scopeEventId}` : false;
 
@@ -297,6 +299,16 @@ export function CourseNavSidebarSection({ onNavigate }: { onNavigate?: () => voi
             <span className="min-w-0 flex-1">Правила</span>
           </Link>
         ) : null}
+
+        <Link
+          href={`${base}/additional-materials`}
+          onClick={() => onNavigate?.()}
+          className={navItemClass(additionalActive)}
+          aria-current={additionalActive ? "page" : undefined}
+        >
+          <Library className="h-4 w-4 shrink-0" />
+          <span className="min-w-0 flex-1">Доп. материалы</span>
+        </Link>
 
         {payload.curatorFeedback ? (
           <Link

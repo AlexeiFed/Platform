@@ -18,6 +18,7 @@ import {
   Video,
   User,
   LogOut,
+  Library,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { tokens, layout } from "@/lib/design-tokens";
@@ -35,6 +36,7 @@ type NavItem = {
 const adminNav: NavItem[] = [
   { label: "Дашборд", href: "/admin", icon: LayoutDashboard },
   { label: "Курсы", href: "/admin/courses", icon: BookOpen },
+  { label: "Доп. материалы", href: "/admin/additional-materials", icon: Library },
   { label: "Эфиры", href: "/admin/live", icon: Video },
   { label: "Пользователи", href: "/admin/users", icon: Users },
   { label: "Домашние задания", href: "/admin/homework", icon: ClipboardCheck },
