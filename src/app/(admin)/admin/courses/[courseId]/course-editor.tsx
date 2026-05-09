@@ -1882,9 +1882,9 @@ export function CourseEditor({
                         return (
                           <div
                             key={event.id}
-                            className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-3 md:flex-row md:items-start md:justify-between"
+                            className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-3 md:flex-row md:items-start md:justify-between md:gap-4"
                           >
-                            <div className="space-y-2">
+                            <div className="min-w-0 flex-1 space-y-2">
                               <div className="flex flex-wrap items-center gap-2">
                                 <span className="font-medium text-sm">{event.title}</span>
                                 <Badge variant="outline" className="text-xs">{event.type}</Badge>
@@ -1899,7 +1899,7 @@ export function CourseEditor({
                                 )}
                               </div>
                               {event.description && (
-                                <p className="text-sm text-muted-foreground">{event.description}</p>
+                                <p className="text-sm text-muted-foreground break-words">{event.description}</p>
                               )}
                               {linkedLessons.length > 0 && (
                                 <ul className="list-inside list-disc text-xs text-muted-foreground">
@@ -1912,7 +1912,7 @@ export function CourseEditor({
                               )}
                             </div>
 
-                            <div className="flex gap-2">
+                            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                               <Button
                                 type="button"
                                 variant="outline"

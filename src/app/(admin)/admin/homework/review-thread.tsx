@@ -65,7 +65,8 @@ export function ReviewThread({ submission, messages, onThreadChanged }: Props) {
 
     setLoading(true);
     setError("");
-    const result = await sendChatMessage(submission.id, text, replyToId ?? fallbackReplyToId);
+    const replyRef = replyToId ?? fallbackReplyToId;
+    const result = await sendChatMessage(submission.id, text, replyRef ?? undefined);
     if (result.error) {
       setError(result.error);
       setLoading(false);
@@ -79,26 +80,33 @@ export function ReviewThread({ submission, messages, onThreadChanged }: Props) {
     setLoading(false);
   }
 
-  if (submission.status === "APPROVED") {
-    return (
-      <div className="space-y-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <Badge variant="success">Принято</Badge>
-          <div className="text-sm text-muted-foreground">
-            Последняя сдача: {formatHomeworkDateTime(submission.updatedAt)}
-          </div>
-        </div>
-        <HomeworkMessages submission={submission} messages={messages} />
-      </div>
+  const statusBadge =
+    submission.status === "APPROVED" ? (
+      <Badge variant="success">Принято</Badge>
+    ) : (
+      <Badge
+        variant={
+          submission.status === "REJECTED"
+            ? "destructive"
+            : submission.status === "PENDING"
+              ? "warning"
+              : "secondary"
+        }
+      >
+        {submission.status === "REJECTED"
+          ? "Доработать"
+          : submission.status === "PENDING"
+            ? "Ожидает"
+            : "На проверке"}
+      </Badge>
     );
-  }
+
+  const showReviewActions = submission.status !== "APPROVED";
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        <Badge variant={submission.status === "REJECTED" ? "destructive" : submission.status === "PENDING" ? "warning" : "secondary"}>
-          {submission.status === "REJECTED" ? "Доработать" : submission.status === "PENDING" ? "Ожидает" : "На проверке"}
-        </Badge>
+        {statusBadge}
         <div className="text-sm text-muted-foreground">
           Последняя сдача: {formatHomeworkDateTime(submission.updatedAt)}
         </div>
@@ -133,28 +141,30 @@ export function ReviewThread({ submission, messages, onThreadChanged }: Props) {
       )}
 
       <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => handleReview("APPROVED")}
-            disabled={loading}
-            className="text-green-600 hover:bg-green-50 hover:text-green-700 dark:hover:bg-green-950"
-            aria-label="Принять"
-          >
-            <Check className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => handleReview("REJECTED")}
-            disabled={loading}
-            className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950"
-            aria-label="Отправить на доработку"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
+        {showReviewActions && (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => handleReview("APPROVED")}
+              disabled={loading}
+              className="text-green-600 hover:bg-green-50 hover:text-green-700 dark:hover:bg-green-950"
+              aria-label="Принять"
+            >
+              <Check className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => handleReview("REJECTED")}
+              disabled={loading}
+              className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950"
+              aria-label="Отправить на доработку"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
 
         <div className="flex gap-2">
           <textarea

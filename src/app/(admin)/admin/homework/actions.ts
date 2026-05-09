@@ -7,6 +7,30 @@ import { revalidatePath } from "next/cache";
 import { emitHomeworkEvent } from "@/lib/realtime";
 import { enrollmentHasCriterion, loadEnrollmentForCriteriaByUserProduct } from "@/lib/enrollment-criteria";
 
+/** Доступ к треду ДЗ в админке: есть задания в тарифе (в т.ч. VIP без ручной проверки). */
+async function assertStaffHomeworkEnrollment(userId: string, productId: string) {
+  const enrollment = await loadEnrollmentForCriteriaByUserProduct(userId, productId);
+  if (!enrollment || !enrollmentHasCriterion(enrollment, "TASKS")) {
+    return { error: "У студента нет доступа к заданиям по тарифу" } as const;
+  }
+  return { enrollment } as const;
+}
+
+async function assertCuratorProductAccess(role: string, staffUserId: string, productId: string) {
+  if (role !== "CURATOR") return null;
+  const assignment = await prisma.productCurator.findUnique({
+    where: {
+      productId_curatorId: {
+        productId,
+        curatorId: staffUserId,
+      },
+    },
+    select: { id: true },
+  });
+  if (!assignment) return { error: "Нет доступа" } as const;
+  return null;
+}
+
 export async function reviewHomework(
   submissionId: string,
   status: "APPROVED" | "REJECTED"
@@ -117,25 +141,16 @@ export async function getHomeworkReviewThread(input: {
   }
 
   try {
-    if (session.user.role === "CURATOR") {
-      const assignment = await prisma.productCurator.findUnique({
-        where: {
-          productId_curatorId: {
-            productId: input.productId,
-            curatorId: session.user.id,
-          },
-        },
-        select: { id: true },
-      });
+    const curatorGate = await assertCuratorProductAccess(
+      session.user.role,
+      session.user.id,
+      input.productId
+    );
+    if (curatorGate) return curatorGate;
 
-      if (!assignment) {
-        return { error: "Нет доступа" } as const;
-      }
-    }
-
-    const enrollment = await loadEnrollmentForCriteriaByUserProduct(input.userId, input.productId);
-    if (!enrollment || !enrollmentHasCriterion(enrollment, "HOMEWORK_REVIEW")) {
-      return { error: "У студента нет проверки ДЗ в тарифе" } as const;
+    const enrollGate = await assertStaffHomeworkEnrollment(input.userId, input.productId);
+    if ("error" in enrollGate) {
+      return { error: "У студента нет доступа к заданиям по тарифу" } as const;
     }
 
     const submission = await prisma.homeworkSubmission.findFirst({
@@ -219,13 +234,15 @@ export async function sendChatMessage(
     });
     if (!subMeta) return { error: "Работа не найдена" };
 
-    const enrollment = await loadEnrollmentForCriteriaByUserProduct(
-      subMeta.userId,
+    const curatorGate = await assertCuratorProductAccess(
+      session.user.role,
+      session.user.id,
       subMeta.lesson.productId
     );
-    if (!enrollment || !enrollmentHasCriterion(enrollment, "HOMEWORK_REVIEW")) {
-      return { error: "У студента нет проверки ДЗ в тарифе" };
-    }
+    if (curatorGate) return curatorGate;
+
+    const enrollGate = await assertStaffHomeworkEnrollment(subMeta.userId, subMeta.lesson.productId);
+    if ("error" in enrollGate) return { error: enrollGate.error };
 
     if (replyToId) {
       const replyTarget = await prisma.chatMessage.findFirst({
