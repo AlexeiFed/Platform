@@ -7,6 +7,7 @@ import { tokens } from "@/lib/design-tokens";
 import { formatDate } from "@/lib/utils";
 import { BookOpen, GraduationCap } from "lucide-react";
 import { LiveReviewThread } from "./live-review-thread";
+import { HomeworkStudentBodyMetrics } from "./homework-student-body-metrics";
 
 export default async function AdminHomeworkPage({
   searchParams,
@@ -78,6 +79,20 @@ export default async function AdminHomeworkPage({
 
   const selectedUserId = userId ?? (students[0]?.userId ?? null);
 
+  const allowedStudentIds = new Set(students.map((s) => s.userId));
+  const studentBodyUserId = selectedUserId && allowedStudentIds.has(selectedUserId) ? selectedUserId : null;
+
+  const studentBody = studentBodyUserId
+    ? await prisma.user.findUnique({
+        where: { id: studentBodyUserId },
+        select: {
+          height: true,
+          weight: true,
+          measurements: { orderBy: { date: "desc" }, take: 120 },
+        },
+      })
+    : null;
+
   const allForStudent = selectedProductId && selectedUserId
     ? await prisma.homeworkSubmission.findMany({
         where: { lesson: { productId: selectedProductId }, userId: selectedUserId },
@@ -133,6 +148,11 @@ export default async function AdminHomeworkPage({
   };
 
   const selectedProduct = products.find((p) => p.id === selectedProductId) ?? null;
+
+  const selectedStudentEntry = students.find((s) => s.userId === selectedUserId);
+  const selectedStudentLabel =
+    selectedStudentEntry?.user.name ?? selectedStudentEntry?.user.email ?? "Студент";
+
   return (
     <div className="space-y-6">
       <h1 className={tokens.typography.h2}>Домашние задания</h1>
@@ -299,6 +319,15 @@ export default async function AdminHomeworkPage({
                 />
               </CardContent>
             </Card>
+          )}
+
+          {studentBody && (
+            <HomeworkStudentBodyMetrics
+              studentLabel={selectedStudentLabel}
+              heightCm={studentBody.height}
+              weightKg={studentBody.weight}
+              measurements={studentBody.measurements}
+            />
           )}
         </div>
       </div>
