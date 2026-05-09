@@ -54,6 +54,7 @@ import { LandingEditor } from "./landing-editor";
 import { RichTextEditor } from "@/components/shared/rich-text-editor";
 import { MarathonEventLessonPicker } from "./marathon-event-lesson-picker";
 import { loadPdfJs } from "@/components/shared/pdfjs-loader";
+import { formatUtcIsoForDatetimeLocal } from "@/lib/marathon-datetime";
 import type { LandingBlock } from "@/types/landing";
 import type { MarathonEventType, MarathonTrack, ProductCriterion, ProductType, UnlockRule } from "@prisma/client";
 
@@ -185,20 +186,16 @@ function getEmptyMarathonEventForm(): MarathonEventForm {
   };
 }
 
-function formatDatetimeLocalValue(iso: string) {
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
 function MarathonEventFields({
   form,
   onPatch,
   lessons,
+  marathonTimeZone,
 }: {
   form: MarathonEventForm;
   onPatch: (patch: Partial<MarathonEventForm>) => void;
   lessons: SerializedLesson[];
+  marathonTimeZone: string;
 }) {
   return (
     <>
@@ -284,7 +281,10 @@ function MarathonEventFields({
             onChange={(e) => onPatch({ scheduledAt: e.target.value })}
           />
           <div className={`${tokens.typography.small} text-muted-foreground`}>
-            Это время используется в админ-разделе «Эфиры» для календаря/списка комнат.
+            Время в зоне <span className="font-medium text-foreground">{marathonTimeZone}</span> (env{" "}
+            <code className="text-xs">MARATHON_TIME_ZONE</code>
+            ), а не в часовом поясе браузера. Для Хабаровска задайте, например,{" "}
+            <code className="text-xs">Asia/Vladivostok</code>. Раздел «Эфиры» строит дни по этой же зоне.
           </div>
         </div>
       ) : null}
@@ -804,11 +804,13 @@ export function CourseEditor({
   lessons: initialLessons,
   marathonEvents: initialMarathonEvents,
   activeTab,
+  marathonTimeZone,
 }: {
   product: SerializedProduct;
   lessons: SerializedLesson[];
   marathonEvents: SerializedMarathonEvent[];
   activeTab: string;
+  marathonTimeZone: string;
 }) {
   // landingBlocks передаётся через product
   const router = useRouter();
@@ -1012,7 +1014,9 @@ export function CourseEditor({
       type: event.type,
       track: event.track,
       dayOffset: String(event.dayOffset),
-      scheduledAt: event.scheduledAt ? formatDatetimeLocalValue(event.scheduledAt) : "",
+      scheduledAt: event.scheduledAt
+        ? formatUtcIsoForDatetimeLocal(event.scheduledAt, marathonTimeZone)
+        : "",
       weekNumber: event.weekNumber != null ? String(event.weekNumber) : "",
       lessonIds: [...event.lessonIds],
       published: event.published,
@@ -1820,6 +1824,7 @@ export function CourseEditor({
                 form={marathonEventForm}
                 onPatch={(patch) => setMarathonEventForm((prev) => ({ ...prev, ...patch }))}
                 lessons={lessons}
+                marathonTimeZone={marathonTimeZone}
               />
 
               <div className="flex gap-3">
@@ -1842,6 +1847,7 @@ export function CourseEditor({
                     form={marathonEditForm}
                     onPatch={(patch) => setMarathonEditForm((prev) => ({ ...prev, ...patch }))}
                     lessons={lessons}
+                    marathonTimeZone={marathonTimeZone}
                   />
                 </form>
                 <DialogFooter className="gap-2 sm:gap-0">

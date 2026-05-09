@@ -69,13 +69,7 @@ const userProcedureUpdateSchema = z.object({
   position: z.coerce.number().int().min(0).optional(),
 });
 
-const parseOptionalDate = (value?: string | null) => {
-  if (!value?.trim()) {
-    return null;
-  }
-
-  return new Date(value);
-};
+import { parseOptionalDateTimeLocalInMarathonZone as parseOptionalDate } from "@/lib/marathon-datetime";
 
 const assertAdminOrCurator = async () => {
   const session = await auth();

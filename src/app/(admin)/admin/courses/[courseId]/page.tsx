@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { CourseEditorShell } from "./course-editor-shell";
+import { getResolvedMarathonTimeZone } from "@/lib/marathon-time-zone";
 import type { ContentBlock } from "./course-editor";
 import type { LandingBlock } from "@/types/landing";
 
@@ -128,6 +129,7 @@ export default async function CourseEditorPage({ params }: Props) {
         lessons={serializedLessons}
         marathonEvents={serializedMarathonEvents}
         tariffs={serializedTariffs}
+        marathonTimeZone={getResolvedMarathonTimeZone()}
       />
     </div>
   );

@@ -51,6 +51,8 @@ type Props = {
   lessons: Parameters<typeof CourseEditor>[0]["lessons"];
   marathonEvents: Parameters<typeof CourseEditor>[0]["marathonEvents"];
   tariffs: SerializedTariff[];
+  /** IANA TZ для времени эфиров (MARATHON_TIME_ZONE), не часовой пояс браузера. */
+  marathonTimeZone: string;
 };
 
 // === Типы табов ===
@@ -90,7 +92,7 @@ function TabPills({
 }
 
 // === Shell ===
-export function CourseEditorShell({ product, lessons, marathonEvents, tariffs }: Props) {
+export function CourseEditorShell({ product, lessons, marathonEvents, tariffs, marathonTimeZone }: Props) {
   const storageKey = `editor-tab-${product.id}`;
   const [activeTab, setActiveTab] = useState<TabId>("criteria");
   const { setSlot } = useHeaderSlot();
@@ -156,6 +158,7 @@ export function CourseEditorShell({ product, lessons, marathonEvents, tariffs }:
         lessons={lessons}
         marathonEvents={marathonEvents}
         activeTab={activeTab}
+        marathonTimeZone={marathonTimeZone}
       />
     </div>
   );

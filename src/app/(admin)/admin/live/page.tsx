@@ -12,18 +12,30 @@ import {
   marathonDateKeyInZone,
   marathonLiveJoinDeniedMessage,
 } from "@/lib/marathon-live-broadcast";
+import { getResolvedMarathonTimeZone } from "@/lib/marathon-time-zone";
 import { cn } from "@/lib/utils";
 
 type Props = {
   searchParams: Promise<{ productId?: string; date?: string }>;
 };
 
+const marathonTz = getResolvedMarathonTimeZone();
+
 function formatRuDate(d: Date) {
-  return new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", year: "numeric" }).format(d);
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: marathonTz,
+  }).format(d);
 }
 
 function formatRuTime(d: Date) {
-  return new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit" }).format(d);
+  return new Intl.DateTimeFormat("ru-RU", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: marathonTz,
+  }).format(d);
 }
 
 export default async function AdminLivePage({ searchParams }: Props) {
