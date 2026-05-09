@@ -1882,9 +1882,9 @@ export function CourseEditor({
                         return (
                           <div
                             key={event.id}
-                            className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-3 md:flex-row md:items-start md:justify-between md:gap-4"
+                            className="grid gap-3 rounded-lg border bg-muted/20 p-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-start md:gap-x-4 md:gap-y-3"
                           >
-                            <div className="min-w-0 flex-1 space-y-2">
+                            <div className="min-w-0 max-w-full space-y-2">
                               <div className="flex flex-wrap items-center gap-2">
                                 <span className="font-medium text-sm">{event.title}</span>
                                 <Badge variant="outline" className="text-xs">{event.type}</Badge>
@@ -1899,7 +1899,9 @@ export function CourseEditor({
                                 )}
                               </div>
                               {event.description && (
-                                <p className="text-sm text-muted-foreground break-words">{event.description}</p>
+                                <p className="max-w-full text-sm text-muted-foreground break-words [overflow-wrap:anywhere]">
+                                  {event.description}
+                                </p>
                               )}
                               {linkedLessons.length > 0 && (
                                 <ul className="list-inside list-disc text-xs text-muted-foreground">
@@ -1912,7 +1914,7 @@ export function CourseEditor({
                               )}
                             </div>
 
-                            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                            <div className="flex shrink-0 flex-wrap items-center gap-2 md:justify-end md:self-start">
                               <Button
                                 type="button"
                                 variant="outline"
