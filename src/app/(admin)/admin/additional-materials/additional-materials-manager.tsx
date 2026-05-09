@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { BookOpen, GraduationCap, Loader2, Trash2, Upload } from "lucide-react";
+import { BookOpen, CheckCircle2, Clock, EyeOff, GraduationCap, Loader2, Trash2, Upload } from "lucide-react";
 import { loadPdfJs } from "@/components/shared/pdfjs-loader";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { tokens } from "@/lib/design-tokens";
+import { formatKhabarovskDate, isVisibleNow, utcToKhabarovskDateInput } from "@/lib/timezone";
 import { cn } from "@/lib/utils";
 import {
   createAdditionalMaterial,
@@ -227,6 +229,9 @@ export const AdditionalMaterialsManager = ({
             onChange={(e) => setVisibilityFrom(e.target.value)}
             className={tokens.radius.md}
           />
+          <span className="block text-xs text-muted-foreground">
+            Время — 00:00 по Хабаровску (UTC+10)
+          </span>
         </div>
         <div className="flex flex-col justify-end gap-2">
           <span id="am-file-label" className="sr-only">
@@ -290,13 +295,16 @@ function MaterialAdminCard({
   onDelete: (id: string) => Promise<void>;
 }) {
   const [title, setTitle] = useState(row.title);
-  const [vis, setVis] = useState(row.visibilityFrom ? row.visibilityFrom.slice(0, 10) : "");
+  const [vis, setVis] = useState(utcToKhabarovskDateInput(row.visibilityFrom));
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setTitle(row.title);
-    setVis(row.visibilityFrom ? row.visibilityFrom.slice(0, 10) : "");
+    setVis(utcToKhabarovskDateInput(row.visibilityFrom));
   }, [row.id, row.title, row.visibilityFrom]);
+
+  const visibleNow = isVisibleNow(row.visibilityFrom);
+  const visDateLabel = row.visibilityFrom ? formatKhabarovskDate(row.visibilityFrom) : null;
 
   const coverSrc = row.coverKey
     ? clientPublicUrl(row.coverKey)
@@ -332,12 +340,29 @@ function MaterialAdminCard({
             </div>
           )}
         </div>
+        <div>
+          {visibleNow ?
+            <Badge variant="success" className="gap-1">
+              <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
+              {visDateLabel ? `Виден студентам с ${visDateLabel}` : "Виден всем студентам"}
+            </Badge>
+          : visDateLabel ?
+            <Badge variant="warning" className="gap-1">
+              <Clock className="h-3.5 w-3.5" aria-hidden />
+              Запланирован с {visDateLabel}
+            </Badge>
+          : <Badge variant="secondary" className="gap-1">
+              <EyeOff className="h-3.5 w-3.5" aria-hidden />
+              Скрыт
+            </Badge>
+          }
+        </div>
         <div className="space-y-2">
           <span className="text-xs text-muted-foreground">Название</span>
           <Input value={title} onChange={(e) => setTitle(e.target.value)} className={tokens.radius.md} />
         </div>
         <div className="space-y-2">
-          <span className="text-xs text-muted-foreground">Видимость с</span>
+          <span className="text-xs text-muted-foreground">Видимость с (Хабаровск, UTC+10)</span>
           <Input type="date" value={vis} onChange={(e) => setVis(e.target.value)} className={tokens.radius.md} />
         </div>
         <div className="flex gap-2">

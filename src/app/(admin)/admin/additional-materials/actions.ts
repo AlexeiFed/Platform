@@ -3,6 +3,7 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { deleteObject } from "@/lib/s3";
+import { khabarovskDateInputToUtc } from "@/lib/timezone";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -121,11 +122,8 @@ export async function createAdditionalMaterial(
   const keyCheck = assertKeysUnderMaterialFolder(parsed.productId, parsed.fileKey, parsed.coverKey ?? null);
   if ("error" in keyCheck) return { success: false, error: keyCheck.error };
 
-  const visibilityFrom =
-    parsed.visibilityFrom?.trim() ?
-      new Date(`${parsed.visibilityFrom.trim()}T00:00:00.000Z`)
-    : null;
-  if (visibilityFrom && Number.isNaN(visibilityFrom.getTime())) {
+  const visibilityFrom = khabarovskDateInputToUtc(parsed.visibilityFrom);
+  if (parsed.visibilityFrom?.trim() && !visibilityFrom) {
     return { success: false, error: "Некорректная дата видимости" };
   }
 
@@ -187,13 +185,14 @@ export async function updateAdditionalMaterial(
     return { success: false, error: "error" in gate ? gate.error : "Нет доступа" };
   }
 
-  const visibilityFrom =
-    parsed.visibilityFrom === undefined ? undefined
-    : parsed.visibilityFrom?.trim() ?
-      new Date(`${parsed.visibilityFrom.trim()}T00:00:00.000Z`)
-    : null;
-  if (visibilityFrom !== undefined && visibilityFrom !== null && Number.isNaN(visibilityFrom.getTime())) {
-    return { success: false, error: "Некорректная дата" };
+  let visibilityFrom: Date | null | undefined;
+  if (parsed.visibilityFrom === undefined) {
+    visibilityFrom = undefined;
+  } else if (!parsed.visibilityFrom?.trim()) {
+    visibilityFrom = null;
+  } else {
+    visibilityFrom = khabarovskDateInputToUtc(parsed.visibilityFrom);
+    if (!visibilityFrom) return { success: false, error: "Некорректная дата" };
   }
 
   await prisma.productAdditionalMaterial.update({
