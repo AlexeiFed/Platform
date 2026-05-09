@@ -49,7 +49,7 @@ export function LiveReviewThread({
 
   async function apply() {
     const result = await getHomeworkReviewThread({ productId, userId, lessonId });
-    if (!result.success || !result.data) {
+    if ("error" in result || !result.data) {
       return;
     }
 
