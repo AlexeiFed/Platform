@@ -186,6 +186,62 @@ function getEmptyMarathonEventForm(): MarathonEventForm {
   };
 }
 
+function marathonEventToForm(
+  event: SerializedMarathonEvent,
+  marathonTimeZone: string
+): MarathonEventForm {
+  return {
+    title: event.title,
+    description: event.description ?? "",
+    type: event.type,
+    track: event.track,
+    dayOffset: String(event.dayOffset),
+    scheduledAt: event.scheduledAt
+      ? formatUtcIsoForDatetimeLocal(event.scheduledAt, marathonTimeZone)
+      : "",
+    weekNumber: event.weekNumber != null ? String(event.weekNumber) : "",
+    lessonIds: [...event.lessonIds],
+    published: event.published,
+  };
+}
+
+function marathonFormToSavePayload(form: MarathonEventForm) {
+  return {
+    title: form.title,
+    description: form.description || undefined,
+    type: form.type,
+    track: form.track,
+    dayOffset: Number(form.dayOffset),
+    scheduledAt: form.scheduledAt || undefined,
+    weekNumber: form.weekNumber.trim() === "" ? undefined : Number(form.weekNumber),
+    lessonIds: form.lessonIds,
+    published: form.published,
+  };
+}
+
+function marathonDescriptionContainsHtml(content: string) {
+  return /<\/?[a-z][\s\S]*>/i.test(content);
+}
+
+function MarathonEventDescriptionReadonly({ content }: { content: string }) {
+  if (marathonDescriptionContainsHtml(content)) {
+    return (
+      <div
+        className={`${tokens.typography.prose} max-w-none break-words text-sm text-muted-foreground [overflow-wrap:anywhere]`}
+        dangerouslySetInnerHTML={{ __html: content }}
+      />
+    );
+  }
+
+  return (
+    <div
+      className={`${tokens.typography.prose} max-w-none whitespace-pre-line break-words text-sm text-muted-foreground [overflow-wrap:anywhere]`}
+    >
+      {content}
+    </div>
+  );
+}
+
 function MarathonEventFields({
   form,
   onPatch,
@@ -850,7 +906,17 @@ export function CourseEditor({
   const [marathonEditOpen, setMarathonEditOpen] = useState(false);
   const [marathonEditEventId, setMarathonEditEventId] = useState<string | null>(null);
   const [marathonEditForm, setMarathonEditForm] = useState<MarathonEventForm>(getEmptyMarathonEventForm);
+  /** Редактирование описания в карточке дня тем же RichTextEditor, что при создании */
+  const [marathonInlineDescEventId, setMarathonInlineDescEventId] = useState<string | null>(null);
+  const [marathonInlineDescValue, setMarathonInlineDescValue] = useState("");
   const [marathonSaving, setMarathonSaving] = useState(false);
+
+  useEffect(() => {
+    if (activeTab !== "schedule") {
+      setMarathonInlineDescEventId(null);
+      setMarathonInlineDescValue("");
+    }
+  }, [activeTab]);
   const [showCoverPicker, setShowCoverPicker] = useState(false);
   const [coverUploading, setCoverUploading] = useState(false);
   const coverFileRef = useRef<HTMLInputElement>(null);
@@ -975,19 +1041,7 @@ export function CourseEditor({
       setError("");
       setSuccessMsg("");
 
-      const payload = {
-        title: marathonEventForm.title,
-        description: marathonEventForm.description || undefined,
-        type: marathonEventForm.type,
-        track: marathonEventForm.track,
-        dayOffset: Number(marathonEventForm.dayOffset),
-        scheduledAt: marathonEventForm.scheduledAt || undefined,
-        weekNumber:
-          marathonEventForm.weekNumber.trim() === "" ? undefined : Number(marathonEventForm.weekNumber),
-        lessonIds: marathonEventForm.lessonIds,
-        published: marathonEventForm.published,
-      };
-      const result = await createMarathonEvent(product.id, payload);
+      const result = await createMarathonEvent(product.id, marathonFormToSavePayload(marathonEventForm));
 
       if ("error" in result && result.error) {
         setError(result.error);
@@ -1007,21 +1061,46 @@ export function CourseEditor({
   }
 
   function openMarathonEditModal(event: SerializedMarathonEvent) {
+    setMarathonInlineDescEventId(null);
     setMarathonEditEventId(event.id);
-    setMarathonEditForm({
-      title: event.title,
-      description: event.description ?? "",
-      type: event.type,
-      track: event.track,
-      dayOffset: String(event.dayOffset),
-      scheduledAt: event.scheduledAt
-        ? formatUtcIsoForDatetimeLocal(event.scheduledAt, marathonTimeZone)
-        : "",
-      weekNumber: event.weekNumber != null ? String(event.weekNumber) : "",
-      lessonIds: [...event.lessonIds],
-      published: event.published,
-    });
+    setMarathonEditForm(marathonEventToForm(event, marathonTimeZone));
     setMarathonEditOpen(true);
+  }
+
+  function startMarathonInlineDescriptionEdit(event: SerializedMarathonEvent) {
+    closeMarathonEditModal();
+    setMarathonInlineDescEventId(event.id);
+    setMarathonInlineDescValue(event.description ?? "");
+  }
+
+  function cancelMarathonInlineDescriptionEdit() {
+    setMarathonInlineDescEventId(null);
+    setMarathonInlineDescValue("");
+  }
+
+  async function saveMarathonInlineDescription(event: SerializedMarathonEvent) {
+    if (marathonSaving) return;
+    try {
+      setMarathonSaving(true);
+      setError("");
+      setSuccessMsg("");
+      const base = marathonEventToForm(event, marathonTimeZone);
+      const payload = marathonFormToSavePayload({ ...base, description: marathonInlineDescValue });
+      const result = await updateMarathonEvent(event.id, payload);
+      if ("error" in result && result.error) {
+        setError(result.error);
+        return;
+      }
+      cancelMarathonInlineDescriptionEdit();
+      setSuccessMsg("Описание события сохранено");
+      setTimeout(() => setSuccessMsg(""), 3000);
+      router.refresh();
+    } catch (err) {
+      console.error("[saveMarathonInlineDescription]", err);
+      setError("Ошибка при сохранении описания");
+    } finally {
+      setMarathonSaving(false);
+    }
   }
 
   function closeMarathonEditModal() {
@@ -1039,19 +1118,7 @@ export function CourseEditor({
       setError("");
       setSuccessMsg("");
 
-      const payload = {
-        title: marathonEditForm.title,
-        description: marathonEditForm.description || undefined,
-        type: marathonEditForm.type,
-        track: marathonEditForm.track,
-        dayOffset: Number(marathonEditForm.dayOffset),
-        scheduledAt: marathonEditForm.scheduledAt || undefined,
-        weekNumber:
-          marathonEditForm.weekNumber.trim() === "" ? undefined : Number(marathonEditForm.weekNumber),
-        lessonIds: marathonEditForm.lessonIds,
-        published: marathonEditForm.published,
-      };
-      const result = await updateMarathonEvent(marathonEditEventId, payload);
+      const result = await updateMarathonEvent(marathonEditEventId, marathonFormToSavePayload(marathonEditForm));
 
       if ("error" in result && result.error) {
         setError(result.error);
@@ -1844,6 +1911,7 @@ export function CourseEditor({
                 </DialogHeader>
                 <form id="marathon-edit-form" onSubmit={handleSaveMarathonEdit} className="space-y-4">
                   <MarathonEventFields
+                    key={marathonEditEventId ?? "marathon-edit"}
                     form={marathonEditForm}
                     onPatch={(patch) => setMarathonEditForm((prev) => ({ ...prev, ...patch }))}
                     lessons={lessons}
@@ -1904,10 +1972,55 @@ export function CourseEditor({
                                   </Badge>
                                 )}
                               </div>
-                              {event.description && (
-                                <p className="text-sm text-muted-foreground break-words [overflow-wrap:anywhere]">
-                                  {event.description}
-                                </p>
+                              {marathonInlineDescEventId === event.id ? (
+                                <div className="space-y-2">
+                                  <label className={tokens.typography.label} htmlFor={`marathon-inline-desc-${event.id}`}>
+                                    Описание
+                                  </label>
+                                  <RichTextEditor
+                                    id={`marathon-inline-desc-${event.id}`}
+                                    value={marathonInlineDescValue}
+                                    onChange={setMarathonInlineDescValue}
+                                    placeholder="Короткое описание события, что нужно сделать или посмотреть"
+                                    minHeight="100px"
+                                  />
+                                  <div className="flex flex-wrap gap-2">
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      disabled={marathonSaving}
+                                      onClick={() => void saveMarathonInlineDescription(event)}
+                                    >
+                                      {marathonSaving ? "Сохраняем..." : "Сохранить описание"}
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      disabled={marathonSaving}
+                                      onClick={cancelMarathonInlineDescriptionEdit}
+                                    >
+                                      Отмена
+                                    </Button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="space-y-2">
+                                  {event.description ? (
+                                    <MarathonEventDescriptionReadonly content={event.description} />
+                                  ) : (
+                                    <p className={`${tokens.typography.small}`}>Нет описания</p>
+                                  )}
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={marathonSaving}
+                                    onClick={() => startMarathonInlineDescriptionEdit(event)}
+                                  >
+                                    Редактировать описание
+                                  </Button>
+                                </div>
                               )}
                               {linkedLessons.length > 0 && (
                                 <ul className="list-inside list-disc text-xs text-muted-foreground">
