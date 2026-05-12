@@ -133,8 +133,8 @@ const GradesTable = ({
         <table className="w-full min-w-[760px] border-separate border-spacing-0 text-sm">
           <thead className="sticky top-0 z-20">
             <tr className="text-left text-xs text-muted-foreground">
-              <th className="sticky left-0 z-30 min-w-[160px] border-b border-r bg-card px-4 py-4 font-medium text-foreground shadow-[1px_0_0_0_hsl(var(--border))]">
-                Фамилия
+              <th className="sticky left-0 z-30 min-w-[200px] max-w-[260px] border-b border-r bg-card px-4 py-4 font-medium text-foreground shadow-[1px_0_0_0_hsl(var(--border))]">
+                Имя и фамилия
               </th>
               {columns.map((col) =>
                 col.kind === "marathon_training" ? (
@@ -171,8 +171,10 @@ const GradesTable = ({
             ) : (
               rows.map((row) => (
                 <tr key={row.enrollmentId} className="group">
-                  <td className="sticky left-0 z-10 border-b border-r bg-card px-4 py-3 font-medium shadow-[1px_0_0_0_hsl(var(--border))] group-hover:bg-accent/30">
-                    <span title={row.fullName}>{row.surname}</span>
+                  <td className="sticky left-0 z-10 max-w-[260px] border-b border-r bg-card px-4 py-3 font-medium shadow-[1px_0_0_0_hsl(var(--border))] group-hover:bg-accent/30">
+                    <span className="line-clamp-2 break-words" title={`${row.displayName}\n${row.email}`}>
+                      {row.displayName}
+                    </span>
                   </td>
                   {columns.map((col) => {
                     const text = formatRatingsForRefs(col.refs, row.enrollmentId, ratingMap);

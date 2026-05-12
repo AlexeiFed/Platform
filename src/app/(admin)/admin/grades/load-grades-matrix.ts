@@ -20,8 +20,11 @@ export type GradeColumn =
 export type GradeRow = {
   enrollmentId: string;
   userId: string;
-  surname: string;
-  fullName: string;
+  /** Имя и фамилия для отображения (как в админке пользователей) */
+  displayName: string;
+  email: string;
+  /** Для сортировки: фамилия или локальная часть email */
+  sortKey: string;
 };
 
 const EXCLUDED_STUDENT_EMAILS = ["23alex08@gmail.com"];
@@ -156,11 +159,12 @@ export async function loadGradesMatrix(productId: string) {
   const rows: GradeRow[] = enrollments.map((e) => ({
     enrollmentId: e.id,
     userId: e.user.id,
-    surname: surnameFromUser(e.user.name, e.user.email),
-    fullName: e.user.name?.trim() || e.user.email,
+    displayName: e.user.name?.trim() || e.user.email.split("@")[0] || e.user.email,
+    email: e.user.email,
+    sortKey: surnameFromUser(e.user.name, e.user.email),
   }));
 
-  rows.sort((a, b) => a.surname.localeCompare(b.surname, "ru"));
+  rows.sort((a, b) => a.sortKey.localeCompare(b.sortKey, "ru"));
 
   return {
     product,
