@@ -23,16 +23,19 @@ type Props = {
 export default async function AdminUsersPage({ searchParams }: Props) {
   const session = await auth();
   if (!session) redirect("/login");
-  if (session.user.role !== "ADMIN") redirect("/admin");
+  const isAdmin = session.user.role === "ADMIN";
+  const isCurator = session.user.role === "CURATOR";
+  if (!isAdmin && !isCurator) redirect("/admin");
 
   const sp = await searchParams;
-  const initialRole = parseRoleFromSearch(
-    typeof sp.role === "string" ? sp.role : undefined,
-  );
+  const initialRole = isAdmin
+    ? parseRoleFromSearch(typeof sp.role === "string" ? sp.role : undefined)
+    : "USER";
   const initialProductId = typeof sp.product === "string" ? sp.product : "";
   const initialSearch = typeof sp.q === "string" ? sp.q : "";
 
   const users = await prisma.user.findMany({
+    where: isCurator ? { role: "USER" } : undefined,
     include: {
       _count: { select: { enrollments: true, submissions: true } },
       curatedProducts: { select: { productId: true } },
@@ -93,7 +96,7 @@ export default async function AdminUsersPage({ searchParams }: Props) {
     <div className="space-y-6">
       <h1 className={tokens.typography.h2}>Пользователи</h1>
 
-      <CreateCuratorForm />
+      {isAdmin ? <CreateCuratorForm /> : null}
 
       <UsersListWithFilters
         users={listUsers}
@@ -101,6 +104,7 @@ export default async function AdminUsersPage({ searchParams }: Props) {
         initialRole={initialRole}
         initialProductId={initialProductId}
         initialSearch={initialSearch}
+        viewer={isAdmin ? "admin" : "curator"}
       />
     </div>
   );

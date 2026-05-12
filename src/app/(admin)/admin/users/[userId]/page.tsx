@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { prisma } from "@/lib/prisma";
@@ -11,6 +11,7 @@ import { formatDate, getInitials, lessonsLabel } from "@/lib/utils";
 import { formatHomeworkDateTime } from "@/lib/homework";
 import { measurementFields } from "@/lib/measurement-fields";
 import { MarathonProceduresManager } from "./marathon-procedures-manager";
+import { auth } from "@/lib/auth";
 
 type Props = {
   params: Promise<{ userId: string }>;
@@ -41,7 +42,23 @@ function ratingBlockCaption(blocks: unknown, blockId: string): string | null {
 }
 
 export default async function AdminUserDetailsPage({ params }: Props) {
+  const session = await auth();
+  if (!session) redirect("/login");
+  if (session.user.role !== "ADMIN" && session.user.role !== "CURATOR") {
+    redirect("/dashboard");
+  }
+
   const { userId } = await params;
+
+  if (session.user.role === "CURATOR") {
+    const access = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+    if (!access || access.role !== "USER") {
+      redirect("/admin/users");
+    }
+  }
 
   const user = await prisma.user.findUnique({
     where: { id: userId },

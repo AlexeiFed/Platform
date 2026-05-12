@@ -74,6 +74,7 @@ export const saveLessonBlockRating = async (
 
   revalidatePath(`/learn/${courseSlug}/${lessonSlug}`);
   revalidatePath(`/admin/users/${session.user.id}`);
+  revalidatePath("/admin/grades");
 
   return { success: true };
 };

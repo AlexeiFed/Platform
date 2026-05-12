@@ -81,9 +81,14 @@ type RestorePayload = {
   scrollY: number;
 };
 
-function buildUsersListQuery(role: Role, productId: string, q: string) {
+function buildUsersListQuery(
+  role: Role,
+  productId: string,
+  q: string,
+  viewer: "admin" | "curator",
+) {
   const params = new URLSearchParams();
-  if (role !== "USER") params.set("role", role);
+  if (viewer === "admin" && role !== "USER") params.set("role", role);
   if (productId) params.set("product", productId);
   const t = q.trim();
   if (t) params.set("q", t);
@@ -111,6 +116,8 @@ type Props = {
   initialRole: Role;
   initialProductId: string;
   initialSearch: string;
+  /** Куратор: только студенты, без админ-действий и без фильтра по роли в URL */
+  viewer?: "admin" | "curator";
 };
 
 export const UsersListWithFilters = ({
@@ -119,6 +126,7 @@ export const UsersListWithFilters = ({
   initialRole,
   initialProductId,
   initialSearch,
+  viewer = "admin",
 }: Props) => {
   const router = useRouter();
   const [roleFilter, setRoleFilter] = useState<Role>(initialRole);
@@ -126,6 +134,12 @@ export const UsersListWithFilters = ({
   const [search, setSearch] = useState(initialSearch);
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
   const searchPending = deferredSearch !== search.trim().toLowerCase();
+
+  useEffect(() => {
+    if (viewer === "curator" && roleFilter !== "USER") {
+      setRoleFilter("USER");
+    }
+  }, [viewer, roleFilter]);
 
   const firstRoleProductUrlEffect = useRef(true);
   const firstSearchUrlEffect = useRef(true);
@@ -154,13 +168,20 @@ export const UsersListWithFilters = ({
     }
 
     const urlHasFilters =
-      initialSearch.trim() !== "" || initialProductId !== "" || initialRole !== "USER";
+      initialSearch.trim() !== "" ||
+      initialProductId !== "" ||
+      (viewer === "admin" && initialRole !== "USER");
 
     if (!urlHasFilters) {
-      setRoleFilter(parsed.role);
+      setRoleFilter(viewer === "curator" ? "USER" : parsed.role);
       setProductId(parsed.product);
       setSearch(parsed.q);
-      const qs = buildUsersListQuery(parsed.role, parsed.product, parsed.q);
+      const qs = buildUsersListQuery(
+        viewer === "curator" ? "USER" : parsed.role,
+        parsed.product,
+        parsed.q,
+        viewer,
+      );
       router.replace(`/admin/users${qs ? `?${qs}` : ""}`, { scroll: false });
     }
 
@@ -182,9 +203,9 @@ export const UsersListWithFilters = ({
       return;
     }
     const { roleFilter: r, productId: p, search: s } = filtersRef.current;
-    const qs = buildUsersListQuery(r, p, s);
+    const qs = buildUsersListQuery(r, p, s, viewer);
     router.replace(`/admin/users${qs ? `?${qs}` : ""}`, { scroll: false });
-  }, [roleFilter, productId, router]);
+  }, [roleFilter, productId, router, viewer]);
 
   useEffect(() => {
     if (firstSearchUrlEffect.current) {
@@ -193,23 +214,29 @@ export const UsersListWithFilters = ({
     }
     const id = window.setTimeout(() => {
       const { roleFilter: r, productId: p, search: s } = filtersRef.current;
-      const qs = buildUsersListQuery(r, p, s);
+      const qs = buildUsersListQuery(r, p, s, viewer);
       router.replace(`/admin/users${qs ? `?${qs}` : ""}`, { scroll: false });
     }, 300);
     return () => clearTimeout(id);
-  }, [search, router]);
+  }, [search, router, viewer]);
 
   useEffect(() => {
     const syncFromLocation = () => {
       const params = new URLSearchParams(window.location.search);
       const r = params.get("role");
-      setRoleFilter(r === "ADMIN" || r === "CURATOR" || r === "USER" ? r : "USER");
+      setRoleFilter(
+        viewer === "curator"
+          ? "USER"
+          : r === "ADMIN" || r === "CURATOR" || r === "USER"
+            ? r
+            : "USER",
+      );
       setProductId(params.get("product") ?? "");
       setSearch(params.get("q") ?? "");
     };
     window.addEventListener("popstate", syncFromLocation);
     return () => window.removeEventListener("popstate", syncFromLocation);
-  }, []);
+  }, [viewer]);
 
   const filtered = useMemo(() => {
     return users.filter((user) => {
@@ -232,29 +259,36 @@ export const UsersListWithFilters = ({
         )}
       >
         <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-end lg:justify-between">
-          <div className="space-y-2">
-            <span className={tokens.typography.label} id="users-role-filter-label">
-              Статус
-            </span>
-            <div
-              className="flex flex-wrap gap-2"
-              role="group"
-              aria-labelledby="users-role-filter-label"
-            >
-              {ROLE_FILTER_OPTIONS.map((opt) => (
-                <Button
-                  key={opt.value}
-                  type="button"
-                  size="sm"
-                  variant={roleFilter === opt.value ? "default" : "outline"}
-                  onClick={() => setRoleFilter(opt.value)}
-                  className="min-h-11"
-                >
-                  {opt.label}
-                </Button>
-              ))}
+          {viewer === "admin" ? (
+            <div className="space-y-2">
+              <span className={tokens.typography.label} id="users-role-filter-label">
+                Статус
+              </span>
+              <div
+                className="flex flex-wrap gap-2"
+                role="group"
+                aria-labelledby="users-role-filter-label"
+              >
+                {ROLE_FILTER_OPTIONS.map((opt) => (
+                  <Button
+                    key={opt.value}
+                    type="button"
+                    size="sm"
+                    variant={roleFilter === opt.value ? "default" : "outline"}
+                    onClick={() => setRoleFilter(opt.value)}
+                    className="min-h-11"
+                  >
+                    {opt.label}
+                  </Button>
+                ))}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="space-y-1">
+              <span className={tokens.typography.label}>Статус</span>
+              <p className="text-sm text-muted-foreground">Только студенты</p>
+            </div>
+          )}
 
           <div className="grid flex-1 gap-3 sm:grid-cols-2 lg:max-w-2xl lg:items-end">
             <div className="space-y-2">
@@ -342,26 +376,30 @@ export const UsersListWithFilters = ({
                   </div>
                 </Link>
                 <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-                  <UserRoleForm userId={user.id} currentRole={user.role} />
-                  {user.role === "CURATOR" && (
-                    <CuratorProductsForm
-                      userId={user.id}
-                      assignedProductIds={user.curatedProducts.map((item) => item.productId)}
-                      products={products}
-                    />
-                  )}
-                  {user.role === "USER" && (
-                    <GrantAccessForm
-                      userId={user.id}
-                      products={products}
-                      existingAccesses={user.enrollments.map((enrollment) => ({
-                        productId: enrollment.productId,
-                        tariffId: enrollment.tariffId,
-                        tariffName: enrollment.tariff.name,
-                      }))}
-                    />
-                  )}
-                  <DeleteUserButton userId={user.id} userEmail={user.email} />
+                  {viewer === "admin" ? (
+                    <>
+                      <UserRoleForm userId={user.id} currentRole={user.role} />
+                      {user.role === "CURATOR" && (
+                        <CuratorProductsForm
+                          userId={user.id}
+                          assignedProductIds={user.curatedProducts.map((item) => item.productId)}
+                          products={products}
+                        />
+                      )}
+                      {user.role === "USER" && (
+                        <GrantAccessForm
+                          userId={user.id}
+                          products={products}
+                          existingAccesses={user.enrollments.map((enrollment) => ({
+                            productId: enrollment.productId,
+                            tariffId: enrollment.tariffId,
+                            tariffName: enrollment.tariff.name,
+                          }))}
+                        />
+                      )}
+                      <DeleteUserButton userId={user.id} userEmail={user.email} />
+                    </>
+                  ) : null}
                 </div>
               </CardContent>
             </Card>

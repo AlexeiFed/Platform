@@ -19,6 +19,7 @@ import {
   User,
   LogOut,
   Library,
+  Star,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { tokens, layout } from "@/lib/design-tokens";
@@ -40,6 +41,7 @@ const adminNav: NavItem[] = [
   { label: "Эфиры", href: "/admin/live", icon: Video },
   { label: "Пользователи", href: "/admin/users", icon: Users },
   { label: "Домашние задания", href: "/admin/homework", icon: ClipboardCheck },
+  { label: "Оценки", href: "/admin/grades", icon: Star },
   { label: "Обратная связь", href: "/admin/feedback", icon: MessageSquare },
   { label: "Оплата", href: "/admin/payments", icon: Wallet },
   { label: "Файлы", href: "/admin/assets", icon: FolderOpen },
