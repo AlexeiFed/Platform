@@ -59,8 +59,8 @@ export default async function AdminGradesPage({ searchParams }: Props) {
       <div>
         <h1 className={tokens.typography.h2}>Оценки</h1>
         <p className={tokens.typography.body}>
-          Оценки нагрузки по блокам уроков (0–10). Для марафона колонки — тренировки; в ячейке — день, название и
-          значения.
+          Оценки нагрузки по блокам уроков (0–10). В строках — только студенты выбранного продукта, в колонках —
+          тренировки или уроки с блоком оценки.
         </p>
       </div>
 
@@ -130,24 +130,28 @@ const GradesTable = ({
         </div>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px] text-sm">
-          <thead>
-            <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
-              <th className="sticky left-0 z-10 min-w-[140px] border-r bg-muted/40 px-3 py-3 font-medium text-foreground">
+        <table className="w-full min-w-[760px] border-separate border-spacing-0 text-sm">
+          <thead className="sticky top-0 z-20">
+            <tr className="text-left text-xs text-muted-foreground">
+              <th className="sticky left-0 z-30 min-w-[160px] border-b border-r bg-card px-4 py-4 font-medium text-foreground shadow-[1px_0_0_0_hsl(var(--border))]">
                 Фамилия
               </th>
               {columns.map((col) =>
                 col.kind === "marathon_training" ? (
-                  <th key={col.eventId} className="min-w-[100px] px-2 py-3 align-bottom font-medium">
-                    <div className="text-[11px] leading-tight text-muted-foreground">День {col.dayOffset}</div>
-                    <div className="mt-0.5 line-clamp-3 text-foreground" title={col.title}>
+                  <th key={col.eventId} className="min-w-[128px] border-b bg-card px-2 py-3 align-bottom font-medium">
+                    <div className="rounded-lg border bg-muted/40 px-2.5 py-2">
+                      <div className="text-[11px] leading-tight text-muted-foreground">День {col.dayOffset}</div>
+                      <div className="mt-1 line-clamp-3 text-xs font-semibold leading-snug text-foreground" title={col.title}>
                       {col.title}
+                      </div>
                     </div>
                   </th>
                 ) : (
-                  <th key={col.lessonId} className="min-w-[100px] max-w-[180px] px-2 py-3 align-bottom font-medium">
-                    <div className="line-clamp-4 text-foreground" title={col.lessonTitle}>
-                      {col.lessonTitle}
+                  <th key={col.lessonId} className="min-w-[128px] max-w-[190px] border-b bg-card px-2 py-3 align-bottom font-medium">
+                    <div className="rounded-lg border bg-muted/40 px-2.5 py-2">
+                      <div className="line-clamp-4 text-xs font-semibold leading-snug text-foreground" title={col.lessonTitle}>
+                        {col.lessonTitle}
+                      </div>
                     </div>
                   </th>
                 ),
@@ -166,30 +170,27 @@ const GradesTable = ({
               </tr>
             ) : (
               rows.map((row) => (
-                <tr key={row.enrollmentId} className="border-b last:border-0 hover:bg-accent/30">
-                  <td className="sticky left-0 z-10 border-r bg-card px-3 py-2 font-medium">
+                <tr key={row.enrollmentId} className="group">
+                  <td className="sticky left-0 z-10 border-b border-r bg-card px-4 py-3 font-medium shadow-[1px_0_0_0_hsl(var(--border))] group-hover:bg-accent/30">
                     <span title={row.fullName}>{row.surname}</span>
                   </td>
                   {columns.map((col) => {
                     const text = formatRatingsForRefs(col.refs, row.enrollmentId, ratingMap);
-                    if (col.kind === "marathon_training") {
-                      return (
-                        <td key={col.eventId} className="px-2 py-2 align-top">
-                          <div className="flex min-w-[120px] max-w-[200px] flex-col gap-1">
-                            <div className="text-[11px] leading-tight text-muted-foreground">
-                              День {col.dayOffset}
-                            </div>
-                            <div className="text-[11px] leading-snug text-foreground line-clamp-3" title={col.title}>
-                              {col.title}
-                            </div>
-                            <div className="text-base font-semibold tabular-nums">{text}</div>
-                          </div>
-                        </td>
-                      );
-                    }
                     return (
-                      <td key={col.lessonId} className="px-2 py-2 align-top tabular-nums">
-                        <span className="font-semibold">{text}</span>
+                      <td
+                        key={col.kind === "marathon_training" ? col.eventId : col.lessonId}
+                        className="border-b px-2 py-2 text-center align-middle tabular-nums group-hover:bg-accent/30"
+                      >
+                        <span
+                          className={cn(
+                            "inline-flex min-h-9 min-w-9 items-center justify-center rounded-full px-2 text-sm font-semibold",
+                            text === "—"
+                              ? "text-muted-foreground"
+                              : "bg-primary/10 text-primary ring-1 ring-primary/15",
+                          )}
+                        >
+                          {text}
+                        </span>
                       </td>
                     );
                   })}

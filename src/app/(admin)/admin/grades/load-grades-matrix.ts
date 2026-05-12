@@ -24,6 +24,8 @@ export type GradeRow = {
   fullName: string;
 };
 
+const EXCLUDED_STUDENT_EMAILS = ["23alex08@gmail.com"];
+
 function ratingRefsFromBlocks(lessonId: string, blocks: unknown): RatingRef[] {
   const arr = blocks as { id: string; type: string }[] | null;
   if (!Array.isArray(arr)) return [];
@@ -67,15 +69,19 @@ export async function loadGradesMatrix(productId: string) {
   if (!product) return null;
 
   const enrollments = await prisma.enrollment.findMany({
-    where: { productId },
+    where: {
+      productId,
+      user: {
+        role: "USER",
+        email: { notIn: EXCLUDED_STUDENT_EMAILS },
+      },
+    },
     select: {
       id: true,
       user: { select: { id: true, name: true, email: true, role: true } },
     },
     orderBy: { createdAt: "asc" },
   });
-
-  const studentEnrollments = enrollments.filter((e) => e.user.role === "USER");
 
   const columns: GradeColumn[] = [];
 
@@ -130,7 +136,7 @@ export async function loadGradesMatrix(productId: string) {
     for (const r of c.refs) allLessonIds.add(r.lessonId);
   }
 
-  const enrollmentIds = studentEnrollments.map((e) => e.id);
+  const enrollmentIds = enrollments.map((e) => e.id);
   const ratings =
     enrollmentIds.length > 0 && allLessonIds.size > 0
       ? await prisma.lessonBlockRating.findMany({
@@ -147,7 +153,7 @@ export async function loadGradesMatrix(productId: string) {
     ratingMap.set(ratingKey(row.enrollmentId, row.lessonId, row.blockId), row.rating);
   }
 
-  const rows: GradeRow[] = studentEnrollments.map((e) => ({
+  const rows: GradeRow[] = enrollments.map((e) => ({
     enrollmentId: e.id,
     userId: e.user.id,
     surname: surnameFromUser(e.user.name, e.user.email),
