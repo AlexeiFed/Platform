@@ -40,12 +40,6 @@ export default async function AdminLiveRoomPage({ params }: Props) {
     productStartDate: event.product.startDate,
   }).ok;
 
-  const liveRow = await prisma.liveRoom.findUnique({
-    where: { marathonEventId: eventId },
-    select: { status: true },
-  });
-  const roomStatus = liveRow?.status ?? "SCHEDULED";
-
   const join = await getAdminLiveJoinToken(eventId);
   if ("error" in join || !("data" in join) || !join.data) {
     redirect("/admin/live");
@@ -69,6 +63,7 @@ export default async function AdminLiveRoomPage({ params }: Props) {
   }
 
   const data = join.data;
+  const roomStatus = data.room.status;
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">

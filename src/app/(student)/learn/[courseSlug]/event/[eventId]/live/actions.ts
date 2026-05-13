@@ -10,6 +10,7 @@ import {
   isMarathonLiveJoinAllowedToday,
   marathonLiveJoinDeniedMessage,
 } from "@/lib/marathon-live-broadcast";
+import { canHostLiveForProduct, isLiveStaffRole } from "@/lib/live-room-staff-access";
 import type { LiveRoomParticipantRole } from "@prisma/client";
 
 const getJwtSecret = () => {
@@ -28,17 +29,23 @@ export async function getOrCreateLiveRoom(eventId: string) {
       select: { id: true, type: true, productId: true, product: { select: { slug: true, type: true } } },
     });
     if (!event || event.product.type !== "MARATHON") return { error: "Событие не найдено" } as const;
+    if (event.type !== "LIVE") return { error: "Это не событие эфира" } as const;
 
-    const enrollment = await prisma.enrollment.findUnique({
-      where: { userId_productId: { userId: session.user.id, productId: event.productId } },
-      select: { id: true },
-    });
-    if (!enrollment) return { error: "Нет доступа к марафону" } as const;
+    const staffCanHost = isLiveStaffRole(session.user.role)
+      ? await canHostLiveForProduct(session.user, event.productId)
+      : false;
+    if (!staffCanHost) {
+      const enrollment = await prisma.enrollment.findUnique({
+        where: { userId_productId: { userId: session.user.id, productId: event.productId } },
+        select: { id: true },
+      });
+      if (!enrollment) return { error: "Нет доступа к марафону" } as const;
 
-    const critRow = await loadEnrollmentForCriteriaByUserProduct(session.user.id, event.productId);
-    const required = criterionForMarathonEventType(event.type);
-    if (required && critRow && !enrollmentHasCriterion(critRow, required)) {
-      return { error: "Эфиры недоступны в вашем тарифе" } as const;
+      const critRow = await loadEnrollmentForCriteriaByUserProduct(session.user.id, event.productId);
+      const required = criterionForMarathonEventType(event.type);
+      if (required && critRow && !enrollmentHasCriterion(critRow, required)) {
+        return { error: "Эфиры недоступны в вашем тарифе" } as const;
+      }
     }
 
     const room = await prisma.liveRoom.upsert({
@@ -85,17 +92,23 @@ export async function getLiveJoinToken(eventId: string) {
       },
     });
     if (!event || event.product.type !== "MARATHON") return { error: "Событие не найдено" } as const;
+    if (event.type !== "LIVE") return { error: "Это не событие эфира" } as const;
 
-    const enrollment = await prisma.enrollment.findUnique({
-      where: { userId_productId: { userId: session.user.id, productId: event.productId } },
-      select: { id: true },
-    });
-    if (!enrollment) return { error: "Нет доступа к марафону" } as const;
+    const staffCanHost = isLiveStaffRole(session.user.role)
+      ? await canHostLiveForProduct(session.user, event.productId)
+      : false;
+    if (!staffCanHost) {
+      const enrollment = await prisma.enrollment.findUnique({
+        where: { userId_productId: { userId: session.user.id, productId: event.productId } },
+        select: { id: true },
+      });
+      if (!enrollment) return { error: "Нет доступа к марафону" } as const;
 
-    const critRow = await loadEnrollmentForCriteriaByUserProduct(session.user.id, event.productId);
-    const required = criterionForMarathonEventType(event.type);
-    if (required && critRow && !enrollmentHasCriterion(critRow, required)) {
-      return { error: "Эфиры недоступны в вашем тарифе" } as const;
+      const critRow = await loadEnrollmentForCriteriaByUserProduct(session.user.id, event.productId);
+      const required = criterionForMarathonEventType(event.type);
+      if (required && critRow && !enrollmentHasCriterion(critRow, required)) {
+        return { error: "Эфиры недоступны в вашем тарифе" } as const;
+      }
     }
 
     const gate = isMarathonLiveJoinAllowedToday({
@@ -130,7 +143,7 @@ export async function getLiveJoinToken(eventId: string) {
     });
 
     const role: LiveRoomParticipantRole =
-      session.user.role === "ADMIN" || session.user.role === "CURATOR"
+      staffCanHost
         ? "HOST"
         : existingParticipant?.role === "SPEAKER" || existingParticipant?.speakerApprovedAt
           ? "SPEAKER"
@@ -226,16 +239,24 @@ export async function requestSpeaker(eventId: string) {
 
 export async function listSpeakerRequests(eventId: string) {
   const session = await auth();
-  if (!session || (session.user.role !== "ADMIN" && session.user.role !== "CURATOR")) {
+  if (!session || !isLiveStaffRole(session.user.role)) {
     return { error: "Нет доступа" } as const;
   }
 
   try {
     const room = await prisma.liveRoom.findUnique({
       where: { marathonEventId: eventId },
-      select: { id: true, maxSpeakers: true, participants: { where: { role: "SPEAKER" }, select: { id: true } } },
+      select: {
+        id: true,
+        maxSpeakers: true,
+        marathonEvent: { select: { productId: true } },
+        participants: { where: { role: "SPEAKER" }, select: { id: true } },
+      },
     });
     if (!room) return { success: true, data: { roomId: null, maxSpeakers: 6, speakerCount: 0, requests: [] } } as const;
+    if (!(await canHostLiveForProduct(session.user, room.marathonEvent.productId))) {
+      return { error: "Нет доступа к этому эфиру" } as const;
+    }
 
     const requests = await prisma.liveRoomParticipant.findMany({
       where: { roomId: room.id, speakerRequestedAt: { not: null }, speakerApprovedAt: null },
@@ -270,7 +291,7 @@ export async function listSpeakerRequests(eventId: string) {
 
 export async function approveSpeaker(eventId: string, userId: string) {
   const session = await auth();
-  if (!session || (session.user.role !== "ADMIN" && session.user.role !== "CURATOR")) {
+  if (!session || !isLiveStaffRole(session.user.role)) {
     return { error: "Нет доступа" } as const;
   }
 
@@ -280,10 +301,14 @@ export async function approveSpeaker(eventId: string, userId: string) {
       select: {
         id: true,
         maxSpeakers: true,
+        marathonEvent: { select: { productId: true } },
         participants: { where: { role: "SPEAKER" }, select: { id: true } },
       },
     });
     if (!room) return { error: "Комната не найдена" } as const;
+    if (!(await canHostLiveForProduct(session.user, room.marathonEvent.productId))) {
+      return { error: "Нет доступа к этому эфиру" } as const;
+    }
     if (room.participants.length >= room.maxSpeakers) {
       return { error: `Лимит спикеров: ${room.maxSpeakers}` } as const;
     }

@@ -7,6 +7,7 @@ import {
   isMarathonLiveJoinAllowedToday,
   marathonLiveJoinDeniedMessage,
 } from "@/lib/marathon-live-broadcast";
+import { canHostLiveForProduct, isLiveStaffRole } from "@/lib/live-room-staff-access";
 import type { LiveRoomStatus } from "@prisma/client";
 
 const loadLiveEventForGate = async (eventId: string) => {
@@ -15,6 +16,7 @@ const loadLiveEventForGate = async (eventId: string) => {
     select: {
       id: true,
       type: true,
+      productId: true,
       dayOffset: true,
       scheduledAt: true,
       product: { select: { slug: true, startDate: true } },
@@ -24,7 +26,7 @@ const loadLiveEventForGate = async (eventId: string) => {
 
 export async function startLiveRoom(eventId: string) {
   const session = await auth();
-  if (!session || (session.user.role !== "ADMIN" && session.user.role !== "CURATOR")) {
+  if (!session || !isLiveStaffRole(session.user.role)) {
     return { error: "Нет доступа" } as const;
   }
 
@@ -32,6 +34,9 @@ export async function startLiveRoom(eventId: string) {
     const event = await loadLiveEventForGate(eventId);
     if (!event || event.type !== "LIVE") {
       return { error: "Событие эфира не найдено" } as const;
+    }
+    if (!(await canHostLiveForProduct(session.user, event.productId))) {
+      return { error: "Нет доступа к этому эфиру" } as const;
     }
 
     const gate = isMarathonLiveJoinAllowedToday({
@@ -63,11 +68,19 @@ export async function startLiveRoom(eventId: string) {
 
 export async function endLiveRoom(eventId: string) {
   const session = await auth();
-  if (!session || (session.user.role !== "ADMIN" && session.user.role !== "CURATOR")) {
+  if (!session || !isLiveStaffRole(session.user.role)) {
     return { error: "Нет доступа" } as const;
   }
 
   try {
+    const event = await loadLiveEventForGate(eventId);
+    if (!event || event.type !== "LIVE") {
+      return { error: "Событие эфира не найдено" } as const;
+    }
+    if (!(await canHostLiveForProduct(session.user, event.productId))) {
+      return { error: "Нет доступа к этому эфиру" } as const;
+    }
+
     const room = await prisma.liveRoom.update({
       where: { marathonEventId: eventId },
       data: { status: "ENDED" satisfies LiveRoomStatus, endedAt: new Date() },

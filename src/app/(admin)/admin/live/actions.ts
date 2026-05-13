@@ -3,11 +3,13 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import jwt from "jsonwebtoken";
+import { revalidatePath } from "next/cache";
 import {
   getLiveBroadcastDateKey,
   isMarathonLiveJoinAllowedToday,
   marathonLiveJoinDeniedMessage,
 } from "@/lib/marathon-live-broadcast";
+import { canHostLiveForProduct, isLiveStaffRole } from "@/lib/live-room-staff-access";
 
 const getJwtSecret = () => {
   const secret = process.env.LIVE_SERVER_JWT_SECRET;
@@ -17,7 +19,7 @@ const getJwtSecret = () => {
 
 export async function getAdminLiveJoinToken(eventId: string) {
   const session = await auth();
-  if (!session || (session.user.role !== "ADMIN" && session.user.role !== "CURATOR")) {
+  if (!session || !isLiveStaffRole(session.user.role)) {
     return { error: "Нет доступа" } as const;
   }
 
@@ -36,6 +38,9 @@ export async function getAdminLiveJoinToken(eventId: string) {
     });
     if (!event || event.product.type !== "MARATHON") return { error: "Событие не найдено" } as const;
     if (event.type !== "LIVE") return { error: "Это не событие эфира" } as const;
+    if (!(await canHostLiveForProduct(session.user, event.productId))) {
+      return { error: "Нет доступа к этому эфиру" } as const;
+    }
 
     const gate = isMarathonLiveJoinAllowedToday({
       dayOffset: event.dayOffset,
@@ -55,15 +60,30 @@ export async function getAdminLiveJoinToken(eventId: string) {
       return { error: marathonLiveJoinDeniedMessage({ ok: false, reason: "no_schedule" }) } as const;
     }
 
-    const room = await prisma.liveRoom.upsert({
+    const existingRoom = await prisma.liveRoom.upsert({
       where: { marathonEventId: event.id },
       update: {},
       create: { marathonEventId: event.id },
       select: { id: true, status: true, maxSpeakers: true },
     });
 
-    if (room.status === "ENDED") {
+    if (existingRoom.status === "ENDED") {
       return { error: "Это событие эфира завершено" } as const;
+    }
+
+    const room =
+      existingRoom.status === "LIVE"
+        ? existingRoom
+        : await prisma.liveRoom.update({
+            where: { id: existingRoom.id },
+            data: { status: "LIVE", startedAt: new Date(), endedAt: null },
+            select: { id: true, status: true, maxSpeakers: true },
+          });
+    if (existingRoom.status !== "LIVE") {
+      revalidatePath("/admin/live");
+      revalidatePath(`/admin/live/${event.id}`);
+      revalidatePath(`/learn/${event.product.slug}/event/${event.id}`);
+      revalidatePath(`/learn/${event.product.slug}/event/${event.id}/live`);
     }
 
     await prisma.liveRoomParticipant.upsert({

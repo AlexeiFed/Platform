@@ -46,13 +46,30 @@ export default async function AdminLivePage({ searchParams }: Props) {
 
   const { productId, date } = await searchParams;
 
+  const allowedProductIds =
+    session.user.role === "CURATOR"
+      ? (
+          await prisma.productCurator.findMany({
+            where: { curatorId: session.user.id },
+            select: { productId: true },
+          })
+        ).map((x) => x.productId)
+      : null;
+
   const marathons = await prisma.product.findMany({
-    where: { type: "MARATHON", deletedAt: null },
+    where: {
+      type: "MARATHON",
+      deletedAt: null,
+      ...(allowedProductIds ? { id: { in: allowedProductIds } } : {}),
+    },
     select: { id: true, title: true, startDate: true },
     orderBy: { title: "asc" },
   });
 
-  const selectedProductId = productId ?? marathons[0]?.id ?? null;
+  const selectedProductId =
+    productId && marathons.some((m) => m.id === productId)
+      ? productId
+      : (marathons[0]?.id ?? null);
   const selected = selectedProductId ? marathons.find((m) => m.id === selectedProductId) ?? null : null;
 
   const liveEvents = selectedProductId
