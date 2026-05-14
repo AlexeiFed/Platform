@@ -2,6 +2,7 @@
 
 import {
   forwardRef,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -18,6 +19,7 @@ import type { Device as MediasoupDevice } from "mediasoup-client";
 import { Device } from "mediasoup-client";
 import { Mic, MicOff, Video, VideoOff, VolumeX, Maximize2, Minimize2 } from "lucide-react";
 import { endLiveRoom } from "@/lib/live-room-actions";
+import { LiveHostRecordingControls } from "@/components/live/live-host-recording-controls";
 import { cn } from "@/lib/utils";
 
 type ServerAck<T> = { ok: true; data: T } | { ok: false; error: string };
@@ -79,12 +81,12 @@ export function LiveRoomClient({
 }: Props) {
   const router = useRouter();
   const isHost = role === "HOST";
-  const canProduce = true; // "как в Zoom": все с видео, у студентов mic off по умолчанию
+  const canProduce = true; // все с аудио/видео; микрофон по умолчанию включаем при входе
   const [status, setStatus] = useState<"connecting" | "connected" | "error">("connecting");
   const [error, setError] = useState("");
   const [remoteTracks, setRemoteTracks] = useState<RemoteTrack[]>([]);
   const [isPending, startTransition] = useTransition();
-  const [micOn, setMicOn] = useState(role === "HOST");
+  const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
   const [peers, setPeers] = useState<PeerRow[]>([]);
   const [producerMuted, setProducerMuted] = useState<Record<string, boolean>>({});
@@ -342,16 +344,10 @@ export function LiveRoomClient({
             const audioTrack = stream.getAudioTracks()[0];
             const videoTrack = stream.getVideoTracks()[0];
             if (audioTrack) {
-              // Как в Zoom: у студентов микрофон по умолчанию выключен.
-              const initialMicOn = role === "HOST";
+              const initialMicOn = true;
               audioTrack.enabled = initialMicOn;
               const p = await sendTransport.produce({ track: audioTrack, appData: { kind: "audio" } });
               audioProducerRef.current = p;
-              if (!initialMicOn) {
-                try {
-                  await p.pause?.();
-                } catch {}
-              }
               setMicOn(initialMicOn);
             }
             if (videoTrack) {
@@ -389,6 +385,8 @@ export function LiveRoomClient({
       } catch {}
     };
   }, [liveServerUrl, token, canProduce, role]);
+
+  const notifyPlayBlocked = useCallback(() => setNeedsAudioGesture(true), []);
 
   const tryEnableAudio = () => {
     try {
@@ -483,9 +481,20 @@ export function LiveRoomClient({
         </Button>
       </div>
 
+      {isHost && marathonEventId ? (
+        <LiveHostRecordingControls
+          eventId={marathonEventId}
+          liveConnected={status === "connected"}
+          stageRef={stageRef}
+          localStreamRef={localStreamRef}
+          remoteTracks={remoteTracks}
+          selfUserId={selfUserId}
+        />
+      ) : null}
+
       <div className="space-y-2">
         <div className={tokens.typography.h3}>Эфир</div>
-        {needsAudioGesture && !isHost ? (
+        {needsAudioGesture ? (
           <Button type="button" variant="outline" size="sm" onClick={tryEnableAudio}>
             Включить звук
           </Button>
@@ -552,72 +561,79 @@ export function LiveRoomClient({
                 {initials(hostPeer?.name ?? null)}
               </div>
             )}
+          </div>
 
-            <div className="absolute bottom-12 left-2 right-2 flex gap-2 overflow-x-auto rounded-xl bg-black/35 p-2 backdrop-blur sm:bottom-auto sm:left-3 sm:right-auto sm:top-14 md:overflow-x-visible">
-              {/* self view */}
+          <div
+            className={cn(
+              "flex gap-2 overflow-x-auto border-t border-white/10 bg-black/80 p-2 backdrop-blur-sm",
+              tokens.radius.md
+            )}
+          >
+            {!isHost ? (
               <div className="relative h-20 w-28 shrink-0 overflow-hidden rounded-lg border border-white/20 bg-black">
                 <video ref={selfThumbVideoRef} className="h-full w-full object-cover" autoPlay playsInline muted />
                 <div className="absolute inset-x-1 bottom-1 flex items-center justify-between gap-1">
-                  <div className="truncate rounded bg-black/55 px-1 py-0.5 text-[10px] text-white">
-                    {isHost ? "Вы" : "Вы"}
-                  </div>
+                  <div className="truncate rounded bg-black/55 px-1 py-0.5 text-[10px] text-white">Вы</div>
                   <div className="flex items-center gap-1">
                     <div className="rounded bg-black/55 p-1 text-white">{micOn ? <Mic className="h-3 w-3" /> : <MicOff className="h-3 w-3" />}</div>
                     <div className="rounded bg-black/55 p-1 text-white">{camOn ? <Video className="h-3 w-3" /> : <VideoOff className="h-3 w-3" />}</div>
                   </div>
                 </div>
               </div>
+            ) : null}
 
-              {peers
-                .filter((p) => (isHost ? p.userId !== selfUserId : p.userId !== hostUserId))
-                .map((p) => {
-                  const video = remoteTracks.find((t) => t.userId === p.userId && t.kind === "video") ?? null;
-                  const audio = remoteTracks.find((t) => t.userId === p.userId && t.kind === "audio") ?? null;
-                  const muted = audio ? Boolean(producerMuted[audio.producerId]) : true;
-                  return (
-                    <div key={p.userId} className="relative h-20 w-28 shrink-0 overflow-hidden rounded-lg border border-white/20 bg-black">
-                      {video ? (
-                        <RemoteVideo stream={video.stream} className="rounded-lg" />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-xl font-semibold text-white/80">
-                          {initials(p.name)}
-                        </div>
-                      )}
-                      <div className="absolute inset-x-1 bottom-1 flex items-center justify-between gap-1">
-                        <div className="truncate rounded bg-black/55 px-1 py-0.5 text-[10px] text-white">
-                          {p.name ?? p.userId}
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <div className="rounded bg-black/55 p-1 text-white">{muted ? <MicOff className="h-3 w-3" /> : <Mic className="h-3 w-3" />}</div>
-                          {isHost && p.userId !== selfUserId ? (
-                            <Button
-                              type="button"
-                              size="icon"
-                              variant="ghost"
-                              className="h-7 w-7 bg-black/55 text-white hover:bg-black/70"
-                              aria-label={muted ? "Включить микрофон участнику" : "Выключить микрофон участнику"}
-                              onClick={() =>
-                                socketRef.current?.emit("setUserAudioMuted", { userId: p.userId, muted: !muted }, () => {})
-                              }
-                            >
-                              {muted ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
-                            </Button>
-                          ) : null}
-                        </div>
+            {peers
+              .filter((p) => (isHost ? p.userId !== selfUserId : p.userId !== hostUserId))
+              .map((p) => {
+                const video = remoteTracks.find((t) => t.userId === p.userId && t.kind === "video") ?? null;
+                const audio = remoteTracks.find((t) => t.userId === p.userId && t.kind === "audio") ?? null;
+                const muted = audio ? Boolean(producerMuted[audio.producerId]) : true;
+                return (
+                  <div key={p.userId} className="relative h-20 w-28 shrink-0 overflow-hidden rounded-lg border border-white/20 bg-black">
+                    {video ? (
+                      <RemoteVideo stream={video.stream} className="rounded-lg" />
+                    ) : (
+                      <div
+                        className="flex h-full w-full items-center justify-center text-xl font-semibold text-white/80"
+                        title="Камера выключена или нет видеопотока"
+                      >
+                        {initials(p.name)}
+                      </div>
+                    )}
+                    <div className="absolute inset-x-1 bottom-1 flex items-center justify-between gap-1">
+                      <div className="truncate rounded bg-black/55 px-1 py-0.5 text-[10px] text-white">
+                        {p.name ?? p.userId}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <div className="rounded bg-black/55 p-1 text-white">{muted ? <MicOff className="h-3 w-3" /> : <Mic className="h-3 w-3" />}</div>
+                        {isHost && p.userId !== selfUserId ? (
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 bg-black/55 text-white hover:bg-black/70"
+                            aria-label={muted ? "Включить микрофон участнику" : "Выключить микрофон участнику"}
+                            onClick={() =>
+                              socketRef.current?.emit("setUserAudioMuted", { userId: p.userId, muted: !muted }, () => {})
+                            }
+                          >
+                            {muted ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
+                          </Button>
+                        ) : null}
                       </div>
                     </div>
-                  );
-                })}
-            </div>
+                  </div>
+                );
+              })}
           </div>
         </div>
 
-        {/* audio playback (без UI): иначе звука не будет */}
-        <div className="hidden">
+        {/* Не display:none: иначе браузеры часто не воспроизводят удалённое аудио */}
+        <div className="sr-only">
           {remoteTracks
             .filter((t) => t.kind === "audio" && t.userId !== selfUserId)
             .map((t) => (
-              <RemoteAudio key={t.id} stream={t.stream} />
+              <RemoteAudio key={t.id} stream={t.stream} onPlayBlocked={notifyPlayBlocked} />
             ))}
         </div>
       </div>
@@ -649,13 +665,16 @@ const RemoteVideo = forwardRef<HTMLVideoElement, { stream: MediaStream; classNam
   }
 );
 
-function RemoteAudio({ stream }: { stream: MediaStream }) {
+function RemoteAudio({ stream, onPlayBlocked }: { stream: MediaStream; onPlayBlocked?: () => void }) {
   const ref = useRef<HTMLAudioElement | null>(null);
   useEffect(() => {
-    if (!ref.current) return;
-    ref.current.srcObject = stream;
-    ref.current.play?.().catch(() => {});
-  }, [stream]);
-  return <audio ref={ref} autoPlay controls className="w-full" />;
+    const el = ref.current;
+    if (!el) return;
+    el.srcObject = stream;
+    el.play?.().catch(() => {
+      onPlayBlocked?.();
+    });
+  }, [stream, onPlayBlocked]);
+  return <audio ref={ref} autoPlay playsInline className="h-px w-px" />;
 }
 

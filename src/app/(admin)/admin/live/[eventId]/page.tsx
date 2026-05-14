@@ -65,6 +65,24 @@ export default async function AdminLiveRoomPage({ params }: Props) {
   const data = join.data;
   const roomStatus = data.room.status;
 
+  const roomRecordings = await prisma.liveRoom.findUnique({
+    where: { marathonEventId: eventId },
+    select: {
+      recordings: {
+        where: { status: "READY", manifestUrl: { not: null } },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+        select: {
+          id: true,
+          manifestUrl: true,
+          durationSec: true,
+          sizeBytes: true,
+          createdAt: true,
+        },
+      },
+    },
+  });
+
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -89,6 +107,30 @@ export default async function AdminLiveRoomPage({ params }: Props) {
         marathonEventId={eventId}
         afterEndRedirectHref="/admin/live"
       />
+
+      {roomRecordings?.recordings?.length ? (
+        <div className="rounded-xl border bg-muted/20 p-4">
+          <div className={tokens.typography.h4}>Записи эфира (S3)</div>
+          <ul className="mt-3 space-y-2">
+            {roomRecordings.recordings.map((r) => (
+              <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                <span className="text-muted-foreground">
+                  {r.createdAt.toLocaleString("ru-RU")}
+                  {typeof r.durationSec === "number" ? ` · ${r.durationSec} с` : null}
+                  {r.sizeBytes != null ? ` · ${(Number(r.sizeBytes) / (1024 * 1024)).toFixed(1)} МБ` : null}
+                </span>
+                {r.manifestUrl ? (
+                  <Button asChild variant="outline" size="sm">
+                    <a href={r.manifestUrl} target="_blank" rel="noopener noreferrer">
+                      Открыть видео
+                    </a>
+                  </Button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       {data.productSlug ? (
         <div className="rounded-xl border bg-muted/20 p-3">
