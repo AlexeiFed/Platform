@@ -2,7 +2,8 @@
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { deleteObject } from "@/lib/s3";
+import { deleteObject, getPresignedDownloadUrl, getPublicUrl } from "@/lib/s3";
+import { assertPreviewPageKeysUnderMaterial } from "@/lib/additional-material-preview-paths";
 import { khabarovskDateInputToUtc } from "@/lib/timezone";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -57,9 +58,22 @@ export type AdminMaterialRow = {
   mimeType: string;
   sizeBytes: number | null;
   coverKey: string | null;
+  previewPageKeys: string[] | null;
   visibilityFrom: string | null;
   createdAt: string;
 };
+
+function parsePreviewPageKeysJson(v: unknown): string[] | null {
+  if (v == null) return null;
+  if (!Array.isArray(v)) return null;
+  const a = v.filter((x): x is string => typeof x === "string" && x.length > 0);
+  return a.length ? a : null;
+}
+
+function isPdfMime(mime: string): boolean {
+  const m = mime.toLowerCase();
+  return m === "application/pdf" || m.includes("pdf");
+}
 
 export async function listAdditionalMaterialsAdmin(
   productId: string
@@ -79,6 +93,7 @@ export async function listAdditionalMaterialsAdmin(
       mimeType: true,
       sizeBytes: true,
       coverKey: true,
+      previewPageKeys: true,
       visibilityFrom: true,
       createdAt: true,
     },
@@ -88,6 +103,7 @@ export async function listAdditionalMaterialsAdmin(
     success: true,
     data: rows.map((r) => ({
       ...r,
+      previewPageKeys: parsePreviewPageKeysJson(r.previewPageKeys),
       visibilityFrom: r.visibilityFrom ? r.visibilityFrom.toISOString() : null,
       createdAt: r.createdAt.toISOString(),
     })),
@@ -216,28 +232,13 @@ export async function deleteAdditionalMaterial(
 ): Promise<{ success: true } | { success: false; error: string }> {
   const existing = await prisma.productAdditionalMaterial.findUnique({
     where: { id },
-    select: { productId: true, fileKey: true, coverKey: true },
+    select: { productId: true, fileKey: true, coverKey: true, previewPageKeys: true },
   });
   if (!existing) return { success: false, error: "Не найдено" };
 
   const gate = await assertStaffProductAccess(existing.productId);
   if (!("session" in gate)) {
     return { success: false, error: "error" in gate ? gate.error : "Нет доступа" };
-  }
-
-  await prisma.productAdditionalMaterial.delete({ where: { id } });
-
-  try {
-    await deleteObject(existing.fileKey);
-  } catch {
-    /* ignore */
-  }
-  if (existing.coverKey) {
-    try {
-      await deleteObject(existing.coverKey);
-    } catch {
-      /* ignore */
-    }
   }
 
   revalidatePath("/admin/additional-materials");
@@ -247,4 +248,118 @@ export async function deleteAdditionalMaterial(
   });
   if (slugRow) revalidatePath(`/learn/${slugRow.slug}/additional-materials`);
   return { success: true };
+}
+
+const setPreviewPagesSchema = z.object({
+  id: z.string().uuid(),
+  pageKeys: z.array(z.string().min(8)).min(1).max(60),
+});
+
+/** Сохранить сгенерированные в браузере WebP-страницы; старые ключи удаляются из S3. */
+export async function setAdditionalMaterialPreviewPages(
+  input: z.infer<typeof setPreviewPagesSchema>
+): Promise<{ success: true } | { success: false; error: string }> {
+  let parsed: z.infer<typeof setPreviewPagesSchema>;
+  try {
+    parsed = setPreviewPagesSchema.parse(input);
+  } catch {
+    return { success: false, error: "Некорректные данные" };
+  }
+
+  const material = await prisma.productAdditionalMaterial.findUnique({
+    where: { id: parsed.id },
+    select: { productId: true, fileKey: true, previewPageKeys: true },
+  });
+  if (!material) return { success: false, error: "Не найдено" };
+
+  const gate = await assertStaffProductAccess(material.productId);
+  if (!("session" in gate)) {
+    return { success: false, error: "error" in gate ? gate.error : "Нет доступа" };
+  }
+
+  if (!assertPreviewPageKeysUnderMaterial(material.fileKey, parsed.pageKeys)) {
+    return { success: false, error: "Некорректные ключи файлов страниц" };
+  }
+
+  const oldPages = parsePreviewPageKeysJson(material.previewPageKeys);
+  if (oldPages) {
+    for (const key of oldPages) {
+      if (parsed.pageKeys.includes(key)) continue;
+      try {
+        await deleteObject(key);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  try {
+    await prisma.productAdditionalMaterial.update({
+      where: { id: parsed.id },
+      data: { previewPageKeys: parsed.pageKeys },
+    });
+  } catch {
+    return { success: false, error: "Не удалось сохранить" };
+  }
+
+  revalidatePath("/admin/additional-materials");
+  revalidatePath(`/admin/additional-materials/preview/${parsed.id}`);
+  const slugRow = await prisma.product.findUnique({
+    where: { id: material.productId },
+    select: { slug: true },
+  });
+  if (slugRow) revalidatePath(`/learn/${slugRow.slug}/additional-materials`);
+  return { success: true };
+}
+
+export async function getAdditionalMaterialStaffPreview(
+  materialId: string
+): Promise<
+  | {
+      success: true;
+      title: string;
+      mimeType: string;
+      previewImageUrls: string[];
+      pdfFallbackUrl: string | null;
+    }
+  | { success: false; error: string }
+> {
+  const session = await auth();
+  if (!session?.user || (session.user.role !== "ADMIN" && session.user.role !== "CURATOR")) {
+    return { success: false, error: "Нет доступа" };
+  }
+
+  const parsedId = z.string().uuid().safeParse(materialId);
+  if (!parsedId.success) return { success: false, error: "Некорректный id" };
+
+  const material = await prisma.productAdditionalMaterial.findUnique({
+    where: { id: parsedId.data },
+    select: { productId: true, title: true, mimeType: true, fileKey: true, previewPageKeys: true },
+  });
+  if (!material) return { success: false, error: "Не найдено" };
+
+  const gate = await assertStaffProductAccess(material.productId);
+  if (!("session" in gate)) {
+    return { success: false, error: "error" in gate ? gate.error : "Нет доступа" };
+  }
+
+  const keys = parsePreviewPageKeysJson(material.previewPageKeys);
+  const previewImageUrls = keys?.map((k) => getPublicUrl(k)) ?? [];
+
+  let pdfFallbackUrl: string | null = null;
+  if (isPdfMime(material.mimeType)) {
+    try {
+      pdfFallbackUrl = await getPresignedDownloadUrl(material.fileKey, 3600);
+    } catch {
+      pdfFallbackUrl = null;
+    }
+  }
+
+  return {
+    success: true,
+    title: material.title,
+    mimeType: material.mimeType,
+    previewImageUrls,
+    pdfFallbackUrl,
+  };
 }

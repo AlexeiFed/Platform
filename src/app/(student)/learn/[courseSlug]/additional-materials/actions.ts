@@ -2,7 +2,7 @@
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getPresignedDownloadUrl } from "@/lib/s3";
+import { getPresignedDownloadUrl, getPublicUrl } from "@/lib/s3";
 
 export type StudentMaterialRow = {
   id: string;
@@ -10,6 +10,8 @@ export type StudentMaterialRow = {
   fileKey: string;
   mimeType: string;
   coverKey: string | null;
+  /** Если задано — студент видит готовые картинки без pdf.js. */
+  previewPageKeys: string[] | null;
 };
 
 export async function listStudentAdditionalMaterials(
@@ -43,10 +45,28 @@ export async function listStudentAdditionalMaterials(
       fileKey: true,
       mimeType: true,
       coverKey: true,
+      previewPageKeys: true,
     },
   });
 
-  return { success: true, data: rows };
+  return {
+    success: true,
+    data: rows.map((r) => ({
+      id: r.id,
+      title: r.title,
+      fileKey: r.fileKey,
+      mimeType: r.mimeType,
+      coverKey: r.coverKey,
+      previewPageKeys: parseStudentPreviewKeys(r.previewPageKeys),
+    })),
+  };
+}
+
+function parseStudentPreviewKeys(v: unknown): string[] | null {
+  if (v == null) return null;
+  if (!Array.isArray(v)) return null;
+  const a = v.filter((x): x is string => typeof x === "string" && x.length > 0);
+  return a.length ? a : null;
 }
 
 export async function getAdditionalMaterialDownloadUrl(
@@ -97,11 +117,15 @@ function isPdfMimeType(mimeType: string): boolean {
   return m === "application/pdf" || m.includes("pdf");
 }
 
-/** Presigned URL для клиентского рендера PDF (pdf.js), только для зачисленных и только PDF. */
-export async function getAdditionalMaterialPdfViewerUrl(
+export type StudentMaterialViewerPayload =
+  | { kind: "images"; title: string; imageUrls: string[] }
+  | { kind: "pdf"; title: string; pdfUrl: string };
+
+/** Просмотр доп. материала: готовые страницы или PDF в браузере. */
+export async function getStudentAdditionalMaterialViewer(
   courseSlug: string,
   materialId: string
-): Promise<{ success: true; url: string; title: string } | { success: false; error: string }> {
+): Promise<{ success: true; data: StudentMaterialViewerPayload } | { success: false; error: string }> {
   const session = await auth();
   if (!session?.user) return { success: false, error: "Нет доступа" };
 
@@ -124,6 +148,7 @@ export async function getAdditionalMaterialPdfViewerUrl(
       title: true,
       visibilityFrom: true,
       mimeType: true,
+      previewPageKeys: true,
     },
   });
   if (!material) return { success: false, error: "Файл не найден" };
@@ -137,6 +162,21 @@ export async function getAdditionalMaterialPdfViewerUrl(
     return { success: false, error: "Просмотр доступен только для PDF" };
   }
 
-  const url = await getPresignedDownloadUrl(material.fileKey, 3600);
-  return { success: true, url, title: material.title };
+  const keys = parseStudentPreviewKeys(material.previewPageKeys);
+  if (keys && keys.length > 0) {
+    return {
+      success: true,
+      data: {
+        kind: "images",
+        title: material.title,
+        imageUrls: keys.map((k) => getPublicUrl(k)),
+      },
+    };
+  }
+
+  const pdfUrl = await getPresignedDownloadUrl(material.fileKey, 3600);
+  return {
+    success: true,
+    data: { kind: "pdf", title: material.title, pdfUrl },
+  };
 }

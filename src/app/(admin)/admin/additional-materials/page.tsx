@@ -32,8 +32,9 @@ export default async function AdditionalMaterialsAdminPage() {
       <div>
         <h1 className={tokens.typography.h2}>Доп. материалы</h1>
         <p className={tokens.typography.body}>
-          Загрузка в S3, привязка к курсу или марафону. Для PDF создаётся обложка по первой странице. Дата
-          видимости — с начала выбранного дня (UTC); если поле пустое, материал виден сразу.
+          Загрузка в S3, привязка к курсу или марафону. Для PDF создаётся обложка по первой странице. Для быстрого
+          просмотра студентом нажмите «Сгенерировать WebP» у материала (страницы сохраняются в S3). Дата видимости —
+          с начала выбранного дня (UTC); если поле пустое, материал виден сразу.
         </p>
       </div>
       <AdditionalMaterialsManager products={products} initialProductId={products[0]?.id ?? null} />

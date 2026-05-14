@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { BookOpen, CheckCircle2, Clock, EyeOff, GraduationCap, Loader2, Trash2, Upload } from "lucide-react";
+import Link from "next/link";
+import { BookOpen, CheckCircle2, Clock, EyeOff, GraduationCap, Images, Loader2, Trash2, Upload } from "lucide-react";
 import { loadPdfJs } from "@/components/shared/pdfjs-loader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,10 +12,13 @@ import { Input } from "@/components/ui/input";
 import { tokens } from "@/lib/design-tokens";
 import { formatKhabarovskDate, isVisibleNow, utcToKhabarovskDateInput } from "@/lib/timezone";
 import { cn } from "@/lib/utils";
+import { uploadPdfPagesAsWebpToS3 } from "@/components/shared/pdf-to-webp-s3-pages-client";
+import { materialStorageDirFromFileKey } from "@/lib/additional-material-preview-paths";
 import {
   createAdditionalMaterial,
   deleteAdditionalMaterial,
   listAdditionalMaterialsAdmin,
+  setAdditionalMaterialPreviewPages,
   updateAdditionalMaterial,
   type AdminMaterialRow,
 } from "./actions";
@@ -273,7 +277,7 @@ export const AdditionalMaterialsManager = ({
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {materials.map((m) => (
-            <MaterialAdminCard key={m.id} row={m} onSave={saveRow} onDelete={remove} />
+            <MaterialAdminCard key={m.id} row={m} onSave={saveRow} onDelete={remove} onReload={load} />
           ))}
         </div>
       )}
@@ -289,14 +293,17 @@ function MaterialAdminCard({
   row,
   onSave,
   onDelete,
+  onReload,
 }: {
   row: AdminMaterialRow;
   onSave: (m: AdminMaterialRow, title: string, vis: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  onReload: () => Promise<void>;
 }) {
   const [title, setTitle] = useState(row.title);
   const [vis, setVis] = useState(utcToKhabarovskDateInput(row.visibilityFrom));
   const [saving, setSaving] = useState(false);
+  const [generatingPreview, setGeneratingPreview] = useState(false);
 
   useEffect(() => {
     setTitle(row.title);
@@ -311,6 +318,36 @@ function MaterialAdminCard({
     : row.mimeType.startsWith("image/")
       ? clientPublicUrl(row.fileKey)
       : null;
+
+  const isPdf =
+    row.mimeType === "application/pdf" || row.mimeType.toLowerCase().includes("pdf");
+
+  async function generatePreviewPages() {
+    if (!isPdf) return;
+    const baseDir = materialStorageDirFromFileKey(row.fileKey);
+    if (!baseDir) {
+      window.alert("Некорректный путь файла");
+      return;
+    }
+    setGeneratingPreview(true);
+    try {
+      const uploadPrefix = `${baseDir}/pages`;
+      const keys = await uploadPdfPagesAsWebpToS3({
+        pdfFileKey: row.fileKey,
+        uploadPathPrefix: uploadPrefix,
+      });
+      const saved = await setAdditionalMaterialPreviewPages({ id: row.id, pageKeys: keys });
+      if (!saved.success) {
+        window.alert(saved.error);
+        return;
+      }
+      await onReload();
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Ошибка генерации");
+    } finally {
+      setGeneratingPreview(false);
+    }
+  }
 
   return (
     <Card className={cn(tokens.shadow.card, tokens.radius.lg, "overflow-hidden border-border")}>
@@ -357,6 +394,48 @@ function MaterialAdminCard({
             </Badge>
           }
         </div>
+        {isPdf ? (
+          <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
+            <span className={tokens.typography.label}>Просмотр PDF для студентов</span>
+            <div className="flex flex-wrap gap-2">
+              {row.previewPageKeys?.length ? (
+                <Badge variant="secondary">{row.previewPageKeys.length} стр. (WebP)</Badge>
+              ) : (
+                <Badge variant="outline">Страницы не сгенерированы — студент ждёт pdf.js</Badge>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={generatingPreview}
+                onClick={() => void generatePreviewPages()}
+                aria-label="Сгенерировать страницы PDF в WebP для быстрого просмотра"
+              >
+                {generatingPreview ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                ) : (
+                  <Images className="mr-2 h-4 w-4" aria-hidden />
+                )}
+                Сгенерировать WebP
+              </Button>
+              <Button type="button" size="sm" variant="outline" asChild>
+                <Link
+                  href={`/admin/additional-materials/preview/${row.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Открыть предпросмотр документа"
+                >
+                  Предпросмотр
+                </Link>
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Генерация в браузере (до 60 стр.), затем сохранение в S3. Повтор — перезапишет список страниц.
+            </p>
+          </div>
+        ) : null}
         <div className="space-y-2">
           <span className="text-xs text-muted-foreground">Название</span>
           <Input value={title} onChange={(e) => setTitle(e.target.value)} className={tokens.radius.md} />

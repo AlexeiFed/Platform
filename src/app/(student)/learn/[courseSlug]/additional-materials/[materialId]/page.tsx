@@ -1,11 +1,12 @@
 import { auth } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { tokens } from "@/lib/design-tokens";
 import { PdfPages } from "@/components/shared/pdf-pages";
-import { getAdditionalMaterialPdfViewerUrl } from "../actions";
+import { getStudentAdditionalMaterialViewer } from "../actions";
 
 type Props = {
   params: Promise<{ courseSlug: string; materialId: string }>;
@@ -16,12 +17,18 @@ export default async function AdditionalMaterialPdfViewerPage({ params }: Props)
   const session = await auth();
   if (!session) redirect("/login");
 
-  const res = await getAdditionalMaterialPdfViewerUrl(courseSlug, materialId);
+  const res = await getStudentAdditionalMaterialViewer(courseSlug, materialId);
   if (!res.success) {
     if (res.error === "Курс не найден") notFound();
     if (res.error === "Просмотр доступен только для PDF") notFound();
     redirect(`/learn/${courseSlug}/additional-materials`);
   }
+
+  const { data } = res;
+  const subtitle =
+    data.kind === "images"
+      ? "Готовые страницы (быстрый просмотр)."
+      : "PDF в браузере — первый просмотр может занять время.";
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 pb-12">
@@ -44,11 +51,30 @@ export default async function AdditionalMaterialPdfViewerPage({ params }: Props)
       </div>
 
       <div>
-        <h1 className={tokens.typography.h2}>{res.title}</h1>
-        <p className={tokens.typography.small}>Просмотр PDF в браузере (как страницы в уроке).</p>
+        <h1 className={tokens.typography.h2}>{data.title}</h1>
+        <p className={tokens.typography.small}>{subtitle}</p>
       </div>
 
-      <PdfPages url={res.url} className="w-full" />
+      {data.kind === "images" ? (
+        <div className="space-y-3">
+          {data.imageUrls.map((url, idx) => (
+            <div key={url} className="overflow-hidden rounded-lg border border-border bg-background">
+              <Image
+                src={url}
+                alt={`Страница ${idx + 1}`}
+                width={1600}
+                height={2200}
+                className="block h-auto w-full"
+                loading={idx < 2 ? "eager" : "lazy"}
+                fetchPriority={idx === 0 ? "high" : "auto"}
+                unoptimized
+              />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <PdfPages url={data.pdfUrl} className="w-full" />
+      )}
     </div>
   );
 }

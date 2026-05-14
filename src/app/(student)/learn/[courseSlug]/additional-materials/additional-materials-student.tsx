@@ -97,6 +97,9 @@ export const AdditionalMaterialsStudent = ({
                 )}
               </button>
               <p className="line-clamp-2 text-center text-sm font-medium leading-snug">{m.title}</p>
+              {isPdf && m.previewPageKeys?.length ? (
+                <p className="text-center text-xs text-muted-foreground">Быстрый просмотр (готовые страницы)</p>
+              ) : null}
               <div className="flex flex-col gap-2">
                 {isPdf ? (
                   <Button type="button" variant="secondary" className="w-full" asChild>

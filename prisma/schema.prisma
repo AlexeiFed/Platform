@@ -270,6 +270,8 @@ model ProductAdditionalMaterial {
   mimeType        String
   sizeBytes       Int?
   coverKey        String?
+  /// S3-ключи WebP страниц PDF (порядок = порядок листов), для мгновенного просмотра студентом.
+  previewPageKeys Json?
   visibilityFrom  DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt

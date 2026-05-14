@@ -70,6 +70,14 @@ try_ssh_origin() {
   return 1
 }
 
+# Git ≥2.35: при владельце репозитория ≠ appuser (часто после rsync под root) git отказывается работать.
+ensure_git_safe_directory() {
+  [[ -d "${REMOTE}/.git" ]] || return 0
+  if ! sudo -u appuser git config --global --get-all safe.directory 2>/dev/null | grep -Fxq "$REMOTE"; then
+    sudo -u appuser git config --global --add safe.directory "$REMOTE"
+  fi
+}
+
 if [[ ! -d "$REMOTE/.git" ]]; then
   echo "→ нет $REMOTE/.git — bootstrap (бэкап, clone по HTTPS)…"
   ts="$(date +%s)"
@@ -86,6 +94,11 @@ if [[ ! -d "$REMOTE/.git" ]]; then
   fi
   try_ssh_origin || echo "→ Deploy key ещё не на GitHub — origin остаётся HTTPS."
 fi
+
+ensure_git_safe_directory
+
+# Иначе git pull не может перезаписать файлы, созданные root / другим пользователем.
+chown -R appuser:appuser "$REMOTE" 2>/dev/null || true
 
 if [[ "$(sudo -u appuser git -C "$REMOTE" remote get-url origin 2>/dev/null || true)" == "$GIT_CLONE_HTTPS" ]]; then
   try_ssh_origin || true
