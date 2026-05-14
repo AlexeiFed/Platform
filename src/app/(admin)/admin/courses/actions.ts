@@ -1,5 +1,7 @@
 "use server";
 
+import { randomUUID } from "crypto";
+import type { Prisma } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
@@ -295,6 +297,92 @@ export async function deleteLesson(lessonId: string) {
     revalidatePath(`/admin/courses/${lesson.productId}`);
     return { success: true };
   } catch {
+    return { error: "Произошла ошибка" };
+  }
+}
+
+function cloneLessonBlocksWithNewIds(blocks: Prisma.JsonValue | null): Prisma.InputJsonValue | undefined {
+  if (blocks === null || blocks === undefined) return undefined;
+  if (!Array.isArray(blocks)) return undefined;
+  return blocks.map((item) => {
+    if (item && typeof item === "object" && !Array.isArray(item) && "id" in item) {
+      return { ...item, id: randomUUID() };
+    }
+    return item;
+  }) as Prisma.InputJsonValue;
+}
+
+export async function duplicateLesson(
+  lessonId: string
+): Promise<{ success: true; data: { id: string } } | { error: string }> {
+  const session = await auth();
+  if (!session || (session.user.role !== "ADMIN" && session.user.role !== "CURATOR")) {
+    return { error: "Нет доступа" };
+  }
+
+  const parsedId = z.string().uuid().safeParse(lessonId);
+  if (!parsedId.success) return { error: "Некорректный идентификатор" };
+
+  try {
+    const source = await prisma.lesson.findUnique({
+      where: { id: parsedId.data },
+      include: { attachments: { orderBy: { createdAt: "asc" } } },
+    });
+    if (!source) return { error: "Урок не найден" };
+
+    const maxOrder = await prisma.lesson.aggregate({
+      where: { productId: source.productId },
+      _max: { order: true },
+    });
+    const nextOrder = (maxOrder._max.order ?? 0) + 1;
+
+    const newTitle = `${source.title} (копия)`;
+    const baseSlug = slugify(newTitle);
+    let finalSlug = baseSlug || `lesson-${Date.now()}`;
+    const slugTaken = await prisma.lesson.findUnique({
+      where: { productId_slug: { productId: source.productId, slug: finalSlug } },
+      select: { id: true },
+    });
+    if (slugTaken) finalSlug = `${finalSlug}-${Date.now()}`;
+
+    const clonedBlocks = cloneLessonBlocksWithNewIds(source.blocks);
+
+    const created = await prisma.$transaction(async (tx) => {
+      const lesson = await tx.lesson.create({
+        data: {
+          productId: source.productId,
+          title: newTitle,
+          slug: finalSlug,
+          order: nextOrder,
+          content: source.content,
+          videoUrl: source.videoUrl,
+          blocks: clonedBlocks ?? undefined,
+          homeworkEnabled: source.homeworkEnabled,
+          homeworkQuestions: source.homeworkQuestions ?? undefined,
+          unlockRule: source.unlockRule,
+          unlockDate: source.unlockDate,
+          unlockDay: source.unlockDay,
+          published: false,
+        },
+      });
+      for (const att of source.attachments) {
+        await tx.lessonAttachment.create({
+          data: {
+            lessonId: lesson.id,
+            name: att.name,
+            url: att.url,
+            type: att.type,
+            size: att.size,
+          },
+        });
+      }
+      return lesson;
+    });
+
+    revalidatePath(`/admin/courses/${source.productId}`);
+    return { success: true, data: { id: created.id } };
+  } catch (error) {
+    console.error("[duplicateLesson]", error);
     return { error: "Произошла ошибка" };
   }
 }

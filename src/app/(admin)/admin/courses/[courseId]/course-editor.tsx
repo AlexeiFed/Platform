@@ -25,7 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { tokens } from "@/lib/design-tokens";
 import { confirmDeletion } from "@/lib/confirm-deletion";
 import {
-  Plus, GripVertical, FileText, Film, X, Pencil, Trash2,
+  Plus, GripVertical, FileText, Film, X, Pencil, Trash2, Copy,
   Eye, EyeOff, Image as ImageIcon, Upload, Loader2,
   ClipboardList, CalendarDays, ArrowUp, ArrowDown, ArrowLeft,
   Gauge,
@@ -41,7 +41,7 @@ import {
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import {
-  createLesson, updateLesson, deleteLesson, reorderLessons, updateProduct,
+  createLesson, updateLesson, deleteLesson, duplicateLesson, reorderLessons, updateProduct,
 } from "../actions";
 import {
   createMarathonEvent,
@@ -385,12 +385,13 @@ function getPublicUrl(key: string) {
 // === Sortable Lesson Item ===
 
 function SortableLesson({
-  lesson, index, onEdit, onTogglePublish, onDelete,
+  lesson, index, onEdit, onTogglePublish, onDuplicate, onDelete,
 }: {
   lesson: SerializedLesson;
   index: number;
   onEdit: () => void;
   onTogglePublish: () => void;
+  onDuplicate: () => void;
   onDelete: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: lesson.id });
@@ -458,6 +459,18 @@ function SortableLesson({
             aria-label="Редактировать урок"
           >
             <Pencil className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDuplicate();
+            }}
+            aria-label="Дублировать урок"
+          >
+            <Copy className="h-4 w-4" />
           </Button>
           <Button
             type="button"
@@ -1270,6 +1283,24 @@ export function CourseEditor({
     } catch (err) {
       console.error("[handleDeleteLesson]", err);
       setError("Ошибка при удалении урока");
+    }
+  }
+
+  async function handleDuplicateLesson(lesson: SerializedLesson) {
+    setError("");
+    setSuccessMsg("");
+    try {
+      const result = await duplicateLesson(lesson.id);
+      if ("error" in result && result.error) {
+        setError(result.error);
+        return;
+      }
+      setSuccessMsg("Урок скопирован в конец списка");
+      setTimeout(() => setSuccessMsg(""), 3000);
+      router.refresh();
+    } catch (err) {
+      console.error("[handleDuplicateLesson]", err);
+      setError("Ошибка при дублировании урока");
     }
   }
 
@@ -2115,6 +2146,7 @@ export function CourseEditor({
                     index={idx}
                     onEdit={() => openEdit(lesson)}
                     onTogglePublish={() => handleToggleLessonPublish(lesson)}
+                    onDuplicate={() => void handleDuplicateLesson(lesson)}
                     onDelete={() => handleDeleteLesson(lesson.id, lesson.title)}
                   />
                   {editingLesson?.id === lesson.id ? (

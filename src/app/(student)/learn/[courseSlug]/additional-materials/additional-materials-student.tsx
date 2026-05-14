@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { BookOpen, Download, GraduationCap, Loader2 } from "lucide-react";
+import Link from "next/link";
+import { BookOpen, Download, Eye, GraduationCap, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { tokens } from "@/lib/design-tokens";
@@ -13,6 +14,11 @@ const S3_BUCKET = process.env.NEXT_PUBLIC_S3_BUCKET;
 
 function clientPublicUrl(key: string) {
   return `https://${S3_BUCKET}.storage.yandexcloud.net/${key}`;
+}
+
+function isPdfMaterial(mimeType: string): boolean {
+  const m = mimeType.toLowerCase();
+  return m === "application/pdf" || m.includes("pdf");
 }
 
 export const AdditionalMaterialsStudent = ({
@@ -55,6 +61,7 @@ export const AdditionalMaterialsStudent = ({
             ? clientPublicUrl(m.fileKey)
             : null;
         const busy = loadingId === m.id;
+        const isPdf = isPdfMaterial(m.mimeType);
         return (
           <Card
             key={m.id}
@@ -90,20 +97,33 @@ export const AdditionalMaterialsStudent = ({
                 )}
               </button>
               <p className="line-clamp-2 text-center text-sm font-medium leading-snug">{m.title}</p>
-              <Button
-                type="button"
-                className="w-full"
-                onClick={() => void download(m.id)}
-                disabled={busy}
-                aria-label={`Скачать файл ${m.title}`}
-              >
-                {busy ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-                ) : (
-                  <Download className="mr-2 h-4 w-4" aria-hidden />
-                )}
-                Скачать
-              </Button>
+              <div className="flex flex-col gap-2">
+                {isPdf ? (
+                  <Button type="button" variant="secondary" className="w-full" asChild>
+                    <Link
+                      href={`/learn/${courseSlug}/additional-materials/${m.id}`}
+                      aria-label={`Посмотреть PDF: ${m.title}`}
+                    >
+                      <Eye className="mr-2 h-4 w-4 shrink-0" aria-hidden />
+                      Посмотреть
+                    </Link>
+                  </Button>
+                ) : null}
+                <Button
+                  type="button"
+                  className="w-full"
+                  onClick={() => void download(m.id)}
+                  disabled={busy}
+                  aria-label={`Скачать файл ${m.title}`}
+                >
+                  {busy ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                  ) : (
+                    <Download className="mr-2 h-4 w-4" aria-hidden />
+                  )}
+                  Скачать
+                </Button>
+              </div>
             </CardContent>
           </Card>
         );
