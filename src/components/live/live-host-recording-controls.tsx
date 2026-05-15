@@ -8,10 +8,8 @@ import { tokens } from "@/lib/design-tokens";
 import { cn } from "@/lib/utils";
 import { failLiveRoomRecording, finishLiveRoomRecording, startLiveRoomRecording } from "@/lib/live-recording-actions";
 import {
-  LiveRecordingAudioMixer,
-  buildRecorderOutputStream,
-  getStageCaptureStream,
-  releaseStageCaptureStream,
+  LiveStageRecorder,
+  buildHostRecordingSources,
   pickRecorderMime,
   pickRecordingFormat,
   type RecordingFormat,
@@ -38,7 +36,6 @@ type Props = {
 export function LiveHostRecordingControls({
   eventId,
   liveConnected,
-  stageRef,
   localStreamRef,
   remoteTracks,
   selfUserId,
@@ -49,7 +46,7 @@ export function LiveHostRecordingControls({
   const [recError, setRecError] = useState<string | null>(null);
   const [elapsedSec, setElapsedSec] = useState(0);
 
-  const mixerRef = useRef<LiveRecordingAudioMixer | null>(null);
+  const stageRecorderRef = useRef<LiveStageRecorder | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const sessionRef = useRef<{
@@ -60,7 +57,6 @@ export function LiveHostRecordingControls({
     startedAt: number;
   } | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const stageCapRef = useRef<MediaStream | null>(null);
 
   const stopTick = () => {
     if (tickRef.current) {
@@ -69,35 +65,35 @@ export function LiveHostRecordingControls({
     }
   };
 
-  const cleanupCapture = () => {
-    releaseStageCaptureStream(stageCapRef.current);
-    stageCapRef.current = null;
+  const cleanupRecorder = () => {
+    stageRecorderRef.current?.release();
+    stageRecorderRef.current = null;
   };
 
-  const syncMixer = useCallback(() => {
-    const mixer = mixerRef.current;
-    if (!mixer) return;
-    const remoteAudios = remoteTracks
-      .filter((t) => t.kind === "audio" && t.userId !== selfUserId)
-      .map((t) => t.stream);
-    mixer.sync({
-      local: localStreamRef.current,
-      remoteAudios,
-    });
-  }, [remoteTracks, selfUserId, localStreamRef]);
+  const recordingSources = useCallback(
+    () => buildHostRecordingSources(localStreamRef.current, remoteTracks, selfUserId),
+    [localStreamRef, remoteTracks, selfUserId]
+  );
+
+  const syncRecordingAudio = useCallback(() => {
+    const rec = stageRecorderRef.current;
+    if (!rec) return;
+    const src = recordingSources();
+    rec.syncAudio({ localAudio: src.localAudio, remoteAudios: src.remoteAudios });
+  }, [recordingSources]);
 
   useEffect(() => {
     if (phase !== "recording") return;
-    syncMixer();
-  }, [phase, syncMixer]);
+    syncRecordingAudio();
+  }, [phase, syncRecordingAudio]);
 
   const stopRecording = useCallback(() => {
     const rec = recorderRef.current;
-    const mixer = mixerRef.current;
     const session = sessionRef.current;
     if (!rec || !session) {
       setPhase("idle");
       stopTick();
+      cleanupRecorder();
       return;
     }
 
@@ -113,14 +109,12 @@ export function LiveHostRecordingControls({
           const blob = new Blob(chunks, { type: rec.mimeType || session.contentType });
           chunksRef.current = [];
           recorderRef.current = null;
-          mixer?.close();
-          mixerRef.current = null;
+          cleanupRecorder();
 
           if (blob.size > MAX_RECORDING_BYTES || !session.contentType.startsWith("video/")) {
             setRecError("Файл записи слишком большой или некорректный тип");
             await failLiveRoomRecording(eventId, session.recordingId, "Превышен размер файла");
             sessionRef.current = null;
-            cleanupCapture();
             setPhase("idle");
             return;
           }
@@ -139,7 +133,6 @@ export function LiveHostRecordingControls({
             setRecError("Не удалось загрузить запись в S3");
             await failLiveRoomRecording(eventId, session.recordingId, "Ошибка загрузки в S3");
             sessionRef.current = null;
-            cleanupCapture();
             setPhase("idle");
             return;
           }
@@ -151,7 +144,6 @@ export function LiveHostRecordingControls({
             durationSec,
           });
           sessionRef.current = null;
-          cleanupCapture();
 
           if (fin && "error" in fin && fin.error) {
             setRecError(fin.error);
@@ -170,21 +162,14 @@ export function LiveHostRecordingControls({
     } catch (e) {
       console.error("[recorder stop]", e);
       void failLiveRoomRecording(eventId, session.recordingId, "Ошибка остановки записи");
-      mixer?.close();
-      mixerRef.current = null;
       sessionRef.current = null;
-      cleanupCapture();
+      cleanupRecorder();
       setPhase("idle");
     }
   }, [eventId, router]);
 
   const startRecording = async () => {
     setRecError(null);
-    const stage = stageRef.current;
-    if (!stage) {
-      setRecError("Нет области эфира для захвата");
-      return;
-    }
 
     const format = pickRecordingFormat();
     if (!format) {
@@ -198,6 +183,12 @@ export function LiveHostRecordingControls({
       return;
     }
 
+    const sources = recordingSources();
+    if (!sources.main?.getVideoTracks().length) {
+      setRecError("Нет видео для записи. Включите камеру.");
+      return;
+    }
+
     setIsStarting(true);
     try {
       const started = await startLiveRoomRecording(eventId, format);
@@ -208,35 +199,23 @@ export function LiveHostRecordingControls({
 
       const { recordingId, uploadUrl, contentType } = started.data;
 
-      const mixer = new LiveRecordingAudioMixer();
-      mixerRef.current = mixer;
-      try {
-        await mixer.resume();
-      } catch (e) {
-        console.error("[mixer resume]", e);
-        mixer.close();
-        mixerRef.current = null;
-        await failLiveRoomRecording(eventId, recordingId, "AudioContext не запущен");
-        setRecError("Не удалось запустить аудио-контекст");
+      const stageRecorder = await LiveStageRecorder.create(sources);
+      if (!stageRecorder) {
+        await failLiveRoomRecording(eventId, recordingId, "Не удалось подготовить захват");
+        setRecError("Не удалось подготовить запись. Попробуйте Chrome на десктопе.");
+        return;
+      }
+      stageRecorderRef.current = stageRecorder;
+
+      const combined = stageRecorder.getCombinedStream();
+      if (!combined.getVideoTracks().length || !combined.getAudioTracks().length) {
+        stageRecorder.release();
+        stageRecorderRef.current = null;
+        await failLiveRoomRecording(eventId, recordingId, "Нет аудио/видео треков");
+        setRecError("Нет аудио для записи. Проверьте микрофон и звук участников.");
         return;
       }
 
-      const remoteAudios = remoteTracks
-        .filter((t) => t.kind === "audio" && t.userId !== selfUserId)
-        .map((t) => t.stream);
-      mixer.sync({ local: localStreamRef.current, remoteAudios });
-
-      const stageCap = getStageCaptureStream(stage);
-      if (!stageCap || !stageCap.getVideoTracks().length) {
-        mixer.close();
-        mixerRef.current = null;
-        await failLiveRoomRecording(eventId, recordingId, "captureStream недоступен");
-        setRecError("Не удалось захватить видео сцены. Проверьте, что эфир на экране, и попробуйте Chrome на десктопе.");
-        return;
-      }
-      stageCapRef.current = stageCap;
-
-      const combined = buildRecorderOutputStream(stageCap, mixer.getMixedStream());
       let recorder: MediaRecorder;
       try {
         recorder = new MediaRecorder(combined, {
@@ -246,9 +225,7 @@ export function LiveHostRecordingControls({
         });
       } catch (e) {
         console.error("[MediaRecorder]", e);
-        cleanupCapture();
-        mixer.close();
-        mixerRef.current = null;
+        cleanupRecorder();
         await failLiveRoomRecording(eventId, recordingId, "MediaRecorder не создан");
         setRecError("Не удалось создать MediaRecorder");
         return;
@@ -263,15 +240,6 @@ export function LiveHostRecordingControls({
         setRecError("Ошибка записи (MediaRecorder)");
       };
 
-      const videoTrack = combined.getVideoTracks()[0];
-      videoTrack?.addEventListener("ended", () => {
-        console.error("[recording] video track ended");
-        if (recorderRef.current?.state === "recording") {
-          setRecError("Видеопоток записи прервался");
-          stopRecording();
-        }
-      });
-
       recorderRef.current = recorder;
       sessionRef.current = {
         recordingId,
@@ -285,9 +253,7 @@ export function LiveHostRecordingControls({
         recorder.start(1000);
       } catch (e) {
         console.error("[recorder start]", e);
-        cleanupCapture();
-        mixer.close();
-        mixerRef.current = null;
+        cleanupRecorder();
         recorderRef.current = null;
         sessionRef.current = null;
         await failLiveRoomRecording(eventId, recordingId, "Не удалось начать запись");
@@ -302,6 +268,7 @@ export function LiveHostRecordingControls({
       setPhase("recording");
     } catch (e) {
       console.error("[startRecording]", e);
+      cleanupRecorder();
       setRecError("Не удалось начать запись");
     } finally {
       setIsStarting(false);
@@ -332,9 +299,7 @@ export function LiveHostRecordingControls({
         }
       }
       recorderRef.current = null;
-      mixerRef.current?.close();
-      mixerRef.current = null;
-      cleanupCapture();
+      cleanupRecorder();
     };
   }, [eventId]);
 
@@ -343,7 +308,7 @@ export function LiveHostRecordingControls({
   return (
     <div className="space-y-2">
       <div className={cn(tokens.typography.small, "text-muted-foreground")}>
-        Запись: область «Эфир» (ведущий и превью участников) и звук с твоего микрофона и участников.
+        Запись: камера ведущего, превью участников и звук всех (микрофоны не отключаются при записи).
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {phase === "idle" ? (

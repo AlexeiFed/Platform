@@ -394,7 +394,12 @@ export function LiveRoomClient({
 
   const notifyPlayBlocked = useCallback(() => setNeedsAudioGesture(true), []);
 
-  const tryEnableAudio = () => {
+  const remoteAudioCount = useMemo(
+    () => remoteTracks.filter((t) => t.kind === "audio" && t.userId !== selfUserId).length,
+    [remoteTracks, selfUserId]
+  );
+
+  const tryEnableAudio = useCallback(() => {
     try {
       const els = Array.from(document.querySelectorAll("audio")) as HTMLAudioElement[];
       Promise.allSettled(els.map((a) => a.play())).then((res) => {
@@ -402,7 +407,12 @@ export function LiveRoomClient({
         setNeedsAudioGesture(anyRejected);
       });
     } catch {}
-  };
+  }, []);
+
+  useEffect(() => {
+    if (status !== "connected" || remoteAudioCount === 0) return;
+    tryEnableAudio();
+  }, [status, remoteAudioCount, tryEnableAudio]);
 
   const retry = () => {
     startTransition(() => {
