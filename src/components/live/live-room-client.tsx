@@ -91,7 +91,7 @@ export function LiveRoomClient({
   const [peers, setPeers] = useState<PeerRow[]>([]);
   const [producerMuted, setProducerMuted] = useState<Record<string, boolean>>({});
   const [needsAudioGesture, setNeedsAudioGesture] = useState(false);
-  const [stageFullscreen, setStageFullscreen] = useState(false);
+  const [stageExpanded, setStageExpanded] = useState(false);
 
   const socketRef = useRef<Socket | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -108,7 +108,7 @@ export function LiveRoomClient({
   const syncStageFs = () => {
     const doc = document as Document & { webkitFullscreenElement?: Element | null };
     const fs = document.fullscreenElement ?? doc.webkitFullscreenElement ?? null;
-    setStageFullscreen(fs === stageRef.current);
+    setStageExpanded(fs === stageRef.current);
   };
 
   useEffect(() => {
@@ -122,36 +122,42 @@ export function LiveRoomClient({
 
   const toggleStageFullscreen = async () => {
     const stage = stageRef.current;
-    const vid = mainDisplayVideoRef.current;
-    const webkitVid = vid as HTMLVideoElement & { webkitEnterFullscreen?: () => void };
     const doc = document as Document & {
       webkitFullscreenElement?: Element | null;
       webkitExitFullscreen?: () => void;
     };
+    const nativeFs = (document.fullscreenElement ?? doc.webkitFullscreenElement) === stage;
+
+    if (stageExpanded) {
+      if (nativeFs) {
+        try {
+          if (document.exitFullscreen) await document.exitFullscreen();
+          else doc.webkitExitFullscreen?.();
+        } catch {
+          /* ignore */
+        }
+      }
+      setStageExpanded(false);
+      return;
+    }
+
+    if (!stage) return;
 
     try {
-      if (document.fullscreenElement || doc.webkitFullscreenElement) {
-        if (document.exitFullscreen) await document.exitFullscreen();
-        else doc.webkitExitFullscreen?.();
-        return;
-      }
       const webkitStage = stage as HTMLElement & { webkitRequestFullscreen?: () => void };
-      if (stage?.requestFullscreen) {
+      if (stage.requestFullscreen) {
         await stage.requestFullscreen();
         return;
       }
-      if (webkitStage?.webkitRequestFullscreen) {
+      if (webkitStage.webkitRequestFullscreen) {
         webkitStage.webkitRequestFullscreen();
         return;
       }
-      webkitVid?.webkitEnterFullscreen?.();
     } catch {
-      try {
-        webkitVid?.webkitEnterFullscreen?.();
-      } catch {
-        /* ignore */
-      }
+      /* CSS pseudo-fullscreen (iOS и др.) */
     }
+
+    setStageExpanded(true);
   };
 
   const label = useMemo(() => (isHost ? "Ведущий" : "Участник"), [isHost]);
@@ -420,6 +426,38 @@ export function LiveRoomClient({
     });
   };
 
+  const toggleMic = () => {
+    const track = localStreamRef.current?.getAudioTracks?.()?.[0];
+    const producer = audioProducerRef.current;
+    const next = !micOn;
+    if (track) track.enabled = next;
+    try {
+      if (producer) (next ? producer.resume?.() : producer.pause?.());
+    } catch {}
+    setMicOn(next);
+  };
+
+  const toggleCam = () => {
+    const track = localStreamRef.current?.getVideoTracks?.()?.[0];
+    const producer = videoProducerRef.current;
+    const next = !camOn;
+    if (track) track.enabled = next;
+    try {
+      if (producer) (next ? producer.resume?.() : producer.pause?.());
+    } catch {}
+    setCamOn(next);
+  };
+
+  const filmstripPeers = useMemo(
+    () =>
+      peers.filter((p) => {
+        if (p.userId === selfUserId) return false;
+        if (!isHost && p.userId === hostUserId) return false;
+        return true;
+      }),
+    [peers, selfUserId, isHost, hostUserId]
+  );
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -442,45 +480,6 @@ export function LiveRoomClient({
         </div>
       ) : null}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          type="button"
-          size="icon"
-          variant={micOn ? "outline" : "secondary"}
-          aria-label={micOn ? "Выключить микрофон" : "Включить микрофон"}
-          onClick={() => {
-            const track = localStreamRef.current?.getAudioTracks?.()?.[0];
-            const producer = audioProducerRef.current;
-            const next = !micOn;
-            if (track) track.enabled = next;
-            try {
-              if (producer) next ? producer.resume?.() : producer.pause?.();
-            } catch {}
-            setMicOn(next);
-          }}
-        >
-          {micOn ? <Mic /> : <MicOff />}
-        </Button>
-        <Button
-          type="button"
-          size="icon"
-          variant={camOn ? "outline" : "secondary"}
-          aria-label={camOn ? "Выключить камеру" : "Включить камеру"}
-          onClick={() => {
-            const track = localStreamRef.current?.getVideoTracks?.()?.[0];
-            const producer = videoProducerRef.current;
-            const next = !camOn;
-            if (track) track.enabled = next;
-            try {
-              if (producer) next ? producer.resume?.() : producer.pause?.();
-            } catch {}
-            setCamOn(next);
-          }}
-        >
-          {camOn ? <Video /> : <VideoOff />}
-        </Button>
-      </div>
-
       {isHost && marathonEventId ? (
         <LiveHostRecordingControls
           eventId={marathonEventId}
@@ -499,47 +498,18 @@ export function LiveRoomClient({
             Включить звук
           </Button>
         ) : null}
-        <div className="flex flex-wrap items-center gap-2">
-          {isHost ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => socketRef.current?.emit("setAllAudioMuted", { muted: true }, () => {})}
-            >
-              <VolumeX className="mr-1" /> Выключить всем
-            </Button>
-          ) : null}
-          {isHost && marathonEventId ? (
-            <Button type="button" size="sm" variant="destructive" disabled={isPending} onClick={confirmEndBroadcast}>
-              {isPending ? "..." : "Завершить эфир"}
-            </Button>
-          ) : null}
-        </div>
-
         <div
           ref={stageRef}
           className={cn(
-            "relative overflow-hidden border bg-black",
-            stageFullscreen ? "border-0 md:rounded-none" : "rounded-2xl"
+            "relative flex flex-col overflow-hidden border bg-black",
+            stageExpanded ? "fixed inset-0 z-[100] h-[100dvh] max-h-[100dvh] border-0" : cn("rounded-2xl", tokens.radius.lg)
           )}
         >
-          <Button
-            type="button"
-            variant="secondary"
-            size="icon"
-            className={cn(tokens.radius.md, "absolute right-2 top-2 z-30 h-10 w-10 bg-black/55 text-white shadow-md backdrop-blur-sm hover:bg-black/75 sm:right-3 sm:top-3")}
-            aria-label={stageFullscreen ? "Выйти из полноэкранного режима" : "На весь экран"}
-            onClick={() => void toggleStageFullscreen()}
-          >
-            {stageFullscreen ? <Minimize2 className="h-5 w-5 shrink-0" /> : <Maximize2 className="h-5 w-5 shrink-0" />}
-          </Button>
-
           <div
             className={cn(
-              "relative mx-auto flex w-full items-center justify-center bg-black",
-              stageFullscreen
-                ? "min-h-[100dvh] w-full md:aspect-auto md:min-h-0 md:h-full"
+              "relative flex min-h-0 flex-1 w-full items-center justify-center bg-black",
+              stageExpanded
+                ? "min-h-0 flex-1"
                 : "aspect-video max-h-[min(88dvh,100vw)] min-h-[min(48vh,520px)] w-full md:aspect-video md:min-h-0 md:max-h-[min(80vh,920px)]"
             )}
           >
@@ -549,13 +519,14 @@ export function LiveRoomClient({
                   localVideoRef.current = node;
                   mainDisplayVideoRef.current = node;
                 }}
+                data-live-video="main"
                 className="h-full w-full max-w-full object-cover"
                 autoPlay
                 playsInline
                 muted
               />
             ) : hostVideo ? (
-              <RemoteVideo ref={mainDisplayVideoRef} stream={hostVideo.stream} />
+              <RemoteVideo ref={mainDisplayVideoRef} stream={hostVideo.stream} captureTag="main" />
             ) : (
               <div className="flex h-full min-h-[200px] w-full items-center justify-center text-5xl font-semibold text-white/80">
                 {initials(hostPeer?.name ?? null)}
@@ -565,33 +536,34 @@ export function LiveRoomClient({
 
           <div
             className={cn(
-              "flex gap-2 overflow-x-auto border-t border-white/10 bg-black/80 p-2 backdrop-blur-sm",
+              "flex shrink-0 gap-2 overflow-x-auto border-t border-white/10 bg-black/80 p-2 backdrop-blur-sm",
               tokens.radius.md
             )}
           >
             {!isHost ? (
               <div className="relative h-20 w-28 shrink-0 overflow-hidden rounded-lg border border-white/20 bg-black">
-                <video ref={selfThumbVideoRef} className="h-full w-full object-cover" autoPlay playsInline muted />
-                <div className="absolute inset-x-1 bottom-1 flex items-center justify-between gap-1">
+                <video
+                  ref={selfThumbVideoRef}
+                  data-live-video="thumb"
+                  className="h-full w-full object-cover"
+                  autoPlay
+                  playsInline
+                  muted
+                />
+                <div className="absolute inset-x-1 bottom-1">
                   <div className="truncate rounded bg-black/55 px-1 py-0.5 text-[10px] text-white">Вы</div>
-                  <div className="flex items-center gap-1">
-                    <div className="rounded bg-black/55 p-1 text-white">{micOn ? <Mic className="h-3 w-3" /> : <MicOff className="h-3 w-3" />}</div>
-                    <div className="rounded bg-black/55 p-1 text-white">{camOn ? <Video className="h-3 w-3" /> : <VideoOff className="h-3 w-3" />}</div>
-                  </div>
                 </div>
               </div>
             ) : null}
 
-            {peers
-              .filter((p) => (isHost ? p.userId !== selfUserId : p.userId !== hostUserId))
-              .map((p) => {
+            {filmstripPeers.map((p) => {
                 const video = remoteTracks.find((t) => t.userId === p.userId && t.kind === "video") ?? null;
                 const audio = remoteTracks.find((t) => t.userId === p.userId && t.kind === "audio") ?? null;
                 const muted = audio ? Boolean(producerMuted[audio.producerId]) : true;
                 return (
                   <div key={p.userId} className="relative h-20 w-28 shrink-0 overflow-hidden rounded-lg border border-white/20 bg-black">
                     {video ? (
-                      <RemoteVideo stream={video.stream} className="rounded-lg" />
+                      <RemoteVideo stream={video.stream} className="rounded-lg" captureTag="thumb" />
                     ) : (
                       <div
                         className="flex h-full w-full items-center justify-center text-xl font-semibold text-white/80"
@@ -604,28 +576,89 @@ export function LiveRoomClient({
                       <div className="truncate rounded bg-black/55 px-1 py-0.5 text-[10px] text-white">
                         {p.name ?? p.userId}
                       </div>
-                      <div className="flex items-center gap-1">
-                        <div className="rounded bg-black/55 p-1 text-white">{muted ? <MicOff className="h-3 w-3" /> : <Mic className="h-3 w-3" />}</div>
-                        {isHost && p.userId !== selfUserId ? (
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            className="h-7 w-7 bg-black/55 text-white hover:bg-black/70"
-                            aria-label={muted ? "Включить микрофон участнику" : "Выключить микрофон участнику"}
-                            onClick={() =>
-                              socketRef.current?.emit("setUserAudioMuted", { userId: p.userId, muted: !muted }, () => {})
-                            }
-                          >
-                            {muted ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
-                          </Button>
-                        ) : null}
-                      </div>
+                      {isHost ? (
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 bg-black/55 text-white hover:bg-black/70"
+                          aria-label={muted ? "Включить микрофон участнику" : "Выключить микрофон участнику"}
+                          onClick={() =>
+                            socketRef.current?.emit("setUserAudioMuted", { userId: p.userId, muted: !muted }, () => {})
+                          }
+                        >
+                          {muted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                        </Button>
+                      ) : muted ? (
+                        <MicOff className="h-3 w-3 shrink-0 text-white/80" aria-hidden />
+                      ) : null}
                     </div>
                   </div>
                 );
               })}
           </div>
+          <div
+            className={cn(
+              "flex shrink-0 flex-wrap items-center justify-center gap-2 border-t border-white/10 bg-black/90 px-3 py-3 backdrop-blur-sm",
+              tokens.radius.md
+            )}
+          >
+            <Button
+              type="button"
+              size="icon"
+              variant={micOn ? "secondary" : "destructive"}
+              className="h-11 w-11 rounded-full bg-white/15 text-white hover:bg-white/25"
+              aria-label={micOn ? "Выключить микрофон" : "Включить микрофон"}
+              onClick={toggleMic}
+            >
+              {micOn ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
+            </Button>
+            <Button
+              type="button"
+              size="icon"
+              variant={camOn ? "secondary" : "destructive"}
+              className="h-11 w-11 rounded-full bg-white/15 text-white hover:bg-white/25"
+              aria-label={camOn ? "Выключить камеру" : "Включить камеру"}
+              onClick={toggleCam}
+            >
+              {camOn ? <Video className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />}
+            </Button>
+            <Button
+              type="button"
+              size="icon"
+              variant="secondary"
+              className="h-11 w-11 rounded-full bg-white/15 text-white hover:bg-white/25"
+              aria-label={stageExpanded ? "Выйти из полноэкранного режима" : "На весь экран"}
+              onClick={() => void toggleStageFullscreen()}
+            >
+              {stageExpanded ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
+            </Button>
+            {isHost ? (
+              <Button
+                type="button"
+                size="icon"
+                variant="secondary"
+                className="h-11 w-11 rounded-full bg-white/15 text-white hover:bg-white/25"
+                aria-label="Выключить микрофон всем"
+                onClick={() => socketRef.current?.emit("setAllAudioMuted", { muted: true }, () => {})}
+              >
+                <VolumeX className="h-5 w-5" />
+              </Button>
+            ) : null}
+            {isHost && marathonEventId ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="destructive"
+                className="rounded-full px-4"
+                disabled={isPending}
+                onClick={confirmEndBroadcast}
+              >
+                {isPending ? "..." : "Завершить"}
+              </Button>
+            ) : null}
+          </div>
+
         </div>
 
         {/* Не display:none: иначе браузеры часто не воспроизводят удалённое аудио */}
@@ -641,8 +674,10 @@ export function LiveRoomClient({
   );
 }
 
-const RemoteVideo = forwardRef<HTMLVideoElement, { stream: MediaStream; className?: string }>(
-  function RemoteVideo({ stream, className }, ref) {
+const RemoteVideo = forwardRef<
+  HTMLVideoElement,
+  { stream: MediaStream; className?: string; captureTag?: "main" | "thumb" }
+>(function RemoteVideo({ stream, className, captureTag }, ref) {
     const innerRef = useRef<HTMLVideoElement | null>(null);
 
     const setVid = (el: HTMLVideoElement | null) => {
@@ -660,7 +695,7 @@ const RemoteVideo = forwardRef<HTMLVideoElement, { stream: MediaStream; classNam
     }, [stream]);
 
     return (
-      <video ref={setVid} className={cn("h-full w-full bg-black object-cover", className)} autoPlay playsInline muted />
+      <video ref={setVid} data-live-video={captureTag} className={cn("h-full w-full bg-black object-cover", className)} autoPlay playsInline muted />
     );
   }
 );

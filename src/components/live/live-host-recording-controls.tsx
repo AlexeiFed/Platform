@@ -11,6 +11,7 @@ import {
   LiveRecordingAudioMixer,
   buildRecorderOutputStream,
   getStageCaptureStream,
+  releaseStageCaptureStream,
   pickRecorderMime,
   pickRecordingFormat,
   type RecordingFormat,
@@ -69,11 +70,7 @@ export function LiveHostRecordingControls({
   };
 
   const cleanupCapture = () => {
-    try {
-      stageCapRef.current?.getTracks().forEach((t) => t.stop());
-    } catch {
-      /* ignore */
-    }
+    releaseStageCaptureStream(stageCapRef.current);
     stageCapRef.current = null;
   };
 
@@ -234,7 +231,7 @@ export function LiveHostRecordingControls({
         mixer.close();
         mixerRef.current = null;
         await failLiveRoomRecording(eventId, recordingId, "captureStream недоступен");
-        setRecError("Браузер не поддерживает captureStream для блока эфира (лучше Chrome на десктопе)");
+        setRecError("Не удалось захватить видео сцены. Проверьте, что эфир на экране, и попробуйте Chrome на десктопе.");
         return;
       }
       stageCapRef.current = stageCap;
