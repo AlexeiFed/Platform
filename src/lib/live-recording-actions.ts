@@ -127,8 +127,11 @@ export async function finishLiveRoomRecording(
   }
 
   const parsedFormat = formatSchema.safeParse(input.format);
-  if (!parsedFormat.success || !Number.isFinite(input.sizeBytes) || input.sizeBytes < 1) {
-    return { error: "Неверные данные записи" } as const;
+  if (!parsedFormat.success) {
+    return { error: "Неверный формат записи" } as const;
+  }
+  if (!Number.isFinite(input.sizeBytes) || input.sizeBytes < 1) {
+    return { error: "Пустой файл записи (0 байт)" } as const;
   }
 
   try {

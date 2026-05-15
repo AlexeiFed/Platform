@@ -10,6 +10,7 @@ import { failLiveRoomRecording, finishLiveRoomRecording, startLiveRoomRecording 
 import {
   LiveStageRecorder,
   buildHostRecordingSources,
+  flushMediaRecorder,
   pickRecorderMime,
   pickRecordingFormat,
   type RecordingFormat,
@@ -88,84 +89,87 @@ export function LiveHostRecordingControls({
   }, [phase, syncRecordingAudio]);
 
   const stopRecording = useCallback(() => {
-    const rec = recorderRef.current;
-    const session = sessionRef.current;
-    if (!rec || !session) {
-      setPhase("idle");
+    void (async () => {
+      const rec = recorderRef.current;
+      const session = sessionRef.current;
+      if (!rec || !session) {
+        setPhase("idle");
+        stopTick();
+        cleanupRecorder();
+        return;
+      }
+
+      setPhase("uploading");
       stopTick();
+      recorderRef.current = null;
+
+      let blob: Blob;
+      try {
+        blob = await flushMediaRecorder(rec, chunksRef.current, session.contentType);
+      } catch (e) {
+        console.error("[recorder stop]", e);
+        chunksRef.current = [];
+        cleanupRecorder();
+        await failLiveRoomRecording(eventId, session.recordingId, "Ошибка остановки записи");
+        sessionRef.current = null;
+        setRecError("Не удалось остановить запись");
+        setPhase("idle");
+        return;
+      }
+
+      chunksRef.current = [];
       cleanupRecorder();
-      return;
-    }
 
-    setPhase("uploading");
-    stopTick();
+      if (blob.size < 1) {
+        await failLiveRoomRecording(eventId, session.recordingId, "Пустой файл записи");
+        sessionRef.current = null;
+        setRecError("Запись пуста. Подождите 3–5 секунд после старта перед остановкой.");
+        setPhase("idle");
+        return;
+      }
 
-    rec.addEventListener(
-      "stop",
-      () => {
-        void (async () => {
-          await new Promise((r) => setTimeout(r, 120));
-          const chunks = chunksRef.current;
-          const blob = new Blob(chunks, { type: rec.mimeType || session.contentType });
-          chunksRef.current = [];
-          recorderRef.current = null;
-          cleanupRecorder();
+      if (blob.size > MAX_RECORDING_BYTES || !session.contentType.startsWith("video/")) {
+        setRecError("Файл записи слишком большой или некорректный тип");
+        await failLiveRoomRecording(eventId, session.recordingId, "Превышен размер файла");
+        sessionRef.current = null;
+        setPhase("idle");
+        return;
+      }
 
-          if (blob.size > MAX_RECORDING_BYTES || !session.contentType.startsWith("video/")) {
-            setRecError("Файл записи слишком большой или некорректный тип");
-            await failLiveRoomRecording(eventId, session.recordingId, "Превышен размер файла");
-            sessionRef.current = null;
-            setPhase("idle");
-            return;
-          }
+      try {
+        const put = await fetch(session.uploadUrl, {
+          method: "PUT",
+          body: blob,
+          headers: { "Content-Type": session.contentType },
+        });
+        if (!put.ok) {
+          throw new Error(`S3 ${put.status}`);
+        }
+      } catch (e) {
+        console.error("[recording upload]", e);
+        setRecError("Не удалось загрузить запись в S3");
+        await failLiveRoomRecording(eventId, session.recordingId, "Ошибка загрузки в S3");
+        sessionRef.current = null;
+        setPhase("idle");
+        return;
+      }
 
-          try {
-            const put = await fetch(session.uploadUrl, {
-              method: "PUT",
-              body: blob,
-              headers: { "Content-Type": session.contentType },
-            });
-            if (!put.ok) {
-              throw new Error(`S3 ${put.status}`);
-            }
-          } catch (e) {
-            console.error("[recording upload]", e);
-            setRecError("Не удалось загрузить запись в S3");
-            await failLiveRoomRecording(eventId, session.recordingId, "Ошибка загрузки в S3");
-            sessionRef.current = null;
-            setPhase("idle");
-            return;
-          }
-
-          const durationSec = Math.max(1, Math.round((Date.now() - session.startedAt) / 1000));
-          const fin = await finishLiveRoomRecording(eventId, session.recordingId, {
-            format: session.format,
-            sizeBytes: blob.size,
-            durationSec,
-          });
-          sessionRef.current = null;
-
-          if (fin && "error" in fin && fin.error) {
-            setRecError(fin.error);
-          } else {
-            setRecError(null);
-            router.refresh();
-          }
-          setPhase("idle");
-        })();
-      },
-      { once: true }
-    );
-
-    try {
-      rec.stop();
-    } catch (e) {
-      console.error("[recorder stop]", e);
-      void failLiveRoomRecording(eventId, session.recordingId, "Ошибка остановки записи");
+      const durationSec = Math.max(1, Math.round((Date.now() - session.startedAt) / 1000));
+      const fin = await finishLiveRoomRecording(eventId, session.recordingId, {
+        format: session.format,
+        sizeBytes: blob.size,
+        durationSec,
+      });
       sessionRef.current = null;
-      cleanupRecorder();
+
+      if (fin && "error" in fin && fin.error) {
+        setRecError(fin.error);
+      } else {
+        setRecError(null);
+        router.refresh();
+      }
       setPhase("idle");
-    }
+    })();
   }, [eventId, router]);
 
   const startRecording = async () => {
@@ -282,8 +286,7 @@ export function LiveHostRecordingControls({
       const rec = recorderRef.current;
       if (rec?.state === "recording" && sess) {
         try {
-          rec.ondataavailable = null;
-          rec.onstop = null;
+          if (rec.state === "recording") rec.requestData();
           rec.stop();
         } catch {
           /* ignore */

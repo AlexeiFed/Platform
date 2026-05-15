@@ -436,27 +436,50 @@ export function LiveRoomClient({
     });
   };
 
-  const toggleMic = () => {
+  const toggleMic = useCallback(async () => {
     const track = localStreamRef.current?.getAudioTracks?.()?.[0];
-    const producer = audioProducerRef.current;
+    const producer = audioProducerRef.current as {
+      pause?: () => Promise<void>;
+      resume?: () => Promise<void>;
+      paused?: boolean;
+    } | null;
     const next = !micOn;
-    if (track) track.enabled = next;
     try {
-      if (producer) (next ? producer.resume?.() : producer.pause?.());
-    } catch {}
-    setMicOn(next);
-  };
+      if (next) {
+        if (track) track.enabled = true;
+        if (producer?.resume) await producer.resume();
+      } else {
+        if (producer?.pause) await producer.pause();
+        if (track) track.enabled = false;
+      }
+      setMicOn(next);
+    } catch (e) {
+      console.error("[toggleMic]", e);
+      setMicOn(Boolean(track?.enabled));
+    }
+  }, [micOn]);
 
-  const toggleCam = () => {
+  const toggleCam = useCallback(async () => {
     const track = localStreamRef.current?.getVideoTracks?.()?.[0];
-    const producer = videoProducerRef.current;
+    const producer = videoProducerRef.current as {
+      pause?: () => Promise<void>;
+      resume?: () => Promise<void>;
+    } | null;
     const next = !camOn;
-    if (track) track.enabled = next;
     try {
-      if (producer) (next ? producer.resume?.() : producer.pause?.());
-    } catch {}
-    setCamOn(next);
-  };
+      if (next) {
+        if (track) track.enabled = true;
+        if (producer?.resume) await producer.resume();
+      } else {
+        if (producer?.pause) await producer.pause();
+        if (track) track.enabled = false;
+      }
+      setCamOn(next);
+    } catch (e) {
+      console.error("[toggleCam]", e);
+      setCamOn(Boolean(track?.enabled));
+    }
+  }, [camOn]);
 
   const filmstripPeers = useMemo(
     () =>

@@ -372,3 +372,37 @@ export function buildRecorderOutputStream(video: MediaStream, audio: MediaStream
   const a = audio.getAudioTracks();
   return new MediaStream([...v, ...a]);
 }
+
+/** Дождаться финальных чанков MediaRecorder перед сборкой Blob. */
+export function flushMediaRecorder(recorder: MediaRecorder, chunks: Blob[], mimeFallback: string): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    if (recorder.state === "inactive") {
+      resolve(new Blob(chunks, { type: recorder.mimeType || mimeFallback }));
+      return;
+    }
+
+    const onData = (ev: BlobEvent) => {
+      if (ev.data.size > 0) chunks.push(ev.data);
+    };
+
+    const onStop = () => {
+      recorder.removeEventListener("dataavailable", onData);
+      window.setTimeout(() => {
+        resolve(new Blob(chunks, { type: recorder.mimeType || mimeFallback }));
+      }, 300);
+    };
+
+    recorder.addEventListener("dataavailable", onData);
+    recorder.addEventListener("stop", onStop, { once: true });
+
+    try {
+      if (recorder.state === "recording") {
+        recorder.requestData();
+      }
+      recorder.stop();
+    } catch (e) {
+      recorder.removeEventListener("dataavailable", onData);
+      reject(e);
+    }
+  });
+}
