@@ -239,7 +239,11 @@ export function LiveHostRecordingControls({
       const combined = buildRecorderOutputStream(stageCap, mixer.getMixedStream());
       let recorder: MediaRecorder;
       try {
-        recorder = new MediaRecorder(combined, { mimeType: mime, videoBitsPerSecond: 2_500_000 });
+        recorder = new MediaRecorder(combined, {
+          mimeType: mime,
+          videoBitsPerSecond: 2_500_000,
+          audioBitsPerSecond: 128_000,
+        });
       } catch (e) {
         console.error("[MediaRecorder]", e);
         cleanupCapture();
@@ -254,6 +258,19 @@ export function LiveHostRecordingControls({
       recorder.ondataavailable = (ev) => {
         if (ev.data.size > 0) chunksRef.current.push(ev.data);
       };
+      recorder.onerror = (ev) => {
+        console.error("[MediaRecorder error]", ev);
+        setRecError("Ошибка записи (MediaRecorder)");
+      };
+
+      const videoTrack = combined.getVideoTracks()[0];
+      videoTrack?.addEventListener("ended", () => {
+        console.error("[recording] video track ended");
+        if (recorderRef.current?.state === "recording") {
+          setRecError("Видеопоток записи прервался");
+          stopRecording();
+        }
+      });
 
       recorderRef.current = recorder;
       sessionRef.current = {
@@ -265,7 +282,7 @@ export function LiveHostRecordingControls({
       };
 
       try {
-        recorder.start(2000);
+        recorder.start(1000);
       } catch (e) {
         console.error("[recorder start]", e);
         cleanupCapture();
