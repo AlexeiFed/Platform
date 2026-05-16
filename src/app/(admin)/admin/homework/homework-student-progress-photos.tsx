@@ -15,7 +15,7 @@ export const HomeworkStudentProgressPhotos = ({ beforePhotos, afterPhotos }: Pro
 
   return (
     <section className="min-w-0 space-y-3" aria-labelledby="homework-student-photos-heading">
-      <Card className="min-w-0">
+      <Card className="min-w-0 w-full">
         <CardHeader className="pb-3">
           <CardTitle
             id="homework-student-photos-heading"
@@ -28,31 +28,37 @@ export const HomeworkStudentProgressPhotos = ({ beforePhotos, afterPhotos }: Pro
             Снимки из раздела профиля студента; показываются, если загружены.
           </p>
         </CardHeader>
-        <CardContent className="grid gap-6 sm:grid-cols-2">
-          <PhotoColumn label="До" photos={beforePhotos} />
-          <PhotoColumn label="После" photos={afterPhotos} />
+        <CardContent className="space-y-6">
+          <PhotoStrip label="До" photos={beforePhotos} />
+          <PhotoStrip label="После" photos={afterPhotos} />
         </CardContent>
       </Card>
     </section>
   );
 };
 
-const PhotoColumn = ({ label, photos }: { label: string; photos: PhotoRow[] }) => (
+const PhotoStrip = ({ label, photos }: { label: string; photos: PhotoRow[] }) => (
   <div className="min-w-0 space-y-2">
     <div className={`${tokens.typography.label} text-muted-foreground`}>{label}</div>
     {photos.length === 0 ? (
       <p className={tokens.typography.small}>Нет фото</p>
     ) : (
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-2">
+      <div className="grid min-w-0 grid-cols-4 gap-2">
         {photos.map((p) => (
           <a
             key={`${p.url}-${p.position}`}
             href={p.url}
             target="_blank"
             rel="noopener noreferrer"
-            className={`relative aspect-[3/4] overflow-hidden border bg-muted ${tokens.radius.md}`}
+            className={`relative aspect-[3/4] min-h-0 overflow-hidden border bg-muted ${tokens.radius.md}`}
           >
-            <Image src={p.url} alt="" fill className="object-cover" sizes="(max-width: 640px) 45vw, 200px" />
+            <Image
+              src={p.url}
+              alt=""
+              fill
+              className="object-cover"
+              sizes="(max-width: 768px) 22vw, 18vw"
+            />
           </a>
         ))}
       </div>

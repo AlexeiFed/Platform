@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { emitHomeworkEvent } from "@/lib/realtime";
 import { enrollmentHasCriterion, loadEnrollmentForCriteriaByUserProduct } from "@/lib/enrollment-criteria";
+import { notifyStudentHomeworkStaffMessage } from "@/lib/homework-notifications";
 
 /** Доступ к треду ДЗ в админке: есть задания в тарифе (в т.ч. VIP без ручной проверки). */
 async function assertStaffHomeworkEnrollment(userId: string, productId: string) {
@@ -263,6 +264,30 @@ export async function sendChatMessage(
         replyToId: replyToId ?? null,
       },
     });
+
+    const notifyCtx = await prisma.homeworkSubmission.findUnique({
+      where: { id: submissionId },
+      select: {
+        userId: true,
+        lessonId: true,
+        lesson: {
+          select: {
+            title: true,
+            product: { select: { title: true, slug: true } },
+          },
+        },
+      },
+    });
+    if (notifyCtx) {
+      await notifyStudentHomeworkStaffMessage({
+        studentUserId: notifyCtx.userId,
+        lessonId: notifyCtx.lessonId,
+        lessonTitle: notifyCtx.lesson.title,
+        productTitle: notifyCtx.lesson.product.title,
+        productSlug: notifyCtx.lesson.product.slug,
+        preview: content,
+      });
+    }
 
     revalidatePath("/admin/homework");
     const sub = await prisma.homeworkSubmission.findUnique({ where: { id: submissionId }, select: { lessonId: true, userId: true } });

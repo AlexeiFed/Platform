@@ -325,27 +325,27 @@ export default async function AdminHomeworkPage({
               </CardContent>
             </Card>
           )}
-
-          {studentBody && (
-            <>
-              <HomeworkStudentProgressPhotos
-                beforePhotos={studentBody.progressPhotos
-                  .filter((p) => p.type === "BEFORE")
-                  .map(({ url, position }) => ({ url, position }))}
-                afterPhotos={studentBody.progressPhotos
-                  .filter((p) => p.type === "AFTER")
-                  .map(({ url, position }) => ({ url, position }))}
-              />
-              <HomeworkStudentBodyMetrics
-                studentLabel={selectedStudentLabel}
-                heightCm={studentBody.height}
-                weightKg={studentBody.weight}
-                measurements={studentBody.measurements}
-              />
-            </>
-          )}
         </div>
       </div>
+
+      {studentBody ? (
+        <div className="min-w-0 w-full space-y-4">
+          <HomeworkStudentBodyMetrics
+            studentLabel={selectedStudentLabel}
+            heightCm={studentBody.height}
+            weightKg={studentBody.weight}
+            measurements={studentBody.measurements}
+          />
+          <HomeworkStudentProgressPhotos
+            beforePhotos={studentBody.progressPhotos
+              .filter((p) => p.type === "BEFORE")
+              .map(({ url, position }) => ({ url, position }))}
+            afterPhotos={studentBody.progressPhotos
+              .filter((p) => p.type === "AFTER")
+              .map(({ url, position }) => ({ url, position }))}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

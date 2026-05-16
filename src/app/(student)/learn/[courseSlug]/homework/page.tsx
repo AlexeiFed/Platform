@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, BookOpen, GraduationCap } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -192,15 +192,6 @@ export default async function StudentHomeworkPage({ params, searchParams }: Prop
         </Card>
 
         <div className="min-w-0 space-y-3">
-          <div className="flex items-center gap-2">
-            {product.type === "COURSE" ? (
-              <BookOpen className="h-5 w-5 text-primary" />
-            ) : (
-              <GraduationCap className="h-5 w-5 text-primary" />
-            )}
-            <h2 className={tokens.typography.h4}>{product.title}</h2>
-          </div>
-
           {!selectedSubmission ? (
             <Card>
               <CardContent className="p-6 text-sm text-muted-foreground">

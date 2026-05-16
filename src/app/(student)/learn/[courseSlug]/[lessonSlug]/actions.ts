@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { emitHomeworkEvent } from "@/lib/realtime";
 import { enrollmentHasCriterion, loadEnrollmentForCriteriaByUserProduct } from "@/lib/enrollment-criteria";
+import { notifyStaffHomeworkSubmitted } from "@/lib/homework-notifications";
 
 const homeworkSchema = z.object({
   lessonId: z.string().uuid(),
@@ -28,7 +29,12 @@ export async function submitHomework(input: {
 
     const lesson = await prisma.lesson.findUnique({
       where: { id: data.lessonId },
-      select: { productId: true, slug: true, product: { select: { slug: true } } },
+      select: {
+        productId: true,
+        slug: true,
+        title: true,
+        product: { select: { slug: true, title: true } },
+      },
     });
 
     if (!lesson) return { error: "Урок не найден" };
@@ -112,6 +118,15 @@ export async function submitHomework(input: {
 
       emitHomeworkEvent({ submissionId: created.id, lessonId: data.lessonId, userId: session.user.id });
     }
+
+    await notifyStaffHomeworkSubmitted({
+      productId: lesson.productId,
+      productTitle: lesson.product.title,
+      lessonTitle: lesson.title,
+      studentId: session.user.id,
+      studentName: session.user.name ?? null,
+      studentEmail: session.user.email ?? "",
+    });
 
     revalidatePath(`/learn/${lesson.product.slug}/${lesson.slug}`);
     revalidatePath(`/learn/${lesson.product.slug}/homework`);

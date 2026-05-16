@@ -159,41 +159,22 @@ export function buildHomeworkConversation(
 ): HomeworkConversationItem[] {
   const normalizedMessages = buildHomeworkMessages(submission, messages);
   const messageMap = new Map(normalizedMessages.map((message) => [message.id, message]));
-  const rootMessages = normalizedMessages
-    .filter((message) => !message.replyToId || !messageMap.has(message.replyToId))
-    .sort((a, b) =>
-      sortOrder === "asc"
-        ? new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-        : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
 
-  const childrenMap = new Map<string, HomeworkThreadMessage[]>();
-
-  for (const message of normalizedMessages) {
-    if (!message.replyToId || !messageMap.has(message.replyToId)) {
-      continue;
+  /** Хронологическая лента: ответы подвешены к «родителю» в дереве и оказывались между несвязанными корнями. */
+  const sorted = [...normalizedMessages].sort((a, b) => {
+    const ta = new Date(a.createdAt).getTime();
+    const tb = new Date(b.createdAt).getTime();
+    if (ta !== tb) {
+      return sortOrder === "asc" ? ta - tb : tb - ta;
     }
+    return a.id.localeCompare(b.id);
+  });
 
-    const children = childrenMap.get(message.replyToId) ?? [];
-    children.push(message);
-    childrenMap.set(message.replyToId, children);
-  }
-
-  for (const children of childrenMap.values()) {
-    children.sort(
-      (a, b) =>
-        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-    );
-  }
-
-  const result: HomeworkConversationItem[] = [];
-
-  const walk = (message: HomeworkThreadMessage, depth: number) => {
+  return sorted.map((message) => {
     const replyTarget = message.replyToId ? messageMap.get(message.replyToId) : null;
-
-    result.push({
+    return {
       ...message,
-      depth,
+      depth: 0,
       replyTo: replyTarget
         ? {
             id: replyTarget.id,
@@ -201,19 +182,8 @@ export function buildHomeworkConversation(
             content: truncateReplyPreview(replyTarget.content),
           }
         : undefined,
-    });
-
-    const children = childrenMap.get(message.id) ?? [];
-    for (const child of children) {
-      walk(child, depth + 1);
-    }
-  };
-
-  for (const rootMessage of rootMessages) {
-    walk(rootMessage, 0);
-  }
-
-  return result;
+    };
+  });
 }
 
 export function formatHomeworkDateTime(value: string) {

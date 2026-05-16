@@ -7,6 +7,7 @@ import { ArrowLeft, Menu, LogOut, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
+import { PushNotificationsToggle } from "@/components/shared/push-notifications-toggle";
 import { getInitials } from "@/lib/utils";
 import { layout } from "@/lib/design-tokens";
 import { useHeaderSlot } from "@/lib/header-slot";
@@ -81,12 +82,19 @@ export function Header({ onMenuToggle }: { onMenuToggle?: () => void }) {
           </>
         ) : (
           <>
+            {session?.user ? (
+              <div className="flex items-center gap-2 md:hidden">
+                <PushNotificationsToggle />
+                <ThemeToggle />
+              </div>
+            ) : null}
             {!session?.user ? (
               <Button asChild size="sm" className="md:hidden">
                 <Link href="/login">Войти</Link>
               </Button>
             ) : null}
             <div className="hidden items-center gap-2 md:flex">
+              <PushNotificationsToggle />
               <ThemeToggle />
               {session?.user ? (
                 <div className="relative">
