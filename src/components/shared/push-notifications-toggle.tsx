@@ -118,7 +118,7 @@ export const PushNotificationsToggle = () => {
       aria-label={subscribed ? "Отключить push-уведомления" : "Включить push-уведомления"}
       title={subscribed ? "Отключить уведомления" : "Включить уведомления (ДЗ, ответы куратора)"}
     >
-      {subscribed ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
+      {subscribed ? <Bell className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}
     </Button>
   );
 };
