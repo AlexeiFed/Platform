@@ -8,6 +8,7 @@ import { formatDate } from "@/lib/utils";
 import { BookOpen, GraduationCap } from "lucide-react";
 import { LiveReviewThread } from "./live-review-thread";
 import { HomeworkStudentBodyMetrics } from "./homework-student-body-metrics";
+import { HomeworkStudentProgressPhotos } from "./homework-student-progress-photos";
 
 export default async function AdminHomeworkPage({
   searchParams,
@@ -89,6 +90,10 @@ export default async function AdminHomeworkPage({
           height: true,
           weight: true,
           measurements: { orderBy: { date: "desc" }, take: 120 },
+          progressPhotos: {
+            orderBy: [{ type: "asc" }, { position: "asc" }],
+            select: { type: true, url: true, position: true },
+          },
         },
       })
     : null;
@@ -322,12 +327,22 @@ export default async function AdminHomeworkPage({
           )}
 
           {studentBody && (
-            <HomeworkStudentBodyMetrics
-              studentLabel={selectedStudentLabel}
-              heightCm={studentBody.height}
-              weightKg={studentBody.weight}
-              measurements={studentBody.measurements}
-            />
+            <>
+              <HomeworkStudentProgressPhotos
+                beforePhotos={studentBody.progressPhotos
+                  .filter((p) => p.type === "BEFORE")
+                  .map(({ url, position }) => ({ url, position }))}
+                afterPhotos={studentBody.progressPhotos
+                  .filter((p) => p.type === "AFTER")
+                  .map(({ url, position }) => ({ url, position }))}
+              />
+              <HomeworkStudentBodyMetrics
+                studentLabel={selectedStudentLabel}
+                heightCm={studentBody.height}
+                weightKg={studentBody.weight}
+                measurements={studentBody.measurements}
+              />
+            </>
           )}
         </div>
       </div>

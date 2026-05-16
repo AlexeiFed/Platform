@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { ImagePlus, Video, X, Loader2 } from "lucide-react";
@@ -25,6 +26,7 @@ export function HomeworkForm({
   lessonId: string;
   questions?: string[];
 }) {
+  const router = useRouter();
   const hasQuestions = questions && questions.length > 0;
   const [answers, setAnswers] = useState<string[]>(hasQuestions ? questions.map(() => "") : [""]);
   const [loading, setLoading] = useState(false);
@@ -89,6 +91,9 @@ export function HomeworkForm({
       fileUrl: mediaUrls[0] ?? undefined,
       fileUrls: mediaUrls,
     });
+    if ("success" in res && res.success) {
+      router.refresh();
+    }
     setResult(res);
     setLoading(false);
   }

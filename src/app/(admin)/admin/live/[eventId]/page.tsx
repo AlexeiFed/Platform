@@ -9,6 +9,8 @@ import { LiveHostControls } from "@/components/live/live-host-controls";
 import { getAdminLiveJoinToken } from "../actions";
 import { isMarathonLiveJoinAllowedToday } from "@/lib/marathon-live-broadcast";
 
+export const dynamic = "force-dynamic";
+
 type Props = {
   params: Promise<{ eventId: string }>;
 };

@@ -84,22 +84,20 @@ function drawVideoContain(
   }
 }
 
-async function spawnHiddenVideo(
-  stream: MediaStream,
-  root: HTMLElement,
-  clonedTracks: MediaStreamTrack[]
-): Promise<HTMLVideoElement | null> {
+/**
+ * Второй `<video>` на том же MediaStream, что и превью — без `track.clone()`.
+ * Клон WebRTC-трека в Chrome часто гасит декодирование на основном превью;
+ * два элемента с одним stream обычно стабильны для drawImage/capture.
+ */
+async function spawnHiddenVideo(stream: MediaStream, root: HTMLElement): Promise<HTMLVideoElement | null> {
   const track = stream.getVideoTracks()[0];
   if (!track || track.readyState === "ended") return null;
-
-  const clone = track.clone();
-  clonedTracks.push(clone);
 
   const el = document.createElement("video");
   el.muted = true;
   el.playsInline = true;
   el.setAttribute("playsinline", "");
-  el.srcObject = new MediaStream([clone]);
+  el.srcObject = stream;
   root.appendChild(el);
 
   try {
@@ -200,11 +198,10 @@ export class LiveRecordingAudioMixer {
   }
 }
 
-/** Запись через скрытые video (клоны треков) — не трогает WebRTC-превью на экране. */
+/** Запись через скрытые `<video>` на тех же MediaStream, что и превью (без clone видеотрека). */
 export class LiveStageRecorder {
   private readonly hiddenRoot: HTMLDivElement;
   private readonly hiddenVideos: HTMLVideoElement[] = [];
-  private readonly clonedTracks: MediaStreamTrack[] = [];
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
   private readonly videoStream: MediaStream;
@@ -220,7 +217,6 @@ export class LiveStageRecorder {
     mixer: LiveRecordingAudioMixer,
     hiddenRoot: HTMLDivElement,
     hiddenVideos: HTMLVideoElement[],
-    clonedTracks: MediaStreamTrack[],
     fps: number
   ) {
     this.canvas = canvas;
@@ -229,7 +225,6 @@ export class LiveStageRecorder {
     this.mixer = mixer;
     this.hiddenRoot = hiddenRoot;
     this.hiddenVideos = hiddenVideos;
-    this.clonedTracks = clonedTracks;
 
     const frameIntervalMs = 1000 / fps;
     const mainVideos = hiddenVideos.slice(0, 1);
@@ -280,16 +275,15 @@ export class LiveStageRecorder {
       "position:fixed;left:-9999px;top:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none;";
     document.body.appendChild(hiddenRoot);
 
-    const clonedTracks: MediaStreamTrack[] = [];
     const hiddenVideos: HTMLVideoElement[] = [];
 
     try {
       if (sources.main) {
-        const main = await spawnHiddenVideo(sources.main, hiddenRoot, clonedTracks);
+        const main = await spawnHiddenVideo(sources.main, hiddenRoot);
         if (main) hiddenVideos.push(main);
       }
       for (const thumb of sources.thumbs) {
-        const el = await spawnHiddenVideo(thumb, hiddenRoot, clonedTracks);
+        const el = await spawnHiddenVideo(thumb, hiddenRoot);
         if (el) hiddenVideos.push(el);
       }
 
@@ -309,16 +303,9 @@ export class LiveStageRecorder {
       await mixer.resume();
       mixer.sync({ local: sources.localAudio, remoteAudios: sources.remoteAudios });
 
-      return new LiveStageRecorder(canvas, ctx, videoStream, mixer, hiddenRoot, hiddenVideos, clonedTracks, fps);
+      return new LiveStageRecorder(canvas, ctx, videoStream, mixer, hiddenRoot, hiddenVideos, fps);
     } catch (e) {
       console.error("[LiveStageRecorder.create]", e);
-      for (const t of clonedTracks) {
-        try {
-          t.stop();
-        } catch {
-          /* ignore */
-        }
-      }
       hiddenRoot.remove();
       return null;
     }
@@ -345,14 +332,6 @@ export class LiveStageRecorder {
       }
     });
     this.mixer.close();
-    for (const t of this.clonedTracks) {
-      try {
-        t.stop();
-      } catch {
-        /* ignore */
-      }
-    }
-    this.clonedTracks.length = 0;
     this.hiddenVideos.length = 0;
     this.hiddenRoot.remove();
   }

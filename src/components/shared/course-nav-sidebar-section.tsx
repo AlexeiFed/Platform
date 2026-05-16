@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   ChevronRight,
   Circle,
+  ClipboardCheck,
   FileText,
   Library,
   Lock,
@@ -268,6 +269,7 @@ export function CourseNavSidebarSection({ onNavigate }: { onNavigate?: () => voi
   const overviewActive = pathname === base;
   const rulesActive = pathname === `${base}/rules`;
   const additionalActive = pathname === `${base}/additional-materials`;
+  const homeworkActive = pathname === `${base}/homework`;
   const feedbackActive = pathname === `${base}/feedback`;
   const eventActive = scopeEventId ? pathname === `${base}/event/${scopeEventId}` : false;
 
@@ -308,6 +310,16 @@ export function CourseNavSidebarSection({ onNavigate }: { onNavigate?: () => voi
         >
           <Library className="h-4 w-4 shrink-0" />
           <span className="min-w-0 flex-1">Доп. материалы</span>
+        </Link>
+
+        <Link
+          href={`${base}/homework`}
+          onClick={() => onNavigate?.()}
+          className={navItemClass(homeworkActive)}
+          aria-current={homeworkActive ? "page" : undefined}
+        >
+          <ClipboardCheck className="h-4 w-4 shrink-0" />
+          <span className="min-w-0 flex-1">Домашние задания</span>
         </Link>
 
         {payload.curatorFeedback ? (

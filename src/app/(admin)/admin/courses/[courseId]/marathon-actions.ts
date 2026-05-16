@@ -91,6 +91,7 @@ const getProductRevalidationData = async (productId: string) => {
 const revalidateMarathonProductPaths = (product: { id: string; slug: string }) => {
   revalidatePath("/admin/courses");
   revalidatePath(`/admin/courses/${product.id}`);
+  revalidatePath("/admin/live");
   revalidatePath("/catalog");
   revalidatePath(`/catalog/${product.slug}`);
   revalidatePath(`/learn/${product.slug}`);

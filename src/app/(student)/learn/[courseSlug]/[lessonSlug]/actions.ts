@@ -114,6 +114,7 @@ export async function submitHomework(input: {
     }
 
     revalidatePath(`/learn/${lesson.product.slug}/${lesson.slug}`);
+    revalidatePath(`/learn/${lesson.product.slug}/homework`);
     return { success: true };
   } catch (error) {
     console.error("[submitHomework]", error);

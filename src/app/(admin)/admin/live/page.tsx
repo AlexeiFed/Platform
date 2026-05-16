@@ -15,6 +15,8 @@ import {
 import { getResolvedMarathonTimeZone } from "@/lib/marathon-time-zone";
 import { cn } from "@/lib/utils";
 
+export const dynamic = "force-dynamic";
+
 type Props = {
   searchParams: Promise<{ productId?: string; date?: string }>;
 };
@@ -236,7 +238,9 @@ export default async function AdminLivePage({ searchParams }: Props) {
                   <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:items-end">
                     {canOpenRoom ? (
                       <Button asChild className="w-full sm:w-auto">
-                        <Link href={`/admin/live/${ev.id}`}>В комнату</Link>
+                        <Link prefetch={false} href={`/admin/live/${ev.id}`}>
+                          В комнату
+                        </Link>
                       </Button>
                     ) : (
                       <p className="max-w-md text-sm leading-snug text-muted-foreground sm:text-right">{blockReason}</p>
