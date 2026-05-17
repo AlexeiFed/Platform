@@ -49,7 +49,7 @@ export default async function CourseRulesPage({ params }: Props) {
   const olState = { count: 0 };
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="mx-auto max-w-5xl space-y-6">
       <div className="md:hidden">
         <Button variant="outline" size="sm" className="w-full justify-center" asChild>
           <Link href={`/learn/${courseSlug}`} aria-label="Назад к обзору курса">
@@ -67,8 +67,7 @@ export default async function CourseRulesPage({ params }: Props) {
         <h1 className={`${tokens.typography.h2} text-balance`}>{product.title}</h1>
       </header>
 
-      {/* Длинный текст: ограничиваем строку до ~68ch, используем Inter (font-prose) для лучшей читаемости */}
-      <article className="font-prose max-w-[68ch] text-[15px] leading-relaxed text-foreground/90">
+      <article className={`font-prose ${tokens.typography.prose} text-foreground/90`}>
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           components={{

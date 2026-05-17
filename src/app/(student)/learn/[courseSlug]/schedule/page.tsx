@@ -60,7 +60,7 @@ export default async function MarathonSchedulePage({ params, searchParams }: Pro
   const navSections = buildMarathonScheduleNavSections(sections, weekCount);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="mx-auto max-w-5xl space-y-6">
       <div className="md:hidden">
         <Button variant="outline" size="sm" className="w-full justify-center" asChild>
           <Link href={`/learn/${courseSlug}`} aria-label="Назад к обзору курса">
