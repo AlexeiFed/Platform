@@ -51,11 +51,13 @@ import {
 } from "./marathon-actions";
 import { AssetManager } from "../../assets/asset-manager";
 import { LandingEditor } from "./landing-editor";
+import { MarathonSchedulesEditor } from "./marathon-schedules-editor";
 import { RichTextEditor } from "@/components/shared/rich-text-editor";
 import { MarathonEventLessonPicker } from "./marathon-event-lesson-picker";
 import { loadPdfJs } from "@/components/shared/pdfjs-loader";
 import { formatUtcIsoForDatetimeLocal } from "@/lib/marathon-datetime";
 import type { LandingBlock } from "@/types/landing";
+import type { MarathonScheduleSections } from "@/types/marathon-schedule";
 import type { MarathonEventType, MarathonTrack, ProductCriterion, ProductType, UnlockRule } from "@prisma/client";
 
 // === Types ===
@@ -93,6 +95,7 @@ type SerializedProduct = {
   deletedAt: string | null;
   enabledCriteria?: ProductCriterion[];
   landingBlocks: LandingBlock[];
+  marathonScheduleSections: MarathonScheduleSections | null;
 };
 
 type SerializedLesson = {
@@ -925,7 +928,7 @@ export function CourseEditor({
   const [marathonSaving, setMarathonSaving] = useState(false);
 
   useEffect(() => {
-    if (activeTab !== "schedule") {
+    if (activeTab !== "events") {
       setMarathonInlineDescEventId(null);
       setMarathonInlineDescValue("");
     }
@@ -1886,14 +1889,14 @@ export function CourseEditor({
 
       </div>
 
-      {/* === РАСПИСАНИЕ === */}
-      <div className={activeTab !== "schedule" ? "hidden" : undefined}>
+      {/* === СОБЫТИЯ === */}
+      <div className={activeTab !== "events" ? "hidden" : undefined}>
       {product.type === "MARATHON" && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <CalendarDays className="h-4 w-4 text-primary" />
-              Расписание марафона
+              События марафона
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -2117,7 +2120,18 @@ export function CourseEditor({
         </Card>
       )}
 
-      </div>{/* /расписание hidden */}
+      </div>
+
+      {/* === РАСПИСАНИЯ === */}
+      <div className={activeTab !== "schedules" ? "hidden" : undefined}>
+        {product.type === "MARATHON" && (
+          <MarathonSchedulesEditor
+            productId={product.id}
+            durationDays={product.durationDays}
+            initialSections={product.marathonScheduleSections}
+          />
+        )}
+      </div>
 
       {/* === ЛЕНДИНГ === */}
       <div className={activeTab !== "landing" ? "hidden" : undefined}>

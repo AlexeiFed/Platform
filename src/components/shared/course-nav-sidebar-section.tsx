@@ -14,6 +14,7 @@ import {
   FileText,
   Library,
   Lock,
+  CalendarRange,
   MessageCircle,
   ScrollText,
   Sparkles,
@@ -271,6 +272,8 @@ export function CourseNavSidebarSection({ onNavigate }: { onNavigate?: () => voi
   const additionalActive = pathname === `${base}/additional-materials`;
   const homeworkActive = pathname === `${base}/homework`;
   const feedbackActive = pathname === `${base}/feedback`;
+  const scheduleActive = pathname === `${base}/schedule` || pathname.startsWith(`${base}/schedule`);
+  const scheduleSectionId = scheduleActive ? searchParams.get("section") : null;
   const eventActive = scopeEventId ? pathname === `${base}/event/${scopeEventId}` : false;
 
   return (
@@ -332,6 +335,48 @@ export function CourseNavSidebarSection({ onNavigate }: { onNavigate?: () => voi
             <MessageCircle className="h-4 w-4 shrink-0" />
             <span className="min-w-0 flex-1">Обратная связь</span>
           </Link>
+        ) : null}
+
+        {payload.productType === "MARATHON" && payload.marathonScheduleNav?.length ? (
+          <details
+            className="group rounded-lg"
+            open={scheduleActive}
+          >
+            <summary
+              className={cn(
+                navItemClass(scheduleActive),
+                "cursor-pointer list-none [&::-webkit-details-marker]:hidden"
+              )}
+            >
+              <CalendarRange className="h-4 w-4 shrink-0" />
+              <span className="min-w-0 flex-1">Расписание</span>
+              <ChevronRight
+                className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-90"
+                aria-hidden
+              />
+            </summary>
+            <ul className="space-y-0.5 pb-1 pl-2 pt-0.5">
+              {payload.marathonScheduleNav.map((section) => {
+                const href = `${base}/schedule?section=${encodeURIComponent(section.id)}`;
+                const active =
+                  scheduleActive &&
+                  (scheduleSectionId === section.id ||
+                    (!scheduleSectionId && section.id === "goal"));
+                return (
+                  <li key={section.id}>
+                    <Link
+                      href={href}
+                      onClick={() => onNavigate?.()}
+                      className={navItemClass(active, true)}
+                      aria-current={active ? "page" : undefined}
+                    >
+                      <span className="min-w-0 flex-1 truncate text-xs">{section.label}</span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </details>
         ) : null}
 
         {payload.productType === "MARATHON" && scopeEventId ? (
@@ -410,7 +455,7 @@ export function CourseNavSidebarSection({ onNavigate }: { onNavigate?: () => voi
 
             {marathonWeeksDisplay && marathonWeeksDisplay.length > 0 && (
               <>
-                <GroupLabel>Расписание</GroupLabel>
+                <GroupLabel>События</GroupLabel>
                 <div className="space-y-0.5">
                   {marathonWeeksDisplay.map((week) => {
                     const allEvents = week.days.flatMap((d) => d.events);

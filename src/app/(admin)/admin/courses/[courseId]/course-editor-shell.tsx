@@ -14,6 +14,7 @@ import { CourseEditor } from "./course-editor";
 import { BulkProceduresManager } from "./bulk-procedures-manager";
 import type { ProductCriterion, ProductType } from "@prisma/client";
 import type { LandingBlock } from "@/types/landing";
+import type { MarathonScheduleSections } from "@/types/marathon-schedule";
 
 // === Types (дублируют page.tsx для прокидывания в дочерние компоненты) ===
 
@@ -47,6 +48,7 @@ type Props = {
     deletedAt: string | null;
     enabledCriteria: ProductCriterion[];
     landingBlocks: LandingBlock[];
+    marathonScheduleSections: MarathonScheduleSections | null;
   };
   lessons: Parameters<typeof CourseEditor>[0]["lessons"];
   marathonEvents: Parameters<typeof CourseEditor>[0]["marathonEvents"];
@@ -56,7 +58,7 @@ type Props = {
 };
 
 // === Типы табов ===
-type TabId = "criteria" | "description" | "rules" | "schedule" | "landing" | "lessons" | "procedures";
+type TabId = "criteria" | "description" | "rules" | "events" | "schedules" | "landing" | "lessons" | "procedures";
 
 type Tab = { id: TabId; label: string };
 
@@ -100,7 +102,8 @@ export function CourseEditorShell({ product, lessons, marathonEvents, tariffs, m
   // Восстанавливаем последнюю вкладку после монтирования
   useEffect(() => {
     const saved = localStorage.getItem(storageKey);
-    if (saved) setActiveTab(saved as TabId);
+    if (saved === "schedule") setActiveTab("events");
+    else if (saved) setActiveTab(saved as TabId);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -118,7 +121,8 @@ export function CourseEditorShell({ product, lessons, marathonEvents, tariffs, m
     { id: "lessons", label: "Уроки" },
     ...(product.type === "MARATHON"
       ? ([
-          { id: "schedule", label: "Расписание" },
+          { id: "events", label: "События" },
+          { id: "schedules", label: "Расписания" },
           { id: "procedures", label: "Процедуры" },
         ] as Tab[])
       : []),
@@ -152,7 +156,7 @@ export function CourseEditorShell({ product, lessons, marathonEvents, tariffs, m
         </div>
       )}
 
-      {/* Описание, Правила, Расписание, Лендинг, Уроки — управляет CourseEditor */}
+      {/* Описание, Правила, События, Расписания, Лендинг, Уроки — управляет CourseEditor */}
       <CourseEditor
         product={product}
         lessons={lessons}

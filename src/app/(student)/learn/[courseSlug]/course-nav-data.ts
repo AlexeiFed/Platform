@@ -3,6 +3,11 @@ import { isMarathonEventAccessible } from "@/lib/marathon-progress";
 import type { ProductCriterion } from "@prisma/client";
 import { criterionForMarathonEventType } from "@/lib/product-criteria";
 import { effectiveCriteriaSet, enrollmentHasCriterion } from "@/lib/enrollment-criteria";
+import {
+  buildMarathonScheduleNavSections,
+  marathonWeekCountFromDuration,
+  parseMarathonScheduleSections,
+} from "@/lib/marathon-schedule-sections";
 import type {
   CourseNavLesson,
   CourseNavMarathonDay,
@@ -10,6 +15,7 @@ import type {
   CourseNavPayload,
   CourseNavProcedure,
 } from "@/lib/course-nav-types";
+import type { MarathonScheduleSections } from "@/types/marathon-schedule";
 import type { Lesson, MarathonEvent, Product } from "@prisma/client";
 
 type LessonWithSubs = Lesson & {
@@ -228,5 +234,16 @@ export async function getCourseNavPayload(
 
   const marathonWeeks = buildMarathonWeeks(product, product.marathonEvents, criteriaSet);
 
-  return { ...base, procedures, marathonWeeks };
+  const weekCount = marathonWeekCountFromDuration(product.durationDays);
+  const scheduleSections = parseMarathonScheduleSections(
+    product.marathonScheduleSections as MarathonScheduleSections | null,
+    weekCount
+  );
+  const marathonScheduleNav = buildMarathonScheduleNavSections(scheduleSections, weekCount).map((s) => ({
+    id: s.id,
+    label: s.label,
+    hasContent: s.blocks.length > 0,
+  }));
+
+  return { ...base, procedures, marathonWeeks, marathonScheduleNav };
 }

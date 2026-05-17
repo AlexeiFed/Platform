@@ -9,6 +9,11 @@ import { CourseEditorShell } from "./course-editor-shell";
 import { getResolvedMarathonTimeZone } from "@/lib/marathon-time-zone";
 import type { ContentBlock } from "./course-editor";
 import type { LandingBlock } from "@/types/landing";
+import {
+  marathonWeekCountFromDuration,
+  parseMarathonScheduleSections,
+} from "@/lib/marathon-schedule-sections";
+import type { MarathonScheduleSections } from "@/types/marathon-schedule";
 
 type Props = {
   params: Promise<{ courseId: string }>;
@@ -63,6 +68,10 @@ export default async function CourseEditorPage({ params }: Props) {
     deletedAt: productData.deletedAt?.toISOString() ?? null,
     enabledCriteria: productData.enabledCriteria,
     landingBlocks: (productData.landingBlocks as LandingBlock[] | null) ?? [],
+    marathonScheduleSections: parseMarathonScheduleSections(
+      productData.marathonScheduleSections as MarathonScheduleSections | null,
+      marathonWeekCountFromDuration(productData.durationDays)
+    ),
   };
 
   const serializedTariffs = productTariffs.map((t) => ({

@@ -36,6 +36,12 @@ export type CourseNavMarathonWeek = {
   days: CourseNavMarathonDay[];
 };
 
+export type CourseNavScheduleSection = {
+  id: string;
+  label: string;
+  hasContent: boolean;
+};
+
 export type CourseNavPayload = {
   courseSlug: string;
   title: string;
@@ -52,4 +58,6 @@ export type CourseNavPayload = {
   lessons?: CourseNavLesson[];
   procedures?: CourseNavProcedure[];
   marathonWeeks?: CourseNavMarathonWeek[];
+  /** Недельные расписания: цель, недели, результат */
+  marathonScheduleNav?: CourseNavScheduleSection[];
 };

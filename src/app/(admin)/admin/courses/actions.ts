@@ -441,6 +441,47 @@ const landingBlockSchema = z.discriminatedUnion("type", [
   z.object({ id: z.string(), type: z.literal("divider") }),
 ]);
 
+const scheduleContentBlockSchema = z.discriminatedUnion("type", [
+  z.object({ id: z.string(), type: z.literal("heading"), level: z.union([z.literal(2), z.literal(3)]), text: z.string() }),
+  z.object({ id: z.string(), type: z.literal("text"), content: z.string() }),
+  z.object({ id: z.string(), type: z.literal("features"), title: z.string(), items: z.array(z.string()) }),
+]);
+
+const marathonScheduleSectionsSchema = z.object({
+  goal: z.array(scheduleContentBlockSchema),
+  weeks: z.record(z.string(), z.array(scheduleContentBlockSchema)),
+  result: z.array(scheduleContentBlockSchema),
+});
+
+export async function updateProductMarathonSchedules(
+  productId: string,
+  sections: z.infer<typeof marathonScheduleSectionsSchema>
+) {
+  const session = await auth();
+  if (!session || session.user.role !== "ADMIN") return { error: "Нет доступа" };
+
+  try {
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+      select: { type: true },
+    });
+    if (!product) return { error: "Продукт не найден" };
+    if (product.type !== "MARATHON") return { error: "Расписания доступны только для марафонов" };
+
+    const parsed = marathonScheduleSectionsSchema.parse(sections);
+    await prisma.product.update({
+      where: { id: productId },
+      data: { marathonScheduleSections: parsed },
+    });
+    revalidatePath(`/admin/courses/${productId}`);
+    revalidatePath(`/learn`);
+    return { success: true };
+  } catch (error) {
+    if (error instanceof z.ZodError) return { error: error.issues[0]?.message ?? "Некорректные данные" };
+    return { error: "Произошла ошибка" };
+  }
+}
+
 export async function updateProductLanding(productId: string, blocks: LandingBlock[]) {
   const session = await auth();
   if (!session || session.user.role !== "ADMIN") return { error: "Нет доступа" };
