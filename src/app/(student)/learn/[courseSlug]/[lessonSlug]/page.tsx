@@ -23,17 +23,20 @@ import {
 import { computeMarathonEventDayStepper } from "@/lib/marathon-event-day-nav";
 import { MarathonEventDayStepper } from "@/components/shared/marathon-event-day-stepper";
 import { MarathonResumePointTracker } from "@/components/shared/marathon-resume";
+import { LandingRenderer } from "@/app/(student)/catalog/[productSlug]/landing-renderer";
+import type { LandingBlock } from "@/types/landing";
 import type { ProductCriterion } from "@prisma/client";
 
-type ContentBlock = {
-  id: string;
-  type: "text" | "video" | "image" | "pdf" | "rating";
-  content: string;
-  /** Ширина блока (только для image): full = полная, half = ½, third = ⅓ */
-  size?: "full" | "half" | "third";
-  /** Для pdf: готовые страницы (URL картинок) */
-  pages?: string[];
-};
+type ContentBlock =
+  | {
+      id: string;
+      type: "text" | "video" | "image" | "pdf" | "rating";
+      content: string;
+      size?: "full" | "half" | "third";
+      pages?: string[];
+    }
+  | Extract<LandingBlock, { type: "heading" }>
+  | Extract<LandingBlock, { type: "features" }>;
 
 type Props = {
   params: Promise<{ courseSlug: string; lessonSlug: string }>;
@@ -344,6 +347,13 @@ export default async function LessonPage({ params, searchParams }: Props) {
                       {renderTextBlock(block.content)}
                     </CardContent>
                   </Card>
+                </div>
+              );
+            }
+            if (block.type === "heading" || block.type === "features") {
+              return (
+                <div key={block.id} className="w-full">
+                  <LandingRenderer blocks={[block]} />
                 </div>
               );
             }

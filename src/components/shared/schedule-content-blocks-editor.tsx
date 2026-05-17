@@ -23,12 +23,12 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { tokens } from "@/lib/design-tokens";
 import { confirmDeletion } from "@/lib/confirm-deletion";
 import { cn } from "@/lib/utils";
-import { GripVertical, Plus, X, AlignLeft, Heading2, List } from "lucide-react";
+import { GripVertical, AlignLeft, Heading2, List, X } from "lucide-react";
 import type { ScheduleContentBlock } from "@/types/marathon-schedule";
+import { FeaturesBlockEditor, HeadingBlockEditor } from "@/components/shared/heading-features-block-editors";
 
 function uid() {
   return crypto.randomUUID();
@@ -42,41 +42,6 @@ const BLOCK_META: Record<
   text: { label: "Текст", icon: AlignLeft, color: "text-emerald-500" },
   features: { label: "Список возможностей", icon: List, color: "text-orange-500" },
 };
-
-function HeadingEditor({
-  block,
-  onChange,
-}: {
-  block: Extract<ScheduleContentBlock, { type: "heading" }>;
-  onChange: (b: ScheduleContentBlock) => void;
-}) {
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-3">
-        <span className={tokens.typography.label}>Уровень</span>
-        <div className="flex gap-1">
-          {([2, 3] as const).map((l) => (
-            <Button
-              key={l}
-              type="button"
-              size="sm"
-              variant={block.level === l ? "default" : "outline"}
-              onClick={() => onChange({ ...block, level: l })}
-              className="w-10"
-            >
-              H{l}
-            </Button>
-          ))}
-        </div>
-      </div>
-      <Input
-        value={block.text}
-        onChange={(e) => onChange({ ...block, text: e.target.value })}
-        placeholder="Текст заголовка"
-      />
-    </div>
-  );
-}
 
 function TextEditor({
   block,
@@ -92,60 +57,6 @@ function TextEditor({
       placeholder="Основной текст..."
       className="w-full min-h-[120px] rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     />
-  );
-}
-
-function FeaturesEditor({
-  block,
-  onChange,
-}: {
-  block: Extract<ScheduleContentBlock, { type: "features" }>;
-  onChange: (b: ScheduleContentBlock) => void;
-}) {
-  return (
-    <div className="space-y-3">
-      <div className="space-y-1">
-        <label className={tokens.typography.label}>Заголовок секции</label>
-        <Input
-          value={block.title}
-          onChange={(e) => onChange({ ...block, title: e.target.value })}
-          placeholder="Заголовок списка"
-        />
-      </div>
-      <div className="space-y-2">
-        <label className={tokens.typography.label}>Пункты списка</label>
-        {block.items.map((item, i) => (
-          <div key={i} className="flex gap-2">
-            <Input
-              value={item}
-              onChange={(e) =>
-                onChange({
-                  ...block,
-                  items: block.items.map((v, idx) => (idx === i ? e.target.value : v)),
-                })
-              }
-              placeholder={`Пункт ${i + 1}`}
-            />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => onChange({ ...block, items: block.items.filter((_, idx) => idx !== i) })}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        ))}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => onChange({ ...block, items: [...block.items, ""] })}
-        >
-          <Plus className="h-3.5 w-3.5 mr-1" /> Добавить пункт
-        </Button>
-      </div>
-    </div>
   );
 }
 
@@ -188,9 +99,13 @@ function SortableBlock({
       </div>
       {expanded && (
         <div className="p-3">
-          {block.type === "heading" && <HeadingEditor block={block} onChange={onChange} />}
+          {block.type === "heading" && (
+            <HeadingBlockEditor block={block} onChange={(updated) => onChange(updated)} />
+          )}
           {block.type === "text" && <TextEditor block={block} onChange={onChange} />}
-          {block.type === "features" && <FeaturesEditor block={block} onChange={onChange} />}
+          {block.type === "features" && (
+            <FeaturesBlockEditor block={block} onChange={(updated) => onChange(updated)} />
+          )}
         </div>
       )}
     </div>

@@ -6,9 +6,12 @@
  */
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
+import { tokens } from "@/lib/design-tokens";
+import { Badge } from "@/components/ui/badge";
 import { useHeaderSlot } from "@/lib/header-slot";
+import { MarathonEventsPageHeader } from "./marathon-events-page-header";
 import { TariffsAndCriteriaEditor } from "./tariffs-and-criteria-editor";
 import { CourseEditor } from "./course-editor";
 import { BulkProceduresManager } from "./bulk-procedures-manager";
@@ -138,8 +141,44 @@ export function CourseEditorShell({ product, lessons, marathonEvents, tariffs, m
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, product.type]);
 
+  const marathonEventDays = useMemo(() => {
+    const days = new Set(marathonEvents.map((event) => event.dayOffset));
+    return [...days].sort((a, b) => a - b);
+  }, [marathonEvents]);
+
+  const isMarathonEventsTab =
+    product.type === "MARATHON" && activeTab === "events";
+  const [marathonStickyHeight, setMarathonStickyHeight] = useState(0);
+
   return (
-    <div className="space-y-6">
+    <div className={cn("space-y-4", !isMarathonEventsTab && "space-y-6")}>
+      {isMarathonEventsTab ? (
+        <>
+          <MarathonEventsPageHeader
+            title={product.title}
+            type={product.type}
+            published={product.published}
+            days={marathonEventDays}
+            onStickyHeightChange={setMarathonStickyHeight}
+          />
+          {marathonStickyHeight > 0 ? (
+            <div aria-hidden style={{ height: marathonStickyHeight }} className="-mb-2" />
+          ) : null}
+        </>
+      ) : (
+        <div>
+          <h1 className={tokens.typography.h2}>{product.title}</h1>
+          <div className="mt-1 flex items-center gap-2">
+            <Badge variant={product.type === "COURSE" ? "default" : "secondary"}>
+              {product.type === "COURSE" ? "Курс" : "Марафон"}
+            </Badge>
+            <Badge variant={product.published ? "success" : "outline"}>
+              {product.published ? "Опубликован" : "Черновик"}
+            </Badge>
+          </div>
+        </div>
+      )}
+
       {/* Критерии и тарифы */}
       <div className={activeTab !== "criteria" ? "hidden" : undefined}>
         <TariffsAndCriteriaEditor

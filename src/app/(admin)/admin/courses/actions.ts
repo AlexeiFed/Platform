@@ -170,6 +170,18 @@ const contentBlockSchema = z.discriminatedUnion("type", [
     pages: z.array(z.string()).optional(),
   }),
   z.object({ id: z.string(), type: z.literal("rating"), content: z.string() }),
+  z.object({
+    id: z.string(),
+    type: z.literal("heading"),
+    level: z.union([z.literal(2), z.literal(3)]),
+    text: z.string(),
+  }),
+  z.object({
+    id: z.string(),
+    type: z.literal("features"),
+    title: z.string(),
+    items: z.array(z.string()),
+  }),
 ]);
 
 const lessonSchema = z.object({

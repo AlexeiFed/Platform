@@ -1,7 +1,5 @@
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
-import { tokens } from "@/lib/design-tokens";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
@@ -110,7 +108,7 @@ export default async function CourseEditorPage({ params }: Props) {
   }));
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3 -mt-2 sm:-mt-4">
       <div className="md:hidden">
         <Button variant="outline" size="sm" className="w-full justify-center" asChild>
           <Link href="/admin/courses" aria-label="Назад к списку курсов">
@@ -119,20 +117,6 @@ export default async function CourseEditorPage({ params }: Props) {
           </Link>
         </Button>
       </div>
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className={tokens.typography.h2}>{product.title}</h1>
-          <div className="flex items-center gap-2 mt-1">
-            <Badge variant={product.type === "COURSE" ? "default" : "secondary"}>
-              {product.type === "COURSE" ? "Курс" : "Марафон"}
-            </Badge>
-            <Badge variant={product.published ? "success" : "outline"}>
-              {product.published ? "Опубликован" : "Черновик"}
-            </Badge>
-          </div>
-        </div>
-      </div>
-
       <CourseEditorShell
         product={serializedProduct}
         lessons={serializedLessons}

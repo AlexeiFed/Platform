@@ -28,8 +28,9 @@ import {
   Plus, GripVertical, FileText, Film, X, Pencil, Trash2, Copy,
   Eye, EyeOff, Image as ImageIcon, Upload, Loader2,
   ClipboardList, CalendarDays, ArrowUp, ArrowDown, ArrowLeft,
-  Gauge,
+  Gauge, Heading2, List,
 } from "lucide-react";
+import { FeaturesBlockEditor, HeadingBlockEditor } from "@/components/shared/heading-features-block-editors";
 import {
   Dialog,
   DialogContent,
@@ -67,7 +68,9 @@ export type ContentBlock =
   | { id: string; type: "video"; content: string }
   | { id: string; type: "image"; content: string; size?: "full" | "half" | "third" }
   | { id: string; type: "pdf"; content: string; pages?: string[] }
-  | { id: string; type: "rating"; content: string };
+  | { id: string; type: "rating"; content: string }
+  | { id: string; type: "heading"; level: 2 | 3; text: string }
+  | { id: string; type: "features"; title: string; items: string[] };
 
 /** Патч блока в редакторе (Union + Partial даёт конфликт полей size/pages). */
 type ContentBlockPatch = {
@@ -805,10 +808,11 @@ function MediaBlockEditor({
 // === Sortable Block Wrapper ===
 
 function SortableBlock({
-  block, onUpdate, onRemove,
+  block, onUpdate, onReplace, onRemove,
 }: {
   block: ContentBlock;
   onUpdate: (updates: ContentBlockPatch) => void;
+  onReplace: (block: ContentBlock) => void;
   onRemove: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: block.id });
@@ -821,7 +825,31 @@ function SortableBlock({
           <GripVertical className="h-4 w-4 text-muted-foreground" />
         </button>
         <div className="flex-1 min-w-0">
-          {block.type === "text" ? (
+          {block.type === "heading" ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Heading2 className="h-4 w-4 text-blue-500" />
+                <span className="text-sm font-medium">Заголовок</span>
+                <div className="flex-1" />
+                <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={onRemove}>
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+              <HeadingBlockEditor block={block} onChange={onReplace} />
+            </div>
+          ) : block.type === "features" ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <List className="h-4 w-4 text-orange-500" />
+                <span className="text-sm font-medium">Список возможностей</span>
+                <div className="flex-1" />
+                <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={onRemove}>
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+              <FeaturesBlockEditor block={block} onChange={onReplace} />
+            </div>
+          ) : block.type === "text" ? (
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <FileText className="h-4 w-4 text-emerald-500" />
@@ -1310,11 +1338,32 @@ export function CourseEditor({
   // === Block helpers ===
 
   function addBlock(type: ContentBlock["type"]) {
-    setBlocks((prev) => [...prev, { id: uid(), type, content: "" }]);
+    const base = { id: uid() };
+    let block: ContentBlock;
+    switch (type) {
+      case "heading":
+        block = { ...base, type, level: 2, text: "" };
+        break;
+      case "features":
+        block = { ...base, type, title: "", items: [""] };
+        break;
+      case "text":
+      case "video":
+      case "image":
+      case "pdf":
+      case "rating":
+        block = { ...base, type, content: "" };
+        break;
+    }
+    setBlocks((prev) => [...prev, block]);
   }
 
   function updateBlock(id: string, updates: ContentBlockPatch) {
     setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, ...updates } as ContentBlock : b)));
+  }
+
+  function replaceBlock(id: string, block: ContentBlock) {
+    setBlocks((prev) => prev.map((b) => (b.id === id ? block : b)));
   }
 
   function removeBlock(id: string) {
@@ -1480,6 +1529,7 @@ export function CourseEditor({
                         key={block.id}
                         block={block}
                         onUpdate={(updates) => updateBlock(block.id, updates)}
+                        onReplace={(updated) => replaceBlock(block.id, updated)}
                         onRemove={() => removeBlock(block.id)}
                       />
                     ))}
@@ -1495,8 +1545,14 @@ export function CourseEditor({
             )}
 
             <div className="flex gap-2 flex-wrap">
+              <Button type="button" variant="outline" size="sm" onClick={() => addBlock("heading")}>
+                <Heading2 className="h-3.5 w-3.5 mr-1.5 text-blue-500" /> + Заголовок
+              </Button>
               <Button type="button" variant="outline" size="sm" onClick={() => addBlock("text")}>
                 <FileText className="h-3.5 w-3.5 mr-1.5 text-emerald-500" /> + Текст
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => addBlock("features")}>
+                <List className="h-3.5 w-3.5 mr-1.5 text-orange-500" /> + Список возможностей
               </Button>
               <Button type="button" variant="outline" size="sm" onClick={() => addBlock("video")}>
                 <Film className="h-3.5 w-3.5 mr-1.5 text-primary" /> + Видео
@@ -1892,14 +1948,14 @@ export function CourseEditor({
       {/* === СОБЫТИЯ === */}
       <div className={activeTab !== "events" ? "hidden" : undefined}>
       {product.type === "MARATHON" && (
-        <Card>
-          <CardHeader>
+        <Card className="-mt-1">
+          <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <CalendarDays className="h-4 w-4 text-primary" />
               События марафона
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-5">
             <form onSubmit={handleCreateMarathonEvent} className="space-y-4 rounded-lg border p-4">
               <div className="md:hidden">
                 <Button
@@ -1970,7 +2026,11 @@ export function CourseEditor({
                 </div>
               ) : (
                 sortedMarathonDays.map((day) => (
-                  <div key={day} className="space-y-3 rounded-lg border p-4">
+                  <div
+                    key={day}
+                    id={`marathon-day-${day}`}
+                    className="space-y-3 rounded-lg border p-4"
+                  >
                     <div className="flex items-center justify-between gap-2">
                       <div>
                         <p className="font-medium">День {day}</p>

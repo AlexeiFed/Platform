@@ -55,6 +55,8 @@ export const layout = {
   sidebar: {
     width: "w-64",
     collapsedWidth: "w-16",
+    /** Смещение fixed-элементов под колонку main (сайдбар md+) */
+    mainOffset: "md:left-64",
   },
   header: {
     height: "h-16",
