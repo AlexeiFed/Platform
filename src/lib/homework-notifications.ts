@@ -135,6 +135,54 @@ export async function notifyStudentHomeworkStaffMessage(input: {
   }
 }
 
+/** Студент написал сообщение в треде ДЗ — push/email/telegram админам и кураторам продукта */
+export async function notifyStaffHomeworkChatMessage(input: {
+  productId: string;
+  productTitle: string;
+  productSlug: string;
+  lessonId: string;
+  lessonTitle: string;
+  studentId: string;
+  studentName: string | null;
+  studentEmail: string;
+  preview: string;
+}) {
+  try {
+    const { emails: recipients, userIds: staffUserIds } = await staffHomeworkTargets(input.productId);
+    if (recipients.length === 0 && staffUserIds.length === 0) return;
+
+    const who = input.studentName?.trim() || input.studentEmail;
+    const link = `${appOrigin()}/admin/homework?productId=${encodeURIComponent(input.productId)}&userId=${encodeURIComponent(input.studentId)}`;
+    const trimmed = input.preview.replace(/\s+/g, " ").trim();
+    const short = trimmed.length > 280 ? `${trimmed.slice(0, 280)}…` : trimmed;
+
+    const subject = `Сообщение по ДЗ: ${who} — ${input.lessonTitle}`;
+    const html = `
+    <p><strong>${escapeHtml(who)}</strong> (${escapeHtml(input.studentEmail)}) написал(а) сообщение в треде ДЗ.</p>
+    <p>Курс: <strong>${escapeHtml(input.productTitle)}</strong><br/>
+    Урок: <strong>${escapeHtml(input.lessonTitle)}</strong></p>
+    <blockquote style="border-left:3px solid #ccc;padding-left:8px;margin:8px 0;">${escapeHtml(short)}</blockquote>
+    <p><a href="${escapeHtml(link)}">Открыть в админке</a></p>
+  `.trim();
+
+    if (recipients.length > 0) {
+      await Promise.all(recipients.map((to) => sendEmail({ to, subject, html })));
+    }
+
+    await sendTelegram(
+      `💬 <b>Сообщение по ДЗ</b>\n${escapeHtml(who)}\n${escapeHtml(input.productTitle)}\nУрок: ${escapeHtml(input.lessonTitle)}\n${escapeHtml(link)}`
+    );
+
+    await sendWebPushToUserIds(staffUserIds, {
+      title: "Сообщение по ДЗ",
+      body: `${who}: ${input.lessonTitle}`,
+      url: link,
+    });
+  } catch (e) {
+    console.error("[notifyStaffHomeworkChatMessage]", e);
+  }
+}
+
 /** Куратор/админ принял или отклонил ДЗ — уведомление студенту (email + telegram + web push) */
 export async function notifyStudentHomeworkReviewed(input: {
   studentUserId: string;

@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { emitHomeworkEvent } from "@/lib/realtime";
 import { enrollmentHasCriterion, loadEnrollmentForCriteriaByUserProduct } from "@/lib/enrollment-criteria";
+import { notifyStaffHomeworkChatMessage } from "@/lib/homework-notifications";
 
 const sendSchema = z.object({
   submissionId: z.string().uuid(),
@@ -29,7 +30,14 @@ export async function sendStudentHomeworkChatMessage(
       select: {
         userId: true,
         lessonId: true,
-        lesson: { select: { productId: true, product: { select: { slug: true } }, slug: true } },
+        lesson: {
+          select: {
+            productId: true,
+            slug: true,
+            title: true,
+            product: { select: { slug: true, title: true } },
+          },
+        },
       },
     });
     if (!sub || sub.userId !== session.user.id) {
@@ -71,6 +79,19 @@ export async function sendStudentHomeworkChatMessage(
       lessonId: sub.lessonId,
       userId: session.user.id,
     });
+
+    await notifyStaffHomeworkChatMessage({
+      productId: sub.lesson.productId,
+      productTitle: sub.lesson.product.title,
+      productSlug: sub.lesson.product.slug,
+      lessonId: sub.lessonId,
+      lessonTitle: sub.lesson.title,
+      studentId: session.user.id,
+      studentName: session.user.name ?? null,
+      studentEmail: session.user.email ?? "",
+      preview: data.content,
+    });
+
     return { success: true } as const;
   } catch (e) {
     if (e instanceof z.ZodError) return { error: "Некорректные данные" } as const;
