@@ -1,28 +1,46 @@
 /**
  * Web Push (VAPID): рассылка подписчикам из таблицы push_subscriptions.
- * Env: VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, опционально VAPID_SUBJECT (mailto:… или https:…).
+ * Env: VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT (mailto:реальный@домен или https://домен).
  */
 import webpush from "web-push";
 import { prisma } from "@/lib/prisma";
+import { isApplePushEndpoint, resolveVapidSubject } from "@/lib/push-vapid";
 
 export function getVapidPublicKey(): string | null {
   return process.env.VAPID_PUBLIC_KEY?.trim() || null;
 }
 
 let vapidConfigured = false;
+let vapidSubjectUsed: string | null = null;
 
 function ensureVapidConfigured(): boolean {
   if (vapidConfigured) return true;
+
   const pub = process.env.VAPID_PUBLIC_KEY?.trim();
   const priv = process.env.VAPID_PRIVATE_KEY?.trim();
   if (!pub || !priv) return false;
-  const subject =
-    process.env.VAPID_SUBJECT?.trim() ||
-    (process.env.SMTP_FROM?.includes("@") ? `mailto:${process.env.SMTP_FROM}` : "mailto:noreply@localhost");
+
+  const subject = resolveVapidSubject();
+  if (!subject) {
+    console.error(
+      "[push] VAPID_SUBJECT не задан или невалиден для Apple. " +
+        "Задайте VAPID_SUBJECT=mailto:admin@ваш-домен.ru или https://ваш-домен.ru " +
+        "(не localhost). Без этого iPhone не получит push, Android может работать."
+    );
+    return false;
+  }
+
   webpush.setVapidDetails(subject, pub, priv);
   vapidConfigured = true;
+  vapidSubjectUsed = subject;
   return true;
 }
+
+export function getVapidSubjectForDiagnostics(): string | null {
+  return vapidSubjectUsed ?? resolveVapidSubject();
+}
+
+export { isInvalidAppleVapidSubject, resolveVapidSubject } from "@/lib/push-vapid";
 
 export async function sendWebPushToUserIds(
   userIds: string[],
@@ -46,19 +64,43 @@ export async function sendWebPushToUserIds(
 
   await Promise.allSettled(
     subs.map(async (s) => {
+      const apple = isApplePushEndpoint(s.endpoint);
       try {
-        await webpush.sendNotification(
+        const result = await webpush.sendNotification(
           { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
           body,
-          { TTL: 3600, urgency: "normal" }
+          { TTL: 3600, urgency: apple ? "high" : "normal" }
         );
+
+        if (apple && result.statusCode !== 201) {
+          console.warn("[push] Apple endpoint non-201:", result.statusCode, s.endpoint.slice(0, 48));
+        }
       } catch (err: unknown) {
-        const status = typeof err === "object" && err !== null && "statusCode" in err ? (err as { statusCode: number }).statusCode : undefined;
+        const status =
+          typeof err === "object" && err !== null && "statusCode" in err
+            ? (err as { statusCode: number }).statusCode
+            : undefined;
+        const errBody =
+          typeof err === "object" && err !== null && "body" in err
+            ? String((err as { body: string }).body)
+            : "";
+
         if (status === 404 || status === 410) {
           await prisma.pushSubscription.deleteMany({ where: { id: s.id } });
-        } else {
-          console.error("[sendWebPushToUserIds]", err);
+          return;
         }
+
+        if (apple && status === 403) {
+          console.error(
+            "[push] Apple 403 — проверьте VAPID_SUBJECT (реальный email/домен, не localhost).",
+            "subject=",
+            getVapidSubjectForDiagnostics(),
+            errBody || err
+          );
+          return;
+        }
+
+        console.error("[push] send failed", apple ? "apple" : "other", status, err);
       }
     })
   );

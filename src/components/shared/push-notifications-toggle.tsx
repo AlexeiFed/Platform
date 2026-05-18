@@ -121,12 +121,21 @@ export const PushNotificationsToggle = () => {
     setLoading(true);
     try {
       const res = await fetch("/api/push/vapid-public");
-      const data = (await res.json()) as { configured?: boolean; publicKey?: string | null };
+      const data = (await res.json()) as {
+        configured?: boolean;
+        publicKey?: string | null;
+        appleReady?: boolean;
+      };
       if (!data.configured || !data.publicKey) {
         showBanner("Push не настроен на сервере (VAPID-ключи)", "error");
         setLoading(false);
         return;
       }
+
+      const appleReady = "appleReady" in data ? Boolean(data.appleReady) : true;
+      const isIos =
+        /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
       const reg = await navigator.serviceWorker.ready;
       const existing = await reg.pushManager.getSubscription();
@@ -173,7 +182,26 @@ export const PushNotificationsToggle = () => {
       });
       if (save.ok) {
         setSubscribed(true);
-        showBanner("Уведомления включены — ДЗ и ответы куратора", "success");
+        const endpoint = json.endpoint ?? "";
+        const isAppleEndpoint = endpoint.includes("web.push.apple.com");
+        if (isIos && isAppleEndpoint && !appleReady) {
+          showBanner(
+            "Подписка сохранена, но сервер: задайте VAPID_SUBJECT=mailto:admin@ваш-домен.ru — иначе iPhone не получит push",
+            "warning"
+          );
+        } else if (isIos && isAppleEndpoint) {
+          const standalone =
+            window.matchMedia("(display-mode: standalone)").matches ||
+            ("standalone" in navigator && (navigator as Navigator & { standalone?: boolean }).standalone);
+          showBanner(
+            standalone
+              ? "Уведомления включены для iPhone"
+              : "На iPhone откройте LearnHub с иконки «Домой», не из Safari",
+            standalone ? "success" : "warning"
+          );
+        } else {
+          showBanner("Уведомления включены — ДЗ и ответы куратора", "success");
+        }
       } else {
         showBanner("Не удалось сохранить подписку", "error");
       }

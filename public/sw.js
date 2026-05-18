@@ -1,4 +1,9 @@
-const CACHE_NAME = "learnhub-v5";
+const CACHE_NAME = "learnhub-v6";
+
+const notificationIcon = () => {
+  const origin = self.location.origin;
+  return `${origin}/icon.svg`;
+};
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -25,12 +30,21 @@ self.addEventListener("push", (event) => {
   } catch {
     /* ignore */
   }
+
+  const title = data.title || "LearnHub";
+  const options = {
+    body: data.body || "Новое уведомление",
+    data: { url: data.url || "/" },
+    icon: notificationIcon(),
+    badge: notificationIcon(),
+    tag: "learnhub-push",
+    renotify: true,
+  };
+
   event.waitUntil(
-    self.registration.showNotification(data.title, {
-      body: data.body,
-      data: { url: data.url || "/" },
-      icon: "/favicon.ico",
-    })
+    self.registration
+      .showNotification(title, options)
+      .catch(() => self.registration.showNotification(title, { body: options.body }))
   );
 });
 
@@ -66,8 +80,6 @@ self.addEventListener("fetch", (event) => {
     event.request.headers.has("Next-Router-State-Tree") ||
     url.searchParams.has("_rsc");
 
-  // Пропускаем: API, Next.js, RSC/flight (иначе клиентская навигация ломается — Safari:
-  // access control / Load failed), админку (всегда свежие данные), cross-origin.
   if (
     url.origin !== self.location.origin ||
     url.pathname.startsWith("/api/") ||

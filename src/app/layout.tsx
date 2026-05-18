@@ -27,6 +27,11 @@ export const metadata: Metadata = {
   title: "LearnHub — Платформа обучения",
   description: "Курсы и марафоны для вашего развития",
   manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    title: "LearnHub",
+    statusBarStyle: "default",
+  },
 };
 
 export const viewport: Viewport = {
