@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { emitHomeworkEvent } from "@/lib/realtime";
 import { enrollmentHasCriterion, loadEnrollmentForCriteriaByUserProduct } from "@/lib/enrollment-criteria";
-import { notifyStudentHomeworkStaffMessage } from "@/lib/homework-notifications";
+import { notifyStudentHomeworkReviewed, notifyStudentHomeworkStaffMessage } from "@/lib/homework-notifications";
 import { markStaffHomeworkThreadRead } from "./homework-unread-actions";
 
 /** Доступ к треду ДЗ в админке: есть задания в тарифе (в т.ч. VIP без ручной проверки). */
@@ -79,8 +79,16 @@ export async function reviewHomework(
       include: {
         lesson: {
           select: {
+            id: true,
+            title: true,
             productId: true,
-            product: { select: { _count: { select: { lessons: true } } } },
+            product: {
+              select: {
+                title: true,
+                slug: true,
+                _count: { select: { lessons: true } },
+              },
+            },
           },
         },
       },
@@ -126,6 +134,16 @@ export async function reviewHomework(
 
     revalidatePath("/admin/homework");
     emitHomeworkEvent({ submissionId, lessonId: submission.lessonId, userId: submission.userId });
+
+    await notifyStudentHomeworkReviewed({
+      studentUserId: submission.userId,
+      lessonId: submission.lesson.id,
+      lessonTitle: submission.lesson.title,
+      productTitle: submission.lesson.product.title,
+      productSlug: submission.lesson.product.slug,
+      status,
+    });
+
     return { success: true };
   } catch {
     return { error: "Произошла ошибка" };

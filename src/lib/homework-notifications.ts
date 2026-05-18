@@ -134,3 +134,46 @@ export async function notifyStudentHomeworkStaffMessage(input: {
     console.error("[notifyStudentHomeworkStaffMessage]", e);
   }
 }
+
+/** Куратор/админ принял или отклонил ДЗ — уведомление студенту (email + telegram + web push) */
+export async function notifyStudentHomeworkReviewed(input: {
+  studentUserId: string;
+  lessonId: string;
+  lessonTitle: string;
+  productTitle: string;
+  productSlug: string;
+  status: "APPROVED" | "REJECTED";
+}) {
+  try {
+    const student = await prisma.user.findUnique({
+      where: { id: input.studentUserId },
+      select: { email: true, name: true },
+    });
+    if (!student) return;
+
+    const learnUrl = `${appOrigin()}/learn/${encodeURIComponent(input.productSlug)}/homework?lessonId=${encodeURIComponent(input.lessonId)}`;
+    const isApproved = input.status === "APPROVED";
+    const verbRu = isApproved ? "принято" : "отправлено на доработку";
+    const subject = `ДЗ ${verbRu}: ${input.lessonTitle}`;
+    const html = `
+    <p>Ваше домашнее задание по уроку <strong>${escapeHtml(input.lessonTitle)}</strong> (${escapeHtml(input.productTitle)}) ${escapeHtml(verbRu)}.</p>
+    <p><a href="${escapeHtml(learnUrl)}">Открыть урок</a></p>
+  `.trim();
+
+    if (student.email) {
+      await sendEmail({ to: student.email, subject, html });
+    }
+
+    await sendTelegram(
+      `${isApproved ? "✅" : "✏️"} <b>ДЗ ${escapeHtml(verbRu)}</b> для ${escapeHtml(student.name ?? student.email)}\n${escapeHtml(input.productTitle)}\n${escapeHtml(input.lessonTitle)}\n${escapeHtml(learnUrl)}`
+    );
+
+    await sendWebPushToUserIds([input.studentUserId], {
+      title: isApproved ? "ДЗ принято" : "ДЗ на доработку",
+      body: `Урок «${input.lessonTitle}»`,
+      url: learnUrl,
+    });
+  } catch (e) {
+    console.error("[notifyStudentHomeworkReviewed]", e);
+  }
+}

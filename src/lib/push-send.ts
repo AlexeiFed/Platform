@@ -18,7 +18,13 @@ function ensureVapidConfigured(): boolean {
 
   const pub = process.env.VAPID_PUBLIC_KEY?.trim();
   const priv = process.env.VAPID_PRIVATE_KEY?.trim();
-  if (!pub || !priv) return false;
+  if (!pub || !priv) {
+    console.error(
+      "[push] VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY не заданы в окружении сервера. " +
+        "Push не будет отправлен. Проверьте что переменные доступны в рантайме (pm2/systemd/docker)."
+    );
+    return false;
+  }
 
   const subject = resolveVapidSubject();
   if (!subject) {
@@ -30,9 +36,15 @@ function ensureVapidConfigured(): boolean {
     return false;
   }
 
-  webpush.setVapidDetails(subject, pub, priv);
+  try {
+    webpush.setVapidDetails(subject, pub, priv);
+  } catch (e) {
+    console.error("[push] webpush.setVapidDetails failed — проверьте формат VAPID-ключей", e);
+    return false;
+  }
   vapidConfigured = true;
   vapidSubjectUsed = subject;
+  console.info("[push] VAPID настроен, subject=", subject);
   return true;
 }
 
@@ -48,13 +60,22 @@ export async function sendWebPushToUserIds(
 ): Promise<void> {
   if (!ensureVapidConfigured()) return;
   const unique = [...new Set(userIds.filter(Boolean))];
-  if (unique.length === 0) return;
+  if (unique.length === 0) {
+    console.info("[push] sendWebPushToUserIds: пустой список userIds");
+    return;
+  }
 
   const subs = await prisma.pushSubscription.findMany({
     where: { userId: { in: unique } },
     select: { id: true, endpoint: true, p256dh: true, auth: true },
   });
-  if (subs.length === 0) return;
+  if (subs.length === 0) {
+    console.warn(
+      `[push] нет подписок для userIds=[${unique.join(",")}]. Получатели не нажимали кнопку «колокольчик» в шапке либо подписка была удалена браузером.`
+    );
+    return;
+  }
+  console.info(`[push] отправляю ${subs.length} подпискам для ${unique.length} пользователей: "${payload.title}"`);
 
   const body = JSON.stringify({
     title: payload.title,
