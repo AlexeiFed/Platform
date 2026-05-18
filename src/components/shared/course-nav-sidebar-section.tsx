@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 import { tokens } from "@/lib/design-tokens";
 import { useCourseNavPayload } from "@/components/shared/course-nav-context";
 import { MarathonProcedureToggle } from "@/app/(student)/learn/[courseSlug]/marathon-procedure-toggle";
+import { StudentHomeworkUnreadBadge } from "@/components/shared/student-homework-unread-badge";
 import { Badge } from "@/components/ui/badge";
 import type {
   CourseNavMarathonWeek,
@@ -323,6 +324,7 @@ export function CourseNavSidebarSection({ onNavigate }: { onNavigate?: () => voi
         >
           <ClipboardCheck className="h-4 w-4 shrink-0" />
           <span className="min-w-0 flex-1">Домашние задания</span>
+          <StudentHomeworkUnreadBadge courseSlug={payload.courseSlug} />
         </Link>
 
         {payload.curatorFeedback ? (

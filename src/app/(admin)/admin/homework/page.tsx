@@ -9,6 +9,7 @@ import { BookOpen, GraduationCap } from "lucide-react";
 import { LiveReviewThread } from "./live-review-thread";
 import { HomeworkStudentBodyMetrics } from "./homework-student-body-metrics";
 import { HomeworkStudentProgressPhotos } from "./homework-student-progress-photos";
+import { HomeworkPageAutoRefresh } from "@/components/shared/homework-page-auto-refresh";
 
 export default async function AdminHomeworkPage({
   searchParams,
@@ -160,6 +161,7 @@ export default async function AdminHomeworkPage({
 
   return (
     <div className="space-y-6">
+      <HomeworkPageAutoRefresh />
       <h1 className={tokens.typography.h2}>Домашние задания</h1>
 
       <div className="grid min-w-0 w-full gap-4 lg:grid-cols-[340px_280px_1fr]">

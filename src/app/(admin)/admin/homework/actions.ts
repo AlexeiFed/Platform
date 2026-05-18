@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { emitHomeworkEvent } from "@/lib/realtime";
 import { enrollmentHasCriterion, loadEnrollmentForCriteriaByUserProduct } from "@/lib/enrollment-criteria";
 import { notifyStudentHomeworkStaffMessage } from "@/lib/homework-notifications";
+import { markStaffHomeworkThreadRead } from "./homework-unread-actions";
 
 /** Доступ к треду ДЗ в админке: есть задания в тарифе (в т.ч. VIP без ручной проверки). */
 async function assertStaffHomeworkEnrollment(userId: string, productId: string) {
@@ -174,6 +175,12 @@ export async function getHomeworkReviewThread(input: {
     if (!submission) {
       return { success: true, data: null } as const;
     }
+
+    await markStaffHomeworkThreadRead({
+      productId: input.productId,
+      userId: input.userId,
+      lessonId: input.lessonId,
+    });
 
     return {
       success: true,

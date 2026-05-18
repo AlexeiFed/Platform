@@ -14,6 +14,7 @@ import {
 } from "@/lib/enrollment-criteria";
 import { HomeworkForm } from "../[lessonSlug]/homework-form";
 import { StudentLiveHomeworkThread } from "./student-live-homework-thread";
+import { HomeworkPageAutoRefresh } from "@/components/shared/homework-page-auto-refresh";
 
 export const dynamic = "force-dynamic";
 
@@ -139,6 +140,7 @@ export default async function StudentHomeworkPage({ params, searchParams }: Prop
 
   return (
     <div className="space-y-6">
+      <HomeworkPageAutoRefresh />
       <div className="md:hidden">
         <Button variant="outline" size="sm" className="w-full justify-center" asChild>
           <Link href={`/learn/${courseSlug}`} aria-label="Назад к обзору курса">

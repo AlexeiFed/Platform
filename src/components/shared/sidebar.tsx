@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { tokens, layout } from "@/lib/design-tokens";
 import { CourseNavSidebarSection } from "@/components/shared/course-nav-sidebar-section";
 import { FeedbackUnreadBadge } from "@/components/shared/feedback-unread-badge";
+import { HomeworkUnreadBadge } from "@/components/shared/homework-unread-badge";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { SignOutConfirmDialog } from "@/components/shared/sign-out-confirm-dialog";
 
@@ -102,6 +103,9 @@ export function Sidebar({
               >
                 <item.icon className="h-5 w-5" />
                 <span className="flex-1">{item.label}</span>
+                {item.href === "/admin/homework" && variant === "admin" && (
+                  <HomeworkUnreadBadge />
+                )}
                 {item.href === "/admin/feedback" && variant === "admin" && (
                   <FeedbackUnreadBadge />
                 )}

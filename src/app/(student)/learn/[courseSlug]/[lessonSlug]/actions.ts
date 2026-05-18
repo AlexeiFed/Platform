@@ -7,6 +7,7 @@ import { z } from "zod";
 import { emitHomeworkEvent } from "@/lib/realtime";
 import { enrollmentHasCriterion, loadEnrollmentForCriteriaByUserProduct } from "@/lib/enrollment-criteria";
 import { notifyStaffHomeworkSubmitted } from "@/lib/homework-notifications";
+import { markStudentHomeworkThreadRead } from "../homework/homework-unread-actions";
 
 const homeworkSchema = z.object({
   lessonId: z.string().uuid(),
@@ -155,6 +156,8 @@ export async function getHomeworkThread(lessonId: string) {
     });
 
     if (!submission) return { success: true, data: null } as const;
+
+    await markStudentHomeworkThreadRead(lessonId);
 
     return {
       success: true,
