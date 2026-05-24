@@ -71,6 +71,32 @@ export function LiveReviewThread({
     setMessages(initialMessages);
   }, [initialSubmission, initialMessages]);
 
+  // Просмотр треда = прочитано (как у студента в getHomeworkThread)
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      const result = await getHomeworkReviewThread({ productId, userId, lessonId });
+      if (cancelled || "error" in result || !result.data) return;
+      setSubmission({
+        id: result.data.id,
+        status: result.data.status,
+        content: result.data.content,
+        fileUrl: result.data.fileUrl,
+        fileUrls: result.data.fileUrls,
+        createdAt: result.data.createdAt,
+        updatedAt: result.data.updatedAt,
+        user: result.data.user,
+      });
+      setMessages(result.data.messages);
+      window.dispatchEvent(new Event("homework-unread-changed"));
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [productId, userId, lessonId]);
+
   useEffect(() => {
     let alive = true;
 

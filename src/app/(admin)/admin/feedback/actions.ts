@@ -8,7 +8,8 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { sendEmail, sendTelegram } from "@/lib/notifications";
+import { sendEmail } from "@/lib/notifications";
+import { sendNotificationToUsers } from "@/lib/notification-channels/send";
 
 async function assertAdminOrCurator() {
   const session = await auth();
@@ -318,17 +319,18 @@ export async function notifyAdminsOnStudentMessage(opts: {
   const siteUrl = process.env.AUTH_URL ?? "https://thebesteducation.ru";
   const feedbackUrl = `${siteUrl}/admin/feedback?enrollment=${opts.enrollmentId}`;
 
-  // Email всем ADMIN и CURATOR пользователям
   try {
-    const admins = await prisma.user.findMany({
+    const staff = await prisma.user.findMany({
       where: { role: { in: ["ADMIN", "CURATOR"] } },
-      select: { email: true },
+      select: { id: true },
     });
-
-    await Promise.all(
-      admins.map((admin) =>
-        sendEmail({
-          to: admin.email,
+    await sendNotificationToUsers(
+      staff.map((u) => u.id),
+      {
+        title: "Новое сообщение",
+        body: `${opts.studentName} — ${opts.productTitle}`,
+        url: feedbackUrl,
+        email: {
           subject: `Новое сообщение от студента — ${opts.productTitle}`,
           html: `
             <p>Студент <strong>${opts.studentName}</strong> написал в чат обратной связи по курсу <strong>${opts.productTitle}</strong>:</p>
@@ -337,20 +339,10 @@ export async function notifyAdminsOnStudentMessage(opts: {
             </blockquote>
             <p><a href="${feedbackUrl}" style="color:#f97316">Открыть чат</a></p>
           `,
-        })
-      )
+        },
+      }
     );
   } catch (err) {
-    console.error("[notifyAdminsOnStudentMessage:email]", err);
+    console.error("[notifyAdminsOnStudentMessage]", err);
   }
-
-  // Telegram
-  const telegramText =
-    `💬 <b>Новое сообщение</b>\n` +
-    `👤 Студент: ${opts.studentName}\n` +
-    `📚 Курс: ${opts.productTitle}\n\n` +
-    `${opts.messageContent.slice(0, 300)}${opts.messageContent.length > 300 ? "…" : ""}\n\n` +
-    `<a href="${feedbackUrl}">Открыть чат</a>`;
-
-  await sendTelegram(telegramText);
 }

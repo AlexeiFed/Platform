@@ -10,6 +10,7 @@ import { LiveReviewThread } from "./live-review-thread";
 import { HomeworkStudentBodyMetrics } from "./homework-student-body-metrics";
 import { HomeworkStudentProgressPhotos } from "./homework-student-progress-photos";
 import { HomeworkPageAutoRefresh } from "@/components/shared/homework-page-auto-refresh";
+import { markStaffHomeworkThreadRead } from "./homework-unread-actions";
 
 export default async function AdminHomeworkPage({
   searchParams,
@@ -119,6 +120,14 @@ export default async function AdminHomeworkPage({
   const lessonThreads = [...latestByLesson.values()].sort((a, b) => (a.lesson.order ?? 0) - (b.lesson.order ?? 0));
 
   const selectedLessonId = lessonId ?? (lessonThreads[0]?.lesson.id ?? null);
+
+  if (selectedProductId && selectedUserId && selectedLessonId) {
+    await markStaffHomeworkThreadRead({
+      productId: selectedProductId,
+      userId: selectedUserId,
+      lessonId: selectedLessonId,
+    });
+  }
 
   const selectedSubmission = selectedProductId && selectedUserId && selectedLessonId
     ? await prisma.homeworkSubmission.findFirst({

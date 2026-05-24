@@ -13,6 +13,8 @@ export function HomeworkPageAutoRefresh() {
   const router = useRouter();
 
   useEffect(() => {
+    window.dispatchEvent(new Event("homework-unread-changed"));
+
     const es = new EventSource("/api/realtime/homework");
     es.onmessage = () => {
       setTimeout(() => router.refresh(), 0);

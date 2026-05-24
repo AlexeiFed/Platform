@@ -134,24 +134,54 @@ model User {
   enrollmentTariffAuthorship EnrollmentTariffHistory[] @relation("EnrollmentTariffHistoryAuthor")
   progressPhotos  UserProgressPhoto[]
   measurements    UserMeasurement[]
-  pushSubscriptions PushSubscription[]
+  notificationPreference UserNotificationPreference?
+  notificationChannels   NotificationChannel[]
+  notificationLinkTokens NotificationLinkToken[]
 
   @@map("users")
 }
 
-model PushSubscription {
-  id        String   @id @default(uuid())
+enum NotificationChannelType {
+  TELEGRAM
+  MAX
+}
+
+model UserNotificationPreference {
+  userId       String   @id
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emailEnabled Boolean  @default(false)
+  updatedAt    DateTime @updatedAt
+
+  @@map("user_notification_preferences")
+}
+
+model NotificationChannel {
+  id         String                  @id @default(uuid())
+  userId     String
+  user       User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type       NotificationChannelType
+  externalId String
+  isActive   Boolean                 @default(true)
+  linkedAt   DateTime                @default(now())
+  updatedAt  DateTime                @updatedAt
+
+  @@unique([userId, type])
+  @@index([userId, isActive])
+  @@map("notification_channels")
+}
+
+model NotificationLinkToken {
+  id        String                  @id @default(uuid())
   userId    String
-  endpoint  String   @unique
-  p256dh    String   @db.Text
-  auth      String   @db.Text
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  user      User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationChannelType
+  token     String                  @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime                @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@map("push_subscriptions")
+  @@index([userId, type])
+  @@map("notification_link_tokens")
 }
 
 enum ProgressPhotoType {

@@ -1,9 +1,4 @@
-const CACHE_NAME = "learnhub-v6";
-
-const notificationIcon = () => {
-  const origin = self.location.origin;
-  return `${origin}/icon.svg`;
-};
+const CACHE_NAME = "learnhub-v7";
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -16,54 +11,6 @@ self.addEventListener("activate", (event) => {
     )
   );
   self.clients.claim();
-});
-
-self.addEventListener("push", (event) => {
-  let data = { title: "LearnHub", body: "", url: "/" };
-  try {
-    if (event.data) {
-      const parsed = event.data.json();
-      if (parsed && typeof parsed === "object") {
-        data = { ...data, ...parsed };
-      }
-    }
-  } catch {
-    /* ignore */
-  }
-
-  const title = data.title || "LearnHub";
-  const options = {
-    body: data.body || "Новое уведомление",
-    data: { url: data.url || "/" },
-    icon: notificationIcon(),
-    badge: notificationIcon(),
-    tag: "learnhub-push",
-    renotify: true,
-  };
-
-  event.waitUntil(
-    self.registration
-      .showNotification(title, options)
-      .catch(() => self.registration.showNotification(title, { body: options.body }))
-  );
-});
-
-self.addEventListener("notificationclick", (event) => {
-  event.notification.close();
-  const url = event.notification.data?.url || "/";
-  event.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
-      const fullUrl = new URL(url, self.location.origin).href;
-      for (const client of clientList) {
-        if (client.url === fullUrl && "focus" in client) {
-          return client.focus();
-        }
-      }
-      if (self.clients.openWindow) {
-        return self.clients.openWindow(fullUrl);
-      }
-    })
-  );
 });
 
 self.addEventListener("fetch", (event) => {

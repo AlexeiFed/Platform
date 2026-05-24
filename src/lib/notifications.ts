@@ -1,7 +1,6 @@
 /**
  * notifications.ts
- * Утилиты для отправки уведомлений: Email (nodemailer) и Telegram Bot API.
- * Конфигурируется через переменные окружения — при их отсутствии уведомления молча пропускаются.
+ * Транспорт email (nodemailer). Мессенджеры — notification-channels/send.ts.
  */
 
 import nodemailer from "nodemailer";
@@ -37,26 +36,5 @@ export async function sendEmail(opts: {
     });
   } catch (err) {
     console.error("[sendEmail]", err);
-  }
-}
-
-// === Telegram ===
-
-/**
- * Отправляет сообщение в Telegram-чат или группу через Bot API.
- * Требуются env: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
- */
-export async function sendTelegram(text: string) {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  const chatId = process.env.TELEGRAM_CHAT_ID;
-  if (!token || !chatId) return;
-  try {
-    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML" }),
-    });
-  } catch (err) {
-    console.error("[sendTelegram]", err);
   }
 }

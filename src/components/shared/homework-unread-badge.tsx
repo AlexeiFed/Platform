@@ -14,11 +14,15 @@ export function HomeworkUnreadBadge() {
       if (!cancelled) setCount(result.count);
     }
 
-    void fetchCount();
-    const id = setInterval(() => void fetchCount(), 15000);
+    const refresh = () => void fetchCount();
+
+    void refresh();
+    const id = setInterval(refresh, 15000);
+    window.addEventListener("homework-unread-changed", refresh);
     return () => {
       cancelled = true;
       clearInterval(id);
+      window.removeEventListener("homework-unread-changed", refresh);
     };
   }, []);
 

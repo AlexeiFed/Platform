@@ -132,6 +132,12 @@ export async function reviewHomework(
       });
     }
 
+    await markStaffHomeworkThreadRead({
+      productId: before.lesson.productId,
+      userId: before.userId,
+      lessonId: submission.lessonId,
+    });
+
     revalidatePath("/admin/homework");
     emitHomeworkEvent({ submissionId, lessonId: submission.lessonId, userId: submission.userId });
 
