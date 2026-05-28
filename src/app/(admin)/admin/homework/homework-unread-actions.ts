@@ -83,14 +83,15 @@ export async function markStaffHomeworkThreadRead(input: {
       if (!assignment) return { error: "Нет доступа" } as const;
     }
 
-    await prisma.homeworkSubmission.updateMany({
-      where: {
-        userId: input.userId,
-        lessonId: input.lessonId,
-        lesson: { productId: input.productId },
-      },
-      data: { staffReadAt: new Date() },
-    });
+    await prisma.$executeRaw`
+      UPDATE homework_submissions AS hs
+      SET staff_read_at = NOW()
+      FROM lessons AS l
+      WHERE hs.lesson_id = l.id
+        AND hs.lesson_id = ${input.lessonId}::uuid
+        AND hs.user_id = ${input.userId}::uuid
+        AND l.product_id = ${input.productId}::uuid
+    `;
 
     return { success: true } as const;
   } catch {

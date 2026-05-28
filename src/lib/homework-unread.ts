@@ -15,6 +15,9 @@ export type HomeworkUnreadRow = {
   messages: LastMessage[];
 };
 
+/** Сдвиг: Prisma @updatedAt при отметке «прочитано» поднимает updatedAt — не считаем это новой активностью. */
+const READ_MARK_SKEW_MS = 3000;
+
 /** Последняя отправка на пару урок+студент (список уже отсортирован по updatedAt desc). */
 export function latestHomeworkSubmissionsByLessonUser<T extends HomeworkUnreadRow>(
   rows: T[]
@@ -29,16 +32,14 @@ export function latestHomeworkSubmissionsByLessonUser<T extends HomeworkUnreadRo
 
 export function isStaffHomeworkUnread(row: HomeworkUnreadRow): boolean {
   const lastMsg = row.messages[0];
-  const readAt = row.staffReadAt ?? new Date(0);
+  const readAt = row.staffReadAt;
 
-  if (
-    (row.status === "PENDING" || row.status === "IN_REVIEW") &&
-    row.updatedAt > readAt
-  ) {
-    return true;
+  if (row.status === "PENDING" || row.status === "IN_REVIEW") {
+    if (readAt === null) return true;
+    if (row.updatedAt.getTime() - readAt.getTime() > READ_MARK_SKEW_MS) return true;
   }
 
-  if (lastMsg?.user.role === "USER" && lastMsg.createdAt > readAt) {
+  if (lastMsg?.user.role === "USER" && (readAt === null || lastMsg.createdAt > readAt)) {
     return true;
   }
 
@@ -47,21 +48,19 @@ export function isStaffHomeworkUnread(row: HomeworkUnreadRow): boolean {
 
 export function isStudentHomeworkUnread(row: HomeworkUnreadRow): boolean {
   const lastMsg = row.messages[0];
-  const readAt = row.studentReadAt ?? new Date(0);
+  const readAt = row.studentReadAt;
 
   if (
     lastMsg &&
     lastMsg.user.role !== "USER" &&
-    lastMsg.createdAt > readAt
+    (readAt === null || lastMsg.createdAt > readAt)
   ) {
     return true;
   }
 
-  if (
-    (row.status === "APPROVED" || row.status === "REJECTED") &&
-    row.updatedAt > readAt
-  ) {
-    return true;
+  if (row.status === "APPROVED" || row.status === "REJECTED") {
+    if (readAt === null) return true;
+    if (row.updatedAt.getTime() - readAt.getTime() > READ_MARK_SKEW_MS) return true;
   }
 
   return false;

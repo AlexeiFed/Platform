@@ -54,10 +54,13 @@ export async function markStudentHomeworkThreadRead(lessonId: string) {
   if (!session) return { error: "Нет доступа" } as const;
 
   try {
-    await prisma.homeworkSubmission.updateMany({
-      where: { lessonId, userId: session.user.id },
-      data: { studentReadAt: new Date() },
-    });
+    // Только student_read_at — иначе @updatedAt сдвигает updatedAt и бейдж не гаснет.
+    await prisma.$executeRaw`
+      UPDATE homework_submissions
+      SET student_read_at = NOW()
+      WHERE lesson_id = ${lessonId}::uuid
+        AND user_id = ${session.user.id}::uuid
+    `;
     return { success: true } as const;
   } catch {
     return { error: "Ошибка" } as const;
