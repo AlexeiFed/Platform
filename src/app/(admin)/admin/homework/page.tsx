@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { tokens } from "@/lib/design-tokens";
 import { formatDate } from "@/lib/utils";
+import { calculateMarathonProgress } from "@/lib/marathon-progress";
 import { BookOpen, GraduationCap } from "lucide-react";
 import { LiveReviewThread } from "./live-review-thread";
 import { HomeworkStudentBodyMetrics } from "./homework-student-body-metrics";
@@ -32,7 +33,7 @@ export default async function AdminHomeworkPage({
       deletedAt: null,
       ...(allowedProductIds ? { id: { in: allowedProductIds } } : {}),
     },
-    select: { id: true, title: true, type: true },
+    select: { id: true, title: true, type: true, startDate: true },
     orderBy: { title: "asc" },
   });
 
@@ -121,6 +122,117 @@ export default async function AdminHomeworkPage({
 
   const selectedLessonId = lessonId ?? (lessonThreads[0]?.lesson.id ?? null);
 
+  const selectedProduct = products.find((p) => p.id === selectedProductId) ?? null;
+
+  const marathonEventData =
+    selectedProduct?.type === "MARATHON" && selectedProductId && selectedUserId
+      ? await prisma.marathonEvent.findMany({
+          where: { productId: selectedProductId, published: true },
+          orderBy: [{ dayOffset: "asc" }, { position: "asc" }],
+          select: {
+            id: true,
+            dayOffset: true,
+            title: true,
+            eventLessons: {
+              orderBy: { position: "asc" },
+              select: {
+                lessonId: true,
+                lesson: {
+                  select: {
+                    submissions: {
+                      where: { userId: selectedUserId },
+                      select: { status: true },
+                      take: 1,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        })
+      : [];
+
+  const enrollmentForMarathon =
+    selectedProduct?.type === "MARATHON" && selectedProductId && selectedUserId
+      ? await prisma.enrollment.findUnique({
+          where: { userId_productId: { userId: selectedUserId, productId: selectedProductId } },
+          select: {
+            id: true,
+            procedures: { select: { completedAt: true } },
+            eventCompletions: { select: { eventId: true } },
+          },
+        })
+      : null;
+
+  const marathonCompletionEventIds = new Set(enrollmentForMarathon?.eventCompletions.map((c) => c.eventId) ?? []);
+
+  const lessonToMarathonDay = new Map<string, number>();
+  for (const event of marathonEventData) {
+    for (const el of event.eventLessons) {
+      // если урок прикреплён к нескольким событиям — показываем самый ранний день
+      const prev = lessonToMarathonDay.get(el.lessonId);
+      if (prev === undefined || event.dayOffset < prev) {
+        lessonToMarathonDay.set(el.lessonId, event.dayOffset);
+      }
+    }
+  }
+
+  const marathonEventStates =
+    selectedProduct?.type === "MARATHON"
+      ? marathonEventData.map((event) => {
+          const manuallyCompleted = marathonCompletionEventIds.has(event.id);
+          const statuses = event.eventLessons
+            .map((el) => el.lesson.submissions[0]?.status ?? null)
+            .filter((x): x is "PENDING" | "IN_REVIEW" | "APPROVED" | "REJECTED" => Boolean(x));
+
+          const approved = statuses.includes("APPROVED");
+          const completed = manuallyCompleted || approved;
+          const pending = statuses.includes("PENDING") || statuses.includes("IN_REVIEW");
+          const rejected = statuses.includes("REJECTED");
+
+          return {
+            id: event.id,
+            dayOffset: event.dayOffset,
+            title: event.title,
+            completed,
+            pending: !completed && pending,
+            rejected: !completed && !pending && rejected,
+          };
+        })
+      : [];
+
+  const marathonStats =
+    selectedProduct?.type === "MARATHON" && enrollmentForMarathon
+      ? (() => {
+          const totalEvents = marathonEventStates.length;
+          const completedEvents = marathonEventStates.filter((e) => e.completed).length;
+          const inReviewEvents = marathonEventStates.filter((e) => e.pending).length;
+          const rejectedEvents = marathonEventStates.filter((e) => e.rejected).length;
+          const notStartedEvents = Math.max(0, totalEvents - completedEvents - inReviewEvents - rejectedEvents);
+
+          const progress = calculateMarathonProgress({
+            events: marathonEventData.map((e) => ({
+              id: e.id,
+              lessons: e.eventLessons.map((el) => ({ submissions: el.lesson.submissions })),
+              completions: marathonCompletionEventIds.has(e.id) ? [{ id: "done" }] : [],
+            })),
+            procedures: enrollmentForMarathon.procedures,
+          });
+
+          const nextEvent = marathonEventStates.find((e) => !e.completed) ?? null;
+
+          return {
+            totalEvents,
+            completedEvents,
+            inReviewEvents,
+            rejectedEvents,
+            notStartedEvents,
+            progressValue: progress.value,
+            nextDayOffset: nextEvent?.dayOffset ?? null,
+          };
+        })()
+      : null;
+
   if (selectedProductId && selectedUserId && selectedLessonId) {
     await markStaffHomeworkThreadRead({
       productId: selectedProductId,
@@ -161,8 +273,6 @@ export default async function AdminHomeworkPage({
     APPROVED: "success",
     REJECTED: "destructive",
   };
-
-  const selectedProduct = products.find((p) => p.id === selectedProductId) ?? null;
 
   const selectedStudentEntry = students.find((s) => s.userId === selectedUserId);
   const selectedStudentLabel =
@@ -246,13 +356,27 @@ export default async function AdminHomeworkPage({
             {lessonThreads.map((t) => {
               const active = t.lesson.id === selectedLessonId;
               const pending = t.status === "PENDING" || t.status === "IN_REVIEW";
+              const marathonDay =
+                selectedProduct?.type === "MARATHON"
+                  ? (lessonToMarathonDay.get(t.lesson.id) ?? null)
+                  : null;
               return (
                 <Link
                   key={t.lesson.id}
                   href={`/admin/homework?productId=${selectedProductId}&userId=${selectedUserId}&lessonId=${t.lesson.id}`}
                   className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm hover:bg-accent transition-colors ${active ? "bg-primary/10 border-primary/60 ring-2 ring-primary/40" : ""}`}
                 >
-                  <span className="truncate">{t.lesson.order ? `${t.lesson.order}. ` : ""}{t.lesson.title}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">
+                      {t.lesson.order ? `${t.lesson.order}. ` : ""}
+                      {t.lesson.title}
+                    </span>
+                    {marathonDay != null && (
+                      <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                        Добавлен к событию дня {marathonDay}
+                      </span>
+                    )}
+                  </span>
                   <span className="flex items-center gap-2">
                     {pending && <Badge variant="destructive" className="text-xs">!</Badge>}
                     <Badge variant={statusVariants[t.status]} className="text-[10px]">{statusLabels[t.status]}</Badge>
@@ -341,6 +465,38 @@ export default async function AdminHomeworkPage({
 
       {studentBody ? (
         <div className="min-w-0 w-full space-y-4">
+          {marathonStats ? (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Статистика выполнения по событиям</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline">
+                    Прогресс: {Math.round(marathonStats.progressValue * 100)}%
+                  </Badge>
+                  <Badge variant="success">
+                    Выполнено: {marathonStats.completedEvents}/{marathonStats.totalEvents}
+                  </Badge>
+                  <Badge variant="secondary">
+                    На проверке: {marathonStats.inReviewEvents}
+                  </Badge>
+                  <Badge variant="destructive">
+                    Доработать: {marathonStats.rejectedEvents}
+                  </Badge>
+                  <Badge variant="warning">
+                    Не начато: {marathonStats.notStartedEvents}
+                  </Badge>
+                </div>
+
+                {marathonStats.nextDayOffset != null && (
+                  <div className="text-sm text-muted-foreground">
+                    Текущая стадия: ближайшее незавершённое событие — день {marathonStats.nextDayOffset}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ) : null}
           <HomeworkStudentBodyMetrics
             studentLabel={selectedStudentLabel}
             heightCm={studentBody.height}
