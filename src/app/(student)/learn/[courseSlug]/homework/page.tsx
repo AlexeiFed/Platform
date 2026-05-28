@@ -15,6 +15,7 @@ import {
 import { HomeworkForm } from "../[lessonSlug]/homework-form";
 import { StudentLiveHomeworkThread } from "./student-live-homework-thread";
 import { HomeworkPageAutoRefresh } from "@/components/shared/homework-page-auto-refresh";
+import { markStudentHomeworkThreadRead } from "./homework-unread-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -101,6 +102,10 @@ export default async function StudentHomeworkPage({ params, searchParams }: Prop
     lessonIdParam && validLessonIds.has(lessonIdParam)
       ? lessonIdParam
       : (lessonThreads[0]?.lesson.id ?? null);
+
+  if (selectedLessonId) {
+    await markStudentHomeworkThreadRead(selectedLessonId);
+  }
 
   const selectedSubmission =
     selectedLessonId

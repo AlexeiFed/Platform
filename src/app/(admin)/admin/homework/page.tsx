@@ -108,17 +108,30 @@ export default async function AdminHomeworkPage({
           lesson: { select: { id: true, title: true, order: true } },
           _count: { select: { messages: true } },
         },
-        orderBy: [{ lesson: { order: "asc" } }, { updatedAt: "desc" }],
+        orderBy: { createdAt: "asc" },
         take: 300,
       })
     : [];
 
-  // latest submission per lesson
+  // последняя сдача по уроку; порядок в списке — по дате первой сдачи (сверху самое раннее)
   const latestByLesson = new Map<string, (typeof allForStudent)[number]>();
+  const firstSubmittedAtByLesson = new Map<string, Date>();
   for (const s of allForStudent) {
-    if (!latestByLesson.has(s.lesson.id)) latestByLesson.set(s.lesson.id, s);
+    const lessonId = s.lesson.id;
+    const prevFirst = firstSubmittedAtByLesson.get(lessonId);
+    if (!prevFirst || s.createdAt < prevFirst) {
+      firstSubmittedAtByLesson.set(lessonId, s.createdAt);
+    }
+    const prevLatest = latestByLesson.get(lessonId);
+    if (!prevLatest || s.updatedAt > prevLatest.updatedAt) {
+      latestByLesson.set(lessonId, s);
+    }
   }
-  const lessonThreads = [...latestByLesson.values()].sort((a, b) => (a.lesson.order ?? 0) - (b.lesson.order ?? 0));
+  const lessonThreads = [...latestByLesson.values()].sort((a, b) => {
+    const aTime = firstSubmittedAtByLesson.get(a.lesson.id)?.getTime() ?? 0;
+    const bTime = firstSubmittedAtByLesson.get(b.lesson.id)?.getTime() ?? 0;
+    return aTime - bTime;
+  });
 
   const selectedLessonId = lessonId ?? (lessonThreads[0]?.lesson.id ?? null);
 

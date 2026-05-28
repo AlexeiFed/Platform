@@ -43,6 +43,7 @@ export function HomeworkThread({
           },
           messages: res.data.messages,
         });
+        window.dispatchEvent(new Event("homework-unread-changed"));
       }
     };
 

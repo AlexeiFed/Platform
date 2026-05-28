@@ -64,12 +64,17 @@ export const StudentLiveHomeworkThread = ({
       user: viewerUser,
     });
     setMessages(result.data.messages);
+    window.dispatchEvent(new Event("homework-unread-changed"));
   }, [lessonId, viewerUser]);
 
   useEffect(() => {
     setSubmission({ ...initialSubmission, user: viewerUser });
     setMessages(initialMessages);
   }, [initialSubmission, initialMessages, viewerUser]);
+
+  useEffect(() => {
+    void apply();
+  }, [apply]);
 
   useEffect(() => {
     let alive = true;
