@@ -37,6 +37,7 @@ type Props = {
 export function LiveHostRecordingControls({
   eventId,
   liveConnected,
+  stageRef,
   localStreamRef,
   remoteTracks,
   selfUserId,
@@ -203,10 +204,13 @@ export function LiveHostRecordingControls({
 
       const { recordingId, uploadUrl, contentType } = started.data;
 
-      const stageRecorder = await LiveStageRecorder.create(sources);
+      const stageEl = stageRef.current;
+      const stageRecorder = stageEl
+        ? await LiveStageRecorder.createFromStage(stageEl, sources)
+        : await LiveStageRecorder.create(sources);
       if (!stageRecorder) {
         await failLiveRoomRecording(eventId, recordingId, "Не удалось подготовить захват");
-        setRecError("Не удалось подготовить запись. Попробуйте Chrome на десктопе.");
+        setRecError("Не удалось подготовить запись. Включите камеру и подождите 3–5 сек.");
         return;
       }
       stageRecorderRef.current = stageRecorder;
@@ -311,7 +315,8 @@ export function LiveHostRecordingControls({
   return (
     <div className="space-y-2">
       <div className={cn(tokens.typography.small, "text-muted-foreground")}>
-        Запись: камера ведущего, превью участников и звук всех (микрофоны не отключаются при записи).
+        Запись: сцена эфира и звук всех участников. Формат MP4 (iOS/Android/desktop). Подождите 3–5 сек после
+        старта, пока появится картинка.
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {phase === "idle" ? (

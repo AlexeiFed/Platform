@@ -2,32 +2,34 @@
 
 export type RecordingFormat = "webm" | "mp4";
 
+const MP4_MIME_CANDIDATES = [
+  "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
+  "video/mp4;codecs=h264,aac",
+  "video/mp4",
+] as const;
+
+const WEBM_MIME_CANDIDATES = [
+  "video/webm;codecs=vp9,opus",
+  "video/webm;codecs=vp8,opus",
+  "video/webm;codecs=vp8",
+  "video/webm",
+] as const;
+
+/** MP4 в приоритете — воспроизводится на iOS, Android и desktop. */
 export function pickRecordingFormat(): RecordingFormat | null {
   if (typeof MediaRecorder === "undefined") return null;
-  const webmCandidates = [
-    "video/webm;codecs=vp9,opus",
-    "video/webm;codecs=vp8,opus",
-    "video/webm;codecs=vp8",
-    "video/webm",
-  ];
-  for (const t of webmCandidates) {
+  for (const t of MP4_MIME_CANDIDATES) {
+    if (MediaRecorder.isTypeSupported(t)) return "mp4";
+  }
+  for (const t of WEBM_MIME_CANDIDATES) {
     if (MediaRecorder.isTypeSupported(t)) return "webm";
   }
-  if (MediaRecorder.isTypeSupported("video/mp4")) return "mp4";
   return null;
 }
 
 export function pickRecorderMime(format: RecordingFormat): string | undefined {
   if (typeof MediaRecorder === "undefined") return undefined;
-  if (format === "mp4") {
-    return MediaRecorder.isTypeSupported("video/mp4") ? "video/mp4" : undefined;
-  }
-  const order = [
-    "video/webm;codecs=vp9,opus",
-    "video/webm;codecs=vp8,opus",
-    "video/webm;codecs=vp8",
-    "video/webm",
-  ];
+  const order = format === "mp4" ? MP4_MIME_CANDIDATES : WEBM_MIME_CANDIDATES;
   for (const t of order) {
     if (MediaRecorder.isTypeSupported(t)) return t;
   }
@@ -89,6 +91,43 @@ function drawVideoContain(
  * Клон WebRTC-трека в Chrome часто гасит декодирование на основном превью;
  * два элемента с одним stream обычно стабильны для drawImage/capture.
  */
+async function waitForVideoFrames(el: HTMLVideoElement, timeoutMs = 4000): Promise<boolean> {
+  if (el.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && el.videoWidth > 0 && el.videoHeight > 0) {
+    return true;
+  }
+
+  return new Promise((resolve) => {
+    const finish = (ok: boolean) => {
+      el.removeEventListener("loadeddata", onReady);
+      el.removeEventListener("resize", onReady);
+      window.clearTimeout(timer);
+      resolve(ok);
+    };
+    const onReady = () => {
+      if (el.videoWidth > 0 && el.videoHeight > 0) finish(true);
+    };
+    el.addEventListener("loadeddata", onReady);
+    el.addEventListener("resize", onReady);
+    const timer = window.setTimeout(() => finish(el.videoWidth > 0 && el.videoHeight > 0), timeoutMs);
+    try {
+      void el.play();
+    } catch {
+      /* autoplay */
+    }
+  });
+}
+
+function collectStageVideos(stage: HTMLElement): HTMLVideoElement[] {
+  const main = stage.querySelector<HTMLVideoElement>('video[data-live-video="main"]');
+  const thumbs = [...stage.querySelectorAll<HTMLVideoElement>('video[data-live-video="thumb"]')];
+  const out: HTMLVideoElement[] = [];
+  if (main?.srcObject) out.push(main);
+  for (const t of thumbs) {
+    if (t.srcObject) out.push(t);
+  }
+  return out;
+}
+
 async function spawnHiddenVideo(stream: MediaStream, root: HTMLElement): Promise<HTMLVideoElement | null> {
   const track = stream.getVideoTracks()[0];
   if (!track || track.readyState === "ended") return null;
@@ -97,30 +136,15 @@ async function spawnHiddenVideo(stream: MediaStream, root: HTMLElement): Promise
   el.muted = true;
   el.playsInline = true;
   el.setAttribute("playsinline", "");
+  el.width = 640;
+  el.height = 360;
+  el.style.cssText =
+    "position:fixed;left:0;top:0;width:2px;height:2px;opacity:0.01;pointer-events:none;z-index:-1;";
   el.srcObject = stream;
   root.appendChild(el);
 
-  try {
-    await el.play();
-  } catch {
-    /* autoplay policy — ждём loadeddata */
-  }
-
-  await new Promise<void>((resolve) => {
-    if (el.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-      resolve();
-      return;
-    }
-    const done = () => {
-      el.removeEventListener("loadeddata", done);
-      clearTimeout(timer);
-      resolve();
-    };
-    el.addEventListener("loadeddata", done);
-    const timer = window.setTimeout(done, 2500);
-  });
-
-  return el;
+  await waitForVideoFrames(el);
+  return el.videoWidth > 0 ? el : null;
 }
 
 export class LiveRecordingAudioMixer {
@@ -268,11 +292,30 @@ export class LiveStageRecorder {
     this.rafId = requestAnimationFrame(tick);
   }
 
+  /**
+   * Захват с уже отрисовываемых `<video>` на сцене эфира — стабильнее, чем off-screen клоны.
+   */
+  static async createFromStage(
+    stage: HTMLElement,
+    sources: RecordingLayoutSource,
+    fps = 30
+  ): Promise<LiveStageRecorder | null> {
+    const stageVideos = collectStageVideos(stage);
+    for (const v of stageVideos) {
+      await waitForVideoFrames(v);
+    }
+    const readyStageVideos = stageVideos.filter((v) => v.videoWidth > 0 && v.videoHeight > 0);
+    if (readyStageVideos.length) {
+      return LiveStageRecorder.createWithVideos(sources, readyStageVideos, fps, null);
+    }
+    return LiveStageRecorder.create(sources, fps);
+  }
+
   static async create(sources: RecordingLayoutSource, fps = 30): Promise<LiveStageRecorder | null> {
     const hiddenRoot = document.createElement("div");
     hiddenRoot.setAttribute("aria-hidden", "true");
     hiddenRoot.style.cssText =
-      "position:fixed;left:-9999px;top:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none;";
+      "position:fixed;left:0;top:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none;z-index:-1;";
     document.body.appendChild(hiddenRoot);
 
     const hiddenVideos: HTMLVideoElement[] = [];
@@ -291,6 +334,21 @@ export class LiveStageRecorder {
         throw new Error("no video sources");
       }
 
+      return LiveStageRecorder.createWithVideos(sources, hiddenVideos, fps, hiddenRoot);
+    } catch (e) {
+      console.error("[LiveStageRecorder.create]", e);
+      hiddenRoot.remove();
+      return null;
+    }
+  }
+
+  private static async createWithVideos(
+    sources: RecordingLayoutSource,
+    captureVideos: HTMLVideoElement[],
+    fps: number,
+    hiddenRoot: HTMLDivElement | null
+  ): Promise<LiveStageRecorder | null> {
+    try {
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d", { alpha: false });
       if (!ctx) throw new Error("no canvas ctx");
@@ -303,10 +361,18 @@ export class LiveStageRecorder {
       await mixer.resume();
       mixer.sync({ local: sources.localAudio, remoteAudios: sources.remoteAudios });
 
-      return new LiveStageRecorder(canvas, ctx, videoStream, mixer, hiddenRoot, hiddenVideos, fps);
+      const root =
+        hiddenRoot ??
+        (() => {
+          const el = document.createElement("div");
+          el.setAttribute("aria-hidden", "true");
+          return el;
+        })();
+
+      return new LiveStageRecorder(canvas, ctx, videoStream, mixer, root, captureVideos, fps);
     } catch (e) {
-      console.error("[LiveStageRecorder.create]", e);
-      hiddenRoot.remove();
+      console.error("[LiveStageRecorder.createWithVideos]", e);
+      hiddenRoot?.remove();
       return null;
     }
   }
@@ -332,8 +398,13 @@ export class LiveStageRecorder {
       }
     });
     this.mixer.close();
+    if (this.hiddenRoot.isConnected) {
+      this.hiddenVideos.forEach((v) => {
+        if (v.parentElement === this.hiddenRoot) v.remove();
+      });
+      this.hiddenRoot.remove();
+    }
     this.hiddenVideos.length = 0;
-    this.hiddenRoot.remove();
   }
 }
 
