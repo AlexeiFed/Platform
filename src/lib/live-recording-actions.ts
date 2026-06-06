@@ -99,6 +99,7 @@ export async function startLiveRoomRecording(eventId: string, format: "webm" | "
 
     revalidatePath(`/admin/live/${eventId}`);
     revalidatePath("/admin/live");
+    revalidatePath("/admin/live/recordings");
 
     return {
       success: true,
@@ -191,6 +192,7 @@ export async function finishLiveRoomRecording(
 
     revalidatePath(`/admin/live/${eventId}`);
     revalidatePath("/admin/live");
+    revalidatePath("/admin/live/recordings");
 
     return { success: true, data: { manifestUrl } } as const;
   } catch (e) {
@@ -221,6 +223,7 @@ export async function failLiveRoomRecording(eventId: string, recordingId: string
 
     revalidatePath(`/admin/live/${eventId}`);
     revalidatePath("/admin/live");
+    revalidatePath("/admin/live/recordings");
 
     return { success: true } as const;
   } catch (e) {

@@ -29,17 +29,28 @@ import { HomeworkUnreadBadge } from "@/components/shared/homework-unread-badge";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { SignOutConfirmDialog } from "@/components/shared/sign-out-confirm-dialog";
 
+type NavChild = {
+  label: string;
+  href: string;
+};
+
 type NavItem = {
   label: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
+  children?: NavChild[];
 };
 
 const adminNav: NavItem[] = [
   { label: "Дашборд", href: "/admin", icon: LayoutDashboard },
   { label: "Курсы", href: "/admin/courses", icon: BookOpen },
   { label: "Доп. материалы", href: "/admin/additional-materials", icon: Library },
-  { label: "Эфиры", href: "/admin/live", icon: Video },
+  {
+    label: "Эфиры",
+    href: "/admin/live",
+    icon: Video,
+    children: [{ label: "Записи эфиров", href: "/admin/live/recordings" }],
+  },
   { label: "Пользователи", href: "/admin/users", icon: Users },
   { label: "Домашние задания", href: "/admin/homework", icon: ClipboardCheck },
   { label: "Оценки", href: "/admin/grades", icon: Star },
@@ -88,28 +99,56 @@ export function Sidebar({
         <nav className="shrink-0 space-y-1 px-3 py-4">
           {items.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+            const showChildren =
+              item.children?.length &&
+              (pathname === item.href || pathname.startsWith(item.href + "/"));
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => onNavigate?.()}
-                className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium",
-                  tokens.animation.fast,
-                  isActive
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                )}
-              >
-                <item.icon className="h-5 w-5" />
-                <span className="flex-1">{item.label}</span>
-                {item.href === "/admin/homework" && variant === "admin" && (
-                  <HomeworkUnreadBadge />
-                )}
-                {item.href === "/admin/feedback" && variant === "admin" && (
-                  <FeedbackUnreadBadge />
-                )}
-              </Link>
+              <div key={item.href}>
+                <Link
+                  href={item.href}
+                  onClick={() => onNavigate?.()}
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium",
+                    tokens.animation.fast,
+                    isActive
+                      ? "bg-primary/10 text-primary"
+                      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                  )}
+                >
+                  <item.icon className="h-5 w-5" />
+                  <span className="flex-1">{item.label}</span>
+                  {item.href === "/admin/homework" && variant === "admin" && (
+                    <HomeworkUnreadBadge />
+                  )}
+                  {item.href === "/admin/feedback" && variant === "admin" && (
+                    <FeedbackUnreadBadge />
+                  )}
+                </Link>
+                {showChildren ? (
+                  <div className="ml-4 mt-0.5 space-y-0.5 border-l border-border pl-3">
+                    {item.children!.map((child) => {
+                      const childActive =
+                        pathname === child.href || pathname.startsWith(child.href + "/");
+                      return (
+                        <Link
+                          key={child.href}
+                          href={child.href}
+                          onClick={() => onNavigate?.()}
+                          className={cn(
+                            "flex items-center rounded-md px-2 py-2 text-sm",
+                            tokens.animation.fast,
+                            childActive
+                              ? "font-medium text-primary"
+                              : "text-muted-foreground hover:text-accent-foreground"
+                          )}
+                        >
+                          {child.label}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
             );
           })}
         </nav>
