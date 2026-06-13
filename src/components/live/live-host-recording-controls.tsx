@@ -32,6 +32,8 @@ type Props = {
   localStreamRef: RefObject<MediaStream | null>;
   remoteTracks: RemoteTrackLite[];
   selfUserId: string | null;
+  /** userId участника, выведенного хостом в крупное видео (null — сам хост). */
+  mainUserId?: string | null;
 };
 
 export function LiveHostRecordingControls({
@@ -41,6 +43,7 @@ export function LiveHostRecordingControls({
   localStreamRef,
   remoteTracks,
   selfUserId,
+  mainUserId,
 }: Props) {
   const router = useRouter();
   const [isStarting, setIsStarting] = useState(false);
@@ -73,8 +76,8 @@ export function LiveHostRecordingControls({
   };
 
   const recordingSources = useCallback(
-    () => buildHostRecordingSources(localStreamRef.current, remoteTracks, selfUserId),
-    [localStreamRef, remoteTracks, selfUserId]
+    () => buildHostRecordingSources(localStreamRef.current, remoteTracks, selfUserId, mainUserId),
+    [localStreamRef, remoteTracks, selfUserId, mainUserId]
   );
 
   const syncRecordingAudio = useCallback(() => {

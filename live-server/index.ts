@@ -334,6 +334,34 @@ io.on("connection", async (socket) => {
     }
   });
 
+  socket.on("speakerRoleSynced", ({ userId, role }, cb) => {
+    try {
+      const peer = room.peers.get(peerKey);
+      if (!peer || peer.role !== "HOST") return cb?.({ ok: false, error: "forbidden" });
+
+      const targetUserId = String(userId ?? "");
+      const nextRole = role === "SPEAKER" ? "SPEAKER" : role === "VIEWER" ? "VIEWER" : null;
+      if (!targetUserId || !nextRole) return cb?.({ ok: false, error: "invalid payload" });
+
+      let targetSocketId: string | null = null;
+      for (const p of room.peers.values()) {
+        if (p.userId !== targetUserId) continue;
+        if (p.role === "HOST") return cb?.({ ok: false, error: "cannot change host" });
+        p.role = nextRole;
+        targetSocketId = p.socketId;
+      }
+
+      socket.to(roomId).emit("peerRoleChanged", { userId: targetUserId, role: nextRole });
+      if (targetSocketId && nextRole === "SPEAKER") {
+        io.to(targetSocketId).emit("promotedToSpeaker", {});
+      }
+
+      cb?.({ ok: true });
+    } catch (e: any) {
+      cb?.({ ok: false, error: e?.message ?? "role sync error" });
+    }
+  });
+
   socket.on("setAllAudioMuted", async ({ muted }, cb) => {
     try {
       const peer = room.peers.get(peerKey);

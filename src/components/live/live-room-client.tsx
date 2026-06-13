@@ -17,9 +17,11 @@ import { Badge } from "@/components/ui/badge";
 import { tokens } from "@/lib/design-tokens";
 import type { Device as MediasoupDevice } from "mediasoup-client";
 import { Device } from "mediasoup-client";
-import { Mic, MicOff, Video, VideoOff, VolumeX, Maximize2, Minimize2 } from "lucide-react";
+import { Mic, MicOff, Video, VideoOff, VolumeX, Maximize2, Minimize2, UserRoundPlus } from "lucide-react";
 import { endLiveRoom } from "@/lib/live-room-actions";
+import { approveSpeaker } from "@/lib/live-speaker-actions";
 import { LiveHostRecordingControls } from "@/components/live/live-host-recording-controls";
+import { LiveSpeakerRequestsPanel } from "@/components/live/live-speaker-requests-panel";
 import { cn } from "@/lib/utils";
 
 type ServerAck<T> = { ok: true; data: T } | { ok: false; error: string };
@@ -92,15 +94,17 @@ export function LiveRoomClient({
   const [producerMuted, setProducerMuted] = useState<Record<string, boolean>>({});
   const [needsAudioGesture, setNeedsAudioGesture] = useState(false);
   const [stageExpanded, setStageExpanded] = useState(false);
+  const [promoteError, setPromoteError] = useState<string | null>(null);
+  const [promotingUserId, setPromotingUserId] = useState<string | null>(null);
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  // userId участника, выведенного хостом в крупное видео (null — сам хост видит себя).
+  const [mainUserId, setMainUserId] = useState<string | null>(null);
 
   const socketRef = useRef<Socket | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
-  const mainDisplayVideoRef = useRef<HTMLVideoElement | null>(null);
   const deviceRef = useRef<MediasoupDevice | null>(null);
   const sendTransportRef = useRef<any>(null);
   const recvTransportRef = useRef<any>(null);
-  const localVideoRef = useRef<HTMLVideoElement | null>(null);
-  const selfThumbVideoRef = useRef<HTMLVideoElement | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const audioProducerRef = useRef<any>(null);
   const videoProducerRef = useRef<any>(null);
@@ -170,6 +174,14 @@ export function LiveRoomClient({
     if (!hostUserId) return null;
     return remoteTracks.find((t) => t.userId === hostUserId && t.kind === "video") ?? null;
   }, [remoteTracks, hostUserId]);
+  const spotlightPeer = useMemo(
+    () => (mainUserId ? peers.find((p) => p.userId === mainUserId) ?? null : null),
+    [peers, mainUserId]
+  );
+  const spotlightVideo = useMemo(() => {
+    if (!mainUserId) return null;
+    return remoteTracks.find((t) => t.userId === mainUserId && t.kind === "video") ?? null;
+  }, [remoteTracks, mainUserId]);
 
   useEffect(() => {
     let alive = true;
@@ -291,6 +303,15 @@ export function LiveRoomClient({
           if (!producerId) return;
           setProducerMuted((prev) => ({ ...prev, [String(producerId)]: Boolean(muted) }));
         });
+        socket.on("peerRoleChanged", ({ userId, role }: { userId?: string; role?: PeerRow["role"] }) => {
+          const id = String(userId ?? "");
+          if (!id || !role) return;
+          if (role !== "HOST" && role !== "SPEAKER" && role !== "VIEWER") return;
+          setPeers((prev) => prev.map((p) => (p.userId === id ? { ...p, role } : p)));
+        });
+        socket.on("promotedToSpeaker", () => {
+          router.refresh();
+        });
 
         const routerCaps: any = await new Promise((resolve) => socket.once("routerRtpCapabilities", resolve));
 
@@ -340,13 +361,7 @@ export function LiveRoomClient({
           try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
             localStreamRef.current = stream;
-            if (localVideoRef.current) {
-              localVideoRef.current.srcObject = stream;
-            }
-            if (selfThumbVideoRef.current) {
-              selfThumbVideoRef.current.srcObject = stream;
-              selfThumbVideoRef.current.play?.().catch(() => {});
-            }
+            setLocalStream(stream);
             const audioTrack = stream.getAudioTracks()[0];
             const videoTrack = stream.getVideoTracks()[0];
             if (audioTrack) {
@@ -390,7 +405,7 @@ export function LiveRoomClient({
         localStreamRef.current?.getTracks()?.forEach((t) => t.stop());
       } catch {}
     };
-  }, [liveServerUrl, token, canProduce, role]);
+  }, [liveServerUrl, token, canProduce, role, router]);
 
   const notifyPlayBlocked = useCallback(() => setNeedsAudioGesture(true), []);
 
@@ -491,6 +506,47 @@ export function LiveRoomClient({
     [peers, selfUserId, isHost, hostUserId]
   );
 
+  // Спотлайт: хост выводит участника крупно. null/свой userId — показываем самого хоста.
+  const setMain = useCallback(
+    (userId: string | null) => {
+      setMainUserId(userId && userId !== selfUserId ? userId : null);
+    },
+    [selfUserId]
+  );
+
+  // Если выведенный крупно участник вышел из эфира — возвращаем хоста на себя.
+  useEffect(() => {
+    if (mainUserId && !peers.some((p) => p.userId === mainUserId)) {
+      setMainUserId(null);
+    }
+  }, [peers, mainUserId]);
+
+  const syncSpeakerRole = useCallback((userId: string, nextRole: "SPEAKER" | "VIEWER") => {
+    const socket = socketRef.current;
+    if (!socket) return;
+    socket.emit("speakerRoleSynced", { userId, role: nextRole }, () => {});
+    setPeers((prev) => prev.map((p) => (p.userId === userId ? { ...p, role: nextRole } : p)));
+  }, []);
+
+  const promoteToSpeaker = useCallback(
+    async (userId: string) => {
+      if (!marathonEventId || !isHost) return;
+      setPromotingUserId(userId);
+      setPromoteError(null);
+      const res = await approveSpeaker(marathonEventId, userId);
+      if (res && "error" in res && res.error) {
+        setPromoteError(res.error);
+        setPromotingUserId(null);
+        return;
+      }
+      syncSpeakerRole(userId, "SPEAKER");
+      // По требованию: назначенный спикер сразу выводится в крупное видео хоста.
+      setMain(userId);
+      setPromotingUserId(null);
+    },
+    [marathonEventId, isHost, syncSpeakerRole, setMain]
+  );
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -521,8 +577,21 @@ export function LiveRoomClient({
           localStreamRef={localStreamRef}
           remoteTracks={remoteTracks}
           selfUserId={selfUserId}
+          mainUserId={mainUserId}
         />
       ) : null}
+
+      {isHost && marathonEventId && status === "connected" ? (
+        <LiveSpeakerRequestsPanel
+          eventId={marathonEventId}
+          onPromoted={(userId) => {
+            syncSpeakerRole(userId, "SPEAKER");
+            setMain(userId);
+          }}
+        />
+      ) : null}
+
+      {promoteError ? <div className="text-sm text-destructive">{promoteError}</div> : null}
 
       <div className="space-y-2">
         <div className={tokens.typography.h3}>Эфир</div>
@@ -547,24 +616,27 @@ export function LiveRoomClient({
             )}
           >
             {isHost ? (
-              <video
-                ref={(node) => {
-                  localVideoRef.current = node;
-                  mainDisplayVideoRef.current = node;
-                }}
-                data-live-video="main"
-                className="h-full w-full max-w-full object-cover"
-                autoPlay
-                playsInline
-                muted
-              />
+              spotlightVideo ? (
+                <RemoteVideo key={spotlightVideo.id} stream={spotlightVideo.stream} captureTag="main" />
+              ) : mainUserId && spotlightPeer ? (
+                <div className="flex h-full min-h-[200px] w-full items-center justify-center text-5xl font-semibold text-white/80">
+                  {initials(spotlightPeer.name)}
+                </div>
+              ) : (
+                <LocalVideo stream={localStream} captureTag="main" mirror className="max-w-full" />
+              )
             ) : hostVideo ? (
-              <RemoteVideo ref={mainDisplayVideoRef} stream={hostVideo.stream} captureTag="main" />
+              <RemoteVideo stream={hostVideo.stream} captureTag="main" />
             ) : (
               <div className="flex h-full min-h-[200px] w-full items-center justify-center text-5xl font-semibold text-white/80">
                 {initials(hostPeer?.name ?? null)}
               </div>
             )}
+            {isHost && mainUserId && spotlightPeer ? (
+              <div className="absolute left-3 top-3 rounded-md bg-black/60 px-2 py-1 text-xs font-medium text-white">
+                {spotlightPeer.name ?? "Участник"}
+              </div>
+            ) : null}
           </div>
 
           <div
@@ -573,16 +645,28 @@ export function LiveRoomClient({
               tokens.radius.md
             )}
           >
-            {!isHost ? (
-              <div className="relative h-20 w-28 shrink-0 overflow-hidden rounded-lg border border-white/20 bg-black">
-                <video
-                  ref={selfThumbVideoRef}
-                  data-live-video="thumb"
-                  className="h-full w-full object-cover"
-                  autoPlay
-                  playsInline
-                  muted
-                />
+            {!isHost || mainUserId ? (
+              <div
+                role={isHost ? "button" : undefined}
+                tabIndex={isHost ? 0 : undefined}
+                onClick={isHost ? () => setMain(null) : undefined}
+                onKeyDown={
+                  isHost
+                    ? (e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setMain(null);
+                        }
+                      }
+                    : undefined
+                }
+                className={cn(
+                  "relative h-20 w-28 shrink-0 overflow-hidden rounded-lg border bg-black",
+                  isHost ? "cursor-pointer border-white/20 hover:border-primary" : "border-white/20"
+                )}
+                aria-label={isHost ? "Показать себя крупно" : undefined}
+              >
+                <LocalVideo stream={localStream} captureTag="thumb" mirror className="rounded-lg" />
                 <div className="absolute inset-x-1 bottom-1">
                   <div className="truncate rounded bg-black/55 px-1 py-0.5 text-[10px] text-white">Вы</div>
                 </div>
@@ -593,8 +677,32 @@ export function LiveRoomClient({
                 const video = remoteTracks.find((t) => t.userId === p.userId && t.kind === "video") ?? null;
                 const audio = remoteTracks.find((t) => t.userId === p.userId && t.kind === "audio") ?? null;
                 const muted = audio ? Boolean(producerMuted[audio.producerId]) : true;
+                const isSpeaker = p.role === "SPEAKER";
+                const canPromote = isHost && p.role === "VIEWER";
+                const isMain = isHost && mainUserId === p.userId;
                 return (
-                  <div key={p.userId} className="relative h-20 w-28 shrink-0 overflow-hidden rounded-lg border border-white/20 bg-black">
+                  <div
+                    key={p.userId}
+                    role={isHost ? "button" : undefined}
+                    tabIndex={isHost ? 0 : undefined}
+                    onClick={isHost ? () => setMain(p.userId) : undefined}
+                    onKeyDown={
+                      isHost
+                        ? (e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              setMain(p.userId);
+                            }
+                          }
+                        : undefined
+                    }
+                    aria-label={isHost ? `Показать крупно: ${p.name ?? p.userId}` : undefined}
+                    className={cn(
+                      "relative h-20 w-28 shrink-0 overflow-hidden rounded-lg border bg-black",
+                      isMain ? "border-primary ring-2 ring-primary" : "border-white/20",
+                      isHost ? "cursor-pointer hover:border-primary" : ""
+                    )}
+                  >
                     {video ? (
                       <RemoteVideo stream={video.stream} className="rounded-lg" captureTag="thumb" />
                     ) : (
@@ -605,6 +713,27 @@ export function LiveRoomClient({
                         {initials(p.name)}
                       </div>
                     )}
+                    {isSpeaker ? (
+                      <div className="absolute left-1 top-1 rounded bg-primary/90 px-1 py-0.5 text-[9px] font-medium text-primary-foreground">
+                        спикер
+                      </div>
+                    ) : null}
+                    {canPromote ? (
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="secondary"
+                        className="absolute right-1 top-1 h-6 w-6 min-h-0 rounded-full bg-black/70 text-white hover:bg-primary"
+                        aria-label={`Сделать спикером: ${p.name ?? p.userId}`}
+                        disabled={promotingUserId === p.userId}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void promoteToSpeaker(p.userId);
+                        }}
+                      >
+                        <UserRoundPlus className="h-3.5 w-3.5" />
+                      </Button>
+                    ) : null}
                     <div className="absolute inset-x-1 bottom-1 flex items-center justify-between gap-1">
                       <div className="truncate rounded bg-black/55 px-1 py-0.5 text-[10px] text-white">
                         {p.name ?? p.userId}
@@ -616,9 +745,10 @@ export function LiveRoomClient({
                           variant="ghost"
                           className="h-7 w-7 bg-black/55 text-white hover:bg-black/70"
                           aria-label={muted ? "Включить микрофон участнику" : "Выключить микрофон участнику"}
-                          onClick={() =>
-                            socketRef.current?.emit("setUserAudioMuted", { userId: p.userId, muted: !muted }, () => {})
-                          }
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            socketRef.current?.emit("setUserAudioMuted", { userId: p.userId, muted: !muted }, () => {});
+                          }}
                         >
                           {muted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
                         </Button>
@@ -732,6 +862,37 @@ const RemoteVideo = forwardRef<
     );
   }
 );
+
+function LocalVideo({
+  stream,
+  captureTag,
+  className,
+  mirror,
+}: {
+  stream: MediaStream | null;
+  captureTag?: "main" | "thumb";
+  className?: string;
+  mirror?: boolean;
+}) {
+  const ref = useRef<HTMLVideoElement | null>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.srcObject = stream;
+    if (stream) el.play?.().catch(() => {});
+  }, [stream]);
+  return (
+    <video
+      ref={ref}
+      data-live-video={captureTag}
+      // Зеркалим только собственное превью (как в зеркале); запись и удалённые видео не зеркалятся.
+      className={cn("h-full w-full bg-black object-cover", mirror && "-scale-x-100", className)}
+      autoPlay
+      playsInline
+      muted
+    />
+  );
+}
 
 function RemoteAudio({ stream, onPlayBlocked }: { stream: MediaStream; onPlayBlocked?: () => void }) {
   const ref = useRef<HTMLAudioElement | null>(null);

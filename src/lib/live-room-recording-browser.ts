@@ -51,14 +51,38 @@ export type RecordingLayoutSource = {
 export function buildHostRecordingSources(
   local: MediaStream | null,
   remoteTracks: Array<{ userId: string; kind: "audio" | "video"; stream: MediaStream }>,
-  selfUserId: string | null
+  selfUserId: string | null,
+  mainUserId?: string | null
 ): RecordingLayoutSource {
   const notSelf = (userId: string) => userId !== selfUserId;
+  const remoteVideos = remoteTracks.filter((t) => t.kind === "video" && notSelf(t.userId));
+  // Звук пишем всегда: своё + все участники, синхронно через AudioContext-микшер.
+  const remoteAudios = remoteTracks
+    .filter((t) => t.kind === "audio" && notSelf(t.userId))
+    .map((t) => t.stream);
+
+  // Спотлайт: если хост вывел участника крупно — он становится главным кадром,
+  // а собственная камера хоста уходит в превью (как и видит сам хост).
+  const spotlight =
+    mainUserId && notSelf(mainUserId) ? remoteVideos.find((t) => t.userId === mainUserId) ?? null : null;
+
+  if (spotlight) {
+    return {
+      main: spotlight.stream,
+      thumbs: [
+        ...(local ? [local] : []),
+        ...remoteVideos.filter((t) => t.userId !== mainUserId).map((t) => t.stream),
+      ],
+      localAudio: local,
+      remoteAudios,
+    };
+  }
+
   return {
     main: local,
-    thumbs: remoteTracks.filter((t) => t.kind === "video" && notSelf(t.userId)).map((t) => t.stream),
+    thumbs: remoteVideos.map((t) => t.stream),
     localAudio: local,
-    remoteAudios: remoteTracks.filter((t) => t.kind === "audio" && notSelf(t.userId)).map((t) => t.stream),
+    remoteAudios,
   };
 }
 

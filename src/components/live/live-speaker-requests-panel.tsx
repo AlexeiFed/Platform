@@ -2,11 +2,16 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
-import { approveSpeaker, listSpeakerRequests } from "./actions";
+import { approveSpeaker, listSpeakerRequests } from "@/lib/live-speaker-actions";
 
 type RequestRow = { userId: string; requestedAt: string; name: string | null; email: string };
 
-export function LiveSpeakerRequestsHost({ eventId }: { eventId: string }) {
+type Props = {
+  eventId: string;
+  onPromoted?: (userId: string) => void;
+};
+
+export function LiveSpeakerRequestsPanel({ eventId, onPromoted }: Props) {
   const [data, setData] = useState<{
     maxSpeakers: number;
     speakerCount: number;
@@ -45,6 +50,7 @@ export function LiveSpeakerRequestsHost({ eventId }: { eventId: string }) {
         setError(res.error);
         return;
       }
+      onPromoted?.(userId);
       await load();
     });
   };
@@ -58,13 +64,18 @@ export function LiveSpeakerRequestsHost({ eventId }: { eventId: string }) {
       {data?.requests?.length ? (
         <div className="space-y-2">
           {data.requests.map((r) => (
-            <div key={r.userId} className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-background p-2">
+            <div
+              key={r.userId}
+              className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-background p-2"
+            >
               <div className="min-w-0">
                 <div className="truncate text-sm">
                   {r.name ? `${r.name} · ` : ""}
                   {r.email}
                 </div>
-                <div className="text-xs text-muted-foreground">Запрос: {new Date(r.requestedAt).toLocaleString("ru-RU")}</div>
+                <div className="text-xs text-muted-foreground">
+                  Запрос: {new Date(r.requestedAt).toLocaleString("ru-RU")}
+                </div>
               </div>
               <Button type="button" size="sm" onClick={() => approve(r.userId)} disabled={isPending}>
                 Допустить
@@ -73,9 +84,8 @@ export function LiveSpeakerRequestsHost({ eventId }: { eventId: string }) {
           ))}
         </div>
       ) : (
-        <div className="text-sm text-muted-foreground">Запросов нет.</div>
+        <div className="text-sm text-muted-foreground">Запросов нет. Можно назначить спикера из превью участников.</div>
       )}
     </div>
   );
 }
-
