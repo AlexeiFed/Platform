@@ -11,6 +11,10 @@ import {
   marathonLiveJoinDeniedMessage,
 } from "@/lib/marathon-live-broadcast";
 import { canHostLiveForProduct, isLiveStaffRole } from "@/lib/live-room-staff-access";
+import {
+  approveSpeaker as approveSpeakerAction,
+  listSpeakerRequests as listSpeakerRequestsAction,
+} from "@/lib/live-speaker-actions";
 import type { LiveRoomParticipantRole } from "@prisma/client";
 
 const getJwtSecret = () => {
@@ -237,4 +241,10 @@ export async function requestSpeaker(eventId: string) {
   }
 }
 
-export { approveSpeaker, listSpeakerRequests } from "@/lib/live-speaker-actions";
+export async function approveSpeaker(eventId: string, userId: string) {
+  return approveSpeakerAction(eventId, userId);
+}
+
+export async function listSpeakerRequests(eventId: string) {
+  return listSpeakerRequestsAction(eventId);
+}
