@@ -145,7 +145,9 @@ function collectStageVideos(stage: HTMLElement): HTMLVideoElement[] {
   const main = stage.querySelector<HTMLVideoElement>('video[data-live-video="main"]');
   const thumbs = [...stage.querySelectorAll<HTMLVideoElement>('video[data-live-video="thumb"]')];
   const out: HTMLVideoElement[] = [];
-  if (main?.srcObject) out.push(main);
+  // Главное видео всегда держим в слоте 0, даже если srcObject ещё не привязан,
+  // чтобы при гонке миниатюра не заняла место главного кадра.
+  if (main) out.push(main);
   for (const t of thumbs) {
     if (t.srcObject) out.push(t);
   }
@@ -156,6 +158,15 @@ async function spawnHiddenVideo(stream: MediaStream, root: HTMLElement): Promise
   const track = stream.getVideoTracks()[0];
   if (!track || track.readyState === "ended") return null;
 
+  // Клон трека: у скрытого элемента собственный источник, поэтому он НЕ конкурирует
+  // с видимым превью того же участника (иначе Chrome гасит исходное видео).
+  let clone: MediaStreamTrack;
+  try {
+    clone = track.clone();
+  } catch {
+    return null;
+  }
+
   const el = document.createElement("video");
   el.muted = true;
   el.playsInline = true;
@@ -164,11 +175,17 @@ async function spawnHiddenVideo(stream: MediaStream, root: HTMLElement): Promise
   el.height = 360;
   el.style.cssText =
     "position:fixed;left:0;top:0;width:2px;height:2px;opacity:0.01;pointer-events:none;z-index:-1;";
-  el.srcObject = stream;
+  el.srcObject = new MediaStream([clone]);
   root.appendChild(el);
 
   await waitForVideoFrames(el);
-  return el.videoWidth > 0 ? el : null;
+  if (el.videoWidth > 0) return el;
+  try {
+    clone.stop();
+  } catch {
+    /* ignore */
+  }
+  return null;
 }
 
 export class LiveRecordingAudioMixer {
@@ -325,12 +342,13 @@ export class LiveStageRecorder {
     fps = 30
   ): Promise<LiveStageRecorder | null> {
     const stageVideos = collectStageVideos(stage);
-    for (const v of stageVideos) {
-      await waitForVideoFrames(v);
-    }
-    const readyStageVideos = stageVideos.filter((v) => v.videoWidth > 0 && v.videoHeight > 0);
-    if (readyStageVideos.length) {
-      return LiveStageRecorder.createWithVideos(sources, readyStageVideos, fps, null);
+    // Пишем напрямую с уже отрисованных на сцене <video> — это НЕ добавляет
+    // нового потребителя WebRTC-трека и не гасит превью участников.
+    // Важно: не отсеиваем по мгновенным размерам — элемент может стать ready чуть позже,
+    // а drawVideoContain рисует кадр только когда видео готово (per-frame guard).
+    if (stageVideos.length) {
+      await Promise.all(stageVideos.map((v) => waitForVideoFrames(v).catch(() => false)));
+      return LiveStageRecorder.createWithVideos(sources, stageVideos, fps, null);
     }
     return LiveStageRecorder.create(sources, fps);
   }
@@ -422,10 +440,23 @@ export class LiveStageRecorder {
       }
     });
     this.mixer.close();
+    // Останавливаем клон-треки и удаляем ТОЛЬКО скрытые элементы (дети hiddenRoot).
+    // Экранные превью (captureFromStage) не трогаем — их треки живые и нужны эфиру.
+    this.hiddenVideos.forEach((v) => {
+      if (v.parentElement === this.hiddenRoot) {
+        const ms = v.srcObject as MediaStream | null;
+        ms?.getTracks().forEach((t) => {
+          try {
+            t.stop();
+          } catch {
+            /* ignore */
+          }
+        });
+        v.srcObject = null;
+        v.remove();
+      }
+    });
     if (this.hiddenRoot.isConnected) {
-      this.hiddenVideos.forEach((v) => {
-        if (v.parentElement === this.hiddenRoot) v.remove();
-      });
       this.hiddenRoot.remove();
     }
     this.hiddenVideos.length = 0;
