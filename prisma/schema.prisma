@@ -134,6 +134,7 @@ model User {
   enrollmentTariffAuthorship EnrollmentTariffHistory[] @relation("EnrollmentTariffHistoryAuthor")
   progressPhotos  UserProgressPhoto[]
   measurements    UserMeasurement[]
+  weightEntries   UserWeightEntry[]
   notificationPreference UserNotificationPreference?
   notificationChannels   NotificationChannel[]
   notificationLinkTokens NotificationLinkToken[]
@@ -228,6 +229,21 @@ model UserMeasurement {
 
   @@index([userId, date])
   @@map("user_measurements")
+}
+
+/// Записи веса «после» (вес «до» берётся из user.weight)
+model UserWeightEntry {
+  id        String   @id @default(uuid())
+  userId    String
+  date      DateTime
+  weight    Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, date])
+  @@map("user_weight_entries")
 }
 
 model Account {

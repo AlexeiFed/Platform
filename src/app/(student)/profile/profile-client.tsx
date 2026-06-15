@@ -35,6 +35,8 @@ import {
   removeProgressPhoto,
   addMeasurement,
   deleteMeasurement,
+  addWeightEntry,
+  deleteWeightEntry,
   deleteOwnAccount,
 } from "./actions";
 import { measurementFields } from "@/lib/measurement-fields";
@@ -74,9 +76,16 @@ type Measurement = {
   armLeft: number | null;
 };
 
+type WeightEntry = {
+  id: string;
+  date: string;
+  weight: number;
+};
+
 type Props = {
   user: UserData;
   photos: ProgressPhoto[];
+  weightEntries: WeightEntry[];
   measurements: Measurement[];
 };
 
@@ -84,10 +93,11 @@ const dateFmt = new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "short
 
 // === Component ===
 
-export function ProfileClient({ user, photos, measurements }: Props) {
+export function ProfileClient({ user, photos, weightEntries, measurements }: Props) {
   return (
     <div className="space-y-6">
       <BasicCard user={user} />
+      <WeightCard profileWeight={user.weight} entries={weightEntries} />
       <PhotosCard photos={photos} />
       <MeasurementsCard measurements={measurements} />
     </div>
@@ -237,6 +247,176 @@ function BasicCard({ user }: { user: UserData }) {
             {deletingAccount ? "Удаляем аккаунт..." : "Удалить аккаунт"}
           </Button>
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// === Weight: до (из профиля) / после (записи) ===
+
+function WeightCard({
+  profileWeight,
+  entries,
+}: {
+  profileWeight: number | null;
+  entries: WeightEntry[];
+}) {
+  const [items, setItems] = useState<WeightEntry[]>(entries);
+  const [open, setOpen] = useState(false);
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [weight, setWeight] = useState("");
+  const [pending, start] = useTransition();
+  const [error, setError] = useState("");
+
+  const latestAfter = items.length > 0 ? items[items.length - 1] : null;
+  const delta =
+    profileWeight != null && latestAfter != null
+      ? Math.round((latestAfter.weight - profileWeight) * 10) / 10
+      : null;
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    const num = Number(weight.replace(",", "."));
+    if (!Number.isFinite(num) || num <= 0) {
+      setError("Укажите корректный вес");
+      return;
+    }
+
+    start(async () => {
+      const res = await addWeightEntry({ date, weight: num });
+      if (res.error) {
+        setError(res.error);
+        return;
+      }
+      const newItem: WeightEntry = {
+        id: `local-${Date.now()}`,
+        date: new Date(date).toISOString(),
+        weight: num,
+      };
+      setItems((prev) => [...prev, newItem].sort((a, b) => a.date.localeCompare(b.date)));
+      setWeight("");
+      setDate(new Date().toISOString().slice(0, 10));
+      setOpen(false);
+    });
+  }
+
+  async function onDelete(id: string, dateLabel: string) {
+    if (!confirmDeletion(`Удалить запись веса от ${dateLabel}?`)) return;
+    setItems((prev) => prev.filter((w) => w.id !== id));
+    await deleteWeightEntry(id);
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
+        <CardTitle className="text-base">Вес</CardTitle>
+        <Button size="sm" type="button" onClick={() => setOpen((v) => !v)}>
+          <Plus className="h-4 w-4 mr-1" /> {open ? "Скрыть форму" : "Добавить"}
+        </Button>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="rounded-lg border bg-muted/30 px-4 py-3">
+            <div className={tokens.typography.label}>До</div>
+            <div className="text-lg font-semibold tabular-nums">
+              {profileWeight != null ? `${profileWeight} кг` : "—"}
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">Из основных данных профиля</p>
+          </div>
+          <div className="rounded-lg border bg-muted/30 px-4 py-3">
+            <div className={tokens.typography.label}>После</div>
+            <div className="text-lg font-semibold tabular-nums">
+              {latestAfter != null ? `${latestAfter.weight} кг` : "—"}
+            </div>
+            {latestAfter && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                {dateFmt.format(new Date(latestAfter.date))}
+                {delta != null && (
+                  <span className={delta <= 0 ? " text-green-600" : " text-amber-600"}>
+                    {" "}
+                    ({delta > 0 ? "+" : ""}
+                    {delta} кг)
+                  </span>
+                )}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {open && (
+          <form onSubmit={handleSubmit} className="space-y-3 rounded-lg border p-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1">
+                <label className={tokens.typography.label}>Дата</label>
+                <Input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-1">
+                <label className={tokens.typography.label}>Вес (кг)</label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  value={weight}
+                  onChange={(e) => setWeight(e.target.value)}
+                  placeholder="например, 58.5"
+                  required
+                />
+              </div>
+            </div>
+            {error && <p className="text-xs text-destructive">{error}</p>}
+            <div className="flex gap-2">
+              <Button type="submit" disabled={pending} size="sm">
+                {pending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                Сохранить
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)}>
+                Отмена
+              </Button>
+            </div>
+          </form>
+        )}
+
+        {items.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-xs text-muted-foreground">
+                <tr className="border-b">
+                  <th className="py-2 pr-3 text-left font-medium">Дата</th>
+                  <th className="py-2 px-2 text-right font-medium">Вес, кг</th>
+                  <th className="py-2 pl-2" />
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((w) => (
+                  <tr key={w.id} className="border-b last:border-0 hover:bg-accent/30">
+                    <td className="py-2 pr-3 whitespace-nowrap font-medium">
+                      {dateFmt.format(new Date(w.date))}
+                    </td>
+                    <td className="py-2 px-2 text-right tabular-nums">{w.weight}</td>
+                    <td className="py-2 pl-2 text-right">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-destructive"
+                        onClick={() => void onDelete(w.id, dateFmt.format(new Date(w.date)))}
+                        aria-label="Удалить запись веса"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -430,7 +610,7 @@ function MeasurementsCard({ measurements }: { measurements: Measurement[] }) {
         armRight: numeric.armRight ?? null,
         armLeft: numeric.armLeft ?? null,
       };
-      setItems((prev) => [newItem, ...prev].sort((a, b) => b.date.localeCompare(a.date)));
+      setItems((prev) => [...prev, newItem].sort((a, b) => a.date.localeCompare(b.date)));
       setForm(emptyForm());
       setOpen(false);
     });

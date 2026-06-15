@@ -13,7 +13,7 @@ export default async function ProfilePage() {
   const session = await auth();
   if (!session) redirect("/login");
 
-  const [user, photos, measurements] = await Promise.all([
+  const [user, photos, measurements, weightEntries] = await Promise.all([
     prisma.user.findUnique({
       where: { id: session.user.id },
       select: {
@@ -31,7 +31,11 @@ export default async function ProfilePage() {
     }),
     prisma.userMeasurement.findMany({
       where: { userId: session.user.id },
-      orderBy: { date: "desc" },
+      orderBy: { date: "asc" },
+    }),
+    prisma.userWeightEntry.findMany({
+      where: { userId: session.user.id },
+      orderBy: { date: "asc" },
     }),
   ]);
 
@@ -60,6 +64,11 @@ export default async function ProfilePage() {
           type: p.type,
           position: p.position,
           url: p.url,
+        }))}
+        weightEntries={weightEntries.map((w) => ({
+          id: w.id,
+          date: w.date.toISOString(),
+          weight: w.weight,
         }))}
         measurements={measurements.map((m) => ({
           id: m.id,

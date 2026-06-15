@@ -92,7 +92,7 @@ export default async function AdminHomeworkPage({
         select: {
           height: true,
           weight: true,
-          measurements: { orderBy: { date: "desc" }, take: 120 },
+          measurements: { orderBy: { date: "asc" }, take: 120 },
           progressPhotos: {
             orderBy: [{ type: "asc" }, { position: "asc" }],
             select: { type: true, url: true, position: true },

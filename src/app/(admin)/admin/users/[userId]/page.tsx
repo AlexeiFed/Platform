@@ -150,7 +150,10 @@ export default async function AdminUserDetailsPage({ params }: Props) {
         orderBy: [{ type: "asc" }, { position: "asc" }],
       },
       measurements: {
-        orderBy: { date: "desc" },
+        orderBy: { date: "asc" },
+      },
+      weightEntries: {
+        orderBy: { date: "asc" },
       },
     },
   });
@@ -231,6 +234,60 @@ export default async function AdminUserDetailsPage({ params }: Props) {
           </div>
         </CardContent>
       </Card>
+
+      {(user.weight != null || user.weightEntries.length > 0) && (
+        <section className="space-y-3">
+          <h2 className={tokens.typography.h4}>Вес</h2>
+          <Card>
+            <CardContent className="space-y-4 p-6">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-lg border bg-muted/30 px-4 py-3">
+                  <div className={tokens.typography.label}>До</div>
+                  <div className="text-lg font-semibold tabular-nums">
+                    {user.weight != null ? `${user.weight} кг` : "—"}
+                  </div>
+                </div>
+                <div className="rounded-lg border bg-muted/30 px-4 py-3">
+                  <div className={tokens.typography.label}>После</div>
+                  <div className="text-lg font-semibold tabular-nums">
+                    {user.weightEntries.length > 0
+                      ? `${user.weightEntries[user.weightEntries.length - 1].weight} кг`
+                      : "—"}
+                  </div>
+                  {user.weightEntries.length > 0 && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {formatDate(user.weightEntries[user.weightEntries.length - 1].date)}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {user.weightEntries.length > 0 && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="text-xs text-muted-foreground">
+                      <tr className="border-b">
+                        <th className="py-2 px-3 text-left font-medium">Дата</th>
+                        <th className="py-2 px-3 text-right font-medium">Вес, кг</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {user.weightEntries.map((w) => (
+                        <tr key={w.id} className="border-b last:border-0 hover:bg-accent/30">
+                          <td className="py-2 px-3 whitespace-nowrap font-medium">
+                            {formatDate(w.date)}
+                          </td>
+                          <td className="py-2 px-3 text-right tabular-nums">{w.weight}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </section>
+      )}
 
       {user.progressPhotos.length > 0 && (
         <section className="space-y-3">

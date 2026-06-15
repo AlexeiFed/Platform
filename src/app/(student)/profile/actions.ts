@@ -164,6 +164,51 @@ export async function deleteMeasurement(id: string) {
   }
 }
 
+// === Вес (после) ===
+
+const weightEntrySchema = z.object({
+  date: z.string().min(1),
+  weight: z.number().positive().max(500),
+});
+
+export async function addWeightEntry(input: z.infer<typeof weightEntrySchema>) {
+  const session = await requireUser();
+  if (!session) return { error: "Нужно войти" };
+  try {
+    const data = weightEntrySchema.parse(input);
+    await prisma.userWeightEntry.create({
+      data: {
+        userId: session.user.id,
+        date: new Date(data.date),
+        weight: data.weight,
+      },
+    });
+    revalidatePath("/profile");
+    revalidatePath(`/admin/users/${session.user.id}`);
+    return { success: true };
+  } catch (e) {
+    if (e instanceof z.ZodError) return { error: "Некорректные данные" };
+    console.error("[addWeightEntry]", e);
+    return { error: "Ошибка сохранения" };
+  }
+}
+
+export async function deleteWeightEntry(id: string) {
+  const session = await requireUser();
+  if (!session) return { error: "Нужно войти" };
+  try {
+    await prisma.userWeightEntry.deleteMany({
+      where: { id, userId: session.user.id },
+    });
+    revalidatePath("/profile");
+    revalidatePath(`/admin/users/${session.user.id}`);
+    return { success: true };
+  } catch (e) {
+    console.error("[deleteWeightEntry]", e);
+    return { error: "Ошибка" };
+  }
+}
+
 export async function deleteOwnAccount() {
   const session = await requireUser();
   if (!session) return { error: "Нужно войти" };
