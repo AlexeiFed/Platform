@@ -3,7 +3,6 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import jwt from "jsonwebtoken";
-import { revalidatePath } from "next/cache";
 import {
   getLiveBroadcastDateKey,
   isMarathonLiveJoinAllowedToday,
@@ -79,12 +78,6 @@ export async function getAdminLiveJoinToken(eventId: string) {
             data: { status: "LIVE", startedAt: new Date(), endedAt: null },
             select: { id: true, status: true, maxSpeakers: true },
           });
-    if (existingRoom.status !== "LIVE") {
-      revalidatePath("/admin/live");
-      revalidatePath(`/admin/live/${event.id}`);
-      revalidatePath(`/learn/${event.product.slug}/event/${event.id}`);
-      revalidatePath(`/learn/${event.product.slug}/event/${event.id}/live`);
-    }
 
     await prisma.liveRoomParticipant.upsert({
       where: { roomId_userId: { roomId: room.id, userId: session.user.id } },

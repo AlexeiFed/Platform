@@ -101,6 +101,11 @@ export function LiveRoomClient({
   const [mainUserId, setMainUserId] = useState<string | null>(null);
 
   const socketRef = useRef<Socket | null>(null);
+  // Токен меняется при каждом server-render (новый JWT). Держим его в ref, чтобы
+  // refresh страницы (например после revalidatePath на finish записи) НЕ пересоздавал
+  // WebRTC-подключение и не глушил локальные/удалённые треки во время эфира.
+  const tokenRef = useRef(token);
+  tokenRef.current = token;
   const stageRef = useRef<HTMLDivElement | null>(null);
   const deviceRef = useRef<MediasoupDevice | null>(null);
   const sendTransportRef = useRef<any>(null);
@@ -229,7 +234,7 @@ export function LiveRoomClient({
         const socket = io(liveServerUrl, {
           transports: ["websocket"],
           path: "/live/socket.io",
-          auth: { token },
+          auth: { token: tokenRef.current },
         });
         socketRef.current = socket;
 
@@ -405,7 +410,10 @@ export function LiveRoomClient({
         localStreamRef.current?.getTracks()?.forEach((t) => t.stop());
       } catch {}
     };
-  }, [liveServerUrl, token, canProduce, role, router]);
+    // НЕ добавляем token в зависимости: подключение должно жить весь эфир и не
+    // пересоздаваться при refresh страницы. Переподключение только при смене роли
+    // (VIEWER → SPEAKER) или адреса сервера; актуальный token берём из tokenRef.
+  }, [liveServerUrl, canProduce, role, router]);
 
   const notifyPlayBlocked = useCallback(() => setNeedsAudioGesture(true), []);
 

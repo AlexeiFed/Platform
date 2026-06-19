@@ -97,10 +97,10 @@ export async function startLiveRoomRecording(eventId: string, format: "webm" | "
       return { error: "Не удалось подготовить загрузку в S3" } as const;
     }
 
-    revalidatePath(`/admin/live/${eventId}`);
-    revalidatePath("/admin/live");
-    revalidatePath("/admin/live/recordings");
-
+    // Важно: НЕ вызываем revalidatePath на старте записи. Иначе Next обновит RSC
+    // текущей страницы эфира, страница выдаст новый JWT-token, у <LiveRoomClient>
+    // изменится проп token и эффект подключения переподключит WebRTC — пропадут
+    // видео/звук участников прямо во время записи. Список записей обновляем на finish.
     return {
       success: true,
       data: {
